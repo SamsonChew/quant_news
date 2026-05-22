@@ -30,7 +30,7 @@ def build_html_dashboard(
         "items": localized,
         "source_stats": source_stats,
         "category_counts": dict(Counter(row["category"] for row in localized)),
-        "section_counts": section_counts(localized),
+        "section_counts": _section_counts_from_field(localized),
         "sections": [
             {
                 "key": section.key,
@@ -705,6 +705,10 @@ def _render_dashboard(payload: dict[str, Any]) -> str:
         button.addEventListener('click', () => {{
           state.category = button.dataset.category;
           select.value = state.category;
+          if (state.category === 'All') {{
+            state.section = 'All';
+            $('section-select').value = 'All';
+          }}
           render();
         }});
       }});
@@ -731,6 +735,10 @@ def _render_dashboard(payload: dict[str, Any]) -> str:
         button.addEventListener('click', () => {{
           state.section = button.dataset.section;
           select.value = state.section;
+          if (state.section === 'All') {{
+            state.category = 'All';
+            $('category-select').value = 'All';
+          }}
           render();
         }});
       }});
@@ -1004,6 +1012,15 @@ def _render_dashboard(payload: dict[str, Any]) -> str:
 </body>
 </html>
 """
+
+
+def _section_counts_from_field(rows: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        for key in (row.get("report_sections") or []):
+            if key != "other":
+                counts[key] = counts.get(key, 0) + 1
+    return counts
 
 
 def _with_display_labels(row: dict[str, Any]) -> dict[str, Any]:

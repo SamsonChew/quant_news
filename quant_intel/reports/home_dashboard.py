@@ -31,7 +31,7 @@ def build_home_dashboard(
         "source_stats": source_stats,
         "report_config": report_config,
         "day_counts": dict(Counter(_day(row) for row in enriched)),
-        "section_counts": section_counts(enriched),
+        "section_counts": _section_counts_from_field(enriched),
         "category_counts": dict(Counter(row["category"] for row in enriched)),
         "sections": [
             {
@@ -634,8 +634,16 @@ def _render_home(payload: dict[str, Any]) -> str:
     function bindNav(kind) {{
       document.querySelectorAll(`[data-kind="${{kind}}"]`).forEach((button) => {{
         button.addEventListener('click', () => {{
-          state[kind] = button.dataset.value;
-          $(`${{kind}}-select`).value = state[kind];
+          const value = button.dataset.value;
+          state[kind] = value;
+          $(`${{kind}}-select`).value = value;
+          // Clicking "全部" on section or category resets both content filters
+          if (value === 'All' && (kind === 'section' || kind === 'category')) {{
+            state.section = 'All';
+            state.category = 'All';
+            $('section-select').value = 'All';
+            $('category-select').value = 'All';
+          }}
           render();
         }});
       }});
@@ -828,6 +836,15 @@ def _render_home(payload: dict[str, Any]) -> str:
 </body>
 </html>
 """
+
+
+def _section_counts_from_field(rows: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        for key in (row.get("report_sections") or []):
+            if key != "other":
+                counts[key] = counts.get(key, 0) + 1
+    return counts
 
 
 def _with_display_labels(row: dict[str, Any]) -> dict[str, Any]:
