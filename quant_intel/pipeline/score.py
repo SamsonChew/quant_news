@@ -73,6 +73,8 @@ def score_item(item: Item, weights: dict[str, float], today: date) -> Score:
         "Execution / Transaction Cost",
         "Backtesting / Research Tools",
         "Data Engineering",
+        "LLM / Agents for Quant",
+        "Machine Learning for Finance",
     }
     actionable = 4.5
     if item.category in actionable_categories:

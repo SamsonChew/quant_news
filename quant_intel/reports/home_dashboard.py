@@ -57,7 +57,7 @@ def _render_home(payload: dict[str, Any]) -> str:
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>量化情报首页</title>
+  <title>samson 量化情报台</title>
   <style>
     :root {{
       --bg: #ffffff;
@@ -505,7 +505,7 @@ def _render_home(payload: dict[str, Any]) -> str:
 <body>
   <header class="topbar">
     <div class="brand">
-      <h1>量化情报首页</h1>
+      <h1>samson 量化情报台</h1>
       <p id="range-label"></p>
     </div>
     <div class="controls">

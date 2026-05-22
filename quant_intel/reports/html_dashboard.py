@@ -57,7 +57,7 @@ def _render_dashboard(payload: dict[str, Any]) -> str:
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>每日量化情报 - {payload['report_date']}</title>
+  <title>samson 量化情报台 - {payload['report_date']}</title>
   <style>
     :root {{
       --bg: #ffffff;
@@ -593,7 +593,7 @@ def _render_dashboard(payload: dict[str, Any]) -> str:
   <div class="shell">
     <header class="topbar">
       <div class="brand">
-        <h1>量化情报台</h1>
+        <h1>samson 量化情报台</h1>
         <span class="date-pill" id="report-date"></span>
       </div>
       <div class="controls">

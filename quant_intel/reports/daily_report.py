@@ -22,22 +22,43 @@ PRIMARY_SOURCE_BUCKETS = ("arxiv", "zhihu", "quantml", "forum")
 def select_report_rows(
     rows: list[dict[str, Any]], report_config: dict[str, int]
 ) -> list[dict[str, Any]]:
-    max_per_section = int(report_config["max_items_per_category"])
+    target_per_section = int(report_config["max_items_per_category"])
     max_total = int(report_config["max_total_items"])
     main_section_keys = {section.key for section in REPORT_SECTIONS}
 
-    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for row in sorted(rows, key=lambda r: r["final_score"], reverse=True):
-        if not is_primary_source(row):
-            continue
+    sorted_rows = sorted(rows, key=lambda r: r["final_score"], reverse=True)
+
+    primary_grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    all_grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in sorted_rows:
         sections = [key for key in row_section_keys(row) if key in main_section_keys]
         if not sections:
             continue
-        grouped[sections[0]].append(row)
+        all_grouped[sections[0]].append(row)
+        if is_primary_source(row):
+            primary_grouped[sections[0]].append(row)
 
     selected: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+
     for section in REPORT_SECTIONS:
-        selected.extend(_select_diverse_by_source(grouped[section.key], max_per_section))
+        # Fill from primary sources first, then top up from any source to hit target
+        section_items = _select_diverse_by_source(primary_grouped[section.key], target_per_section)
+        section_seen = {row["id"] for row in section_items}
+
+        if len(section_items) < target_per_section:
+            for row in all_grouped[section.key]:
+                if row["id"] in section_seen:
+                    continue
+                section_items.append(row)
+                section_seen.add(row["id"])
+                if len(section_items) >= target_per_section:
+                    break
+
+        for row in section_items:
+            if row["id"] not in seen_ids:
+                selected.append(row)
+                seen_ids.add(row["id"])
 
     selected.sort(key=lambda r: r["final_score"], reverse=True)
     return selected[:max_total]
@@ -129,7 +150,7 @@ def source_bucket(row: dict[str, Any]) -> str:
 def build_alpha_section(alpha_md: str) -> list[str]:
     if not alpha_md:
         return []
-    return ["## 今日 Alpha Idea", "", alpha_md, ""]
+    return ["## 今日 3 个 Alpha Ideas", "", alpha_md, ""]
 
 
 def build_daily_report(

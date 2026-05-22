@@ -21,7 +21,7 @@ from quant_intel.reports import build_daily_report, build_home_dashboard
 from quant_intel.reports import build_html_dashboard
 from quant_intel.reports.daily_report import select_history_rows, select_report_rows, build_alpha_section
 from quant_intel.sources import ArxivSource, GitHubSource, LocalJsonSource
-from quant_intel.sources import QuantMLSource, RSSSource, SampleSource
+from quant_intel.sources import QuantMLSource, RSSSource, SampleSource, ZhihuSource
 from quant_intel.storage import Database
 
 
@@ -70,6 +70,17 @@ def build_sources(config: dict, sample: bool) -> list:
     social_cfg = config.get("social_json", {})
     if social_cfg.get("enabled", False):
         sources.append(LocalJsonSource(paths=social_cfg.get("paths", [])))
+
+    zhihu_cfg = config.get("zhihu", {})
+    if zhihu_cfg.get("enabled", False):
+        sources.append(
+            ZhihuSource(
+                topics=zhihu_cfg.get("topics", []),
+                columns=zhihu_cfg.get("columns", []),
+                max_results_per_topic=int(zhihu_cfg.get("max_results_per_topic", 5)),
+            )
+        )
+
     return sources
 
 
@@ -159,9 +170,9 @@ def run(args: argparse.Namespace) -> int:
     alpha_md = ""
     if summary_client is not None and selected_rows:
         try:
-            alpha_md = summary_client.generate_alpha_idea(selected_rows)
+            alpha_md = summary_client.generate_alpha_ideas(selected_rows)
         except Exception as exc:
-            print(f"[warn] Alpha idea generation failed: {exc}")
+            print(f"[warn] Alpha ideas generation failed: {exc}")
 
     report_path = build_daily_report(
         rows=rows,
