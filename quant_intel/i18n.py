@@ -14,6 +14,7 @@ CATEGORY_ZH = {
     "Crypto Quant": "加密资产量化",
     "Data Engineering": "数据工程",
     "Backtesting / Research Tools": "回测 / 研究工具",
+    "Industry / Career": "行业 / 职业 / 合规",
     "Unclassified": "未分类",
 }
 
@@ -37,6 +38,7 @@ SOURCE_TYPE_ZH = {
     "social": "社交媒体",
     "zhihu": "知乎",
     "x": "X",
+    "quantml": "QuantML",
 }
 
 

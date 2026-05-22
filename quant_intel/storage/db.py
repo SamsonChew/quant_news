@@ -21,7 +21,18 @@ class Database:
     def init_schema(self) -> None:
         schema_path = Path(__file__).with_name("schema.sql")
         self.conn.executescript(schema_path.read_text(encoding="utf-8"))
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        existing = {
+            row[1]
+            for row in self.conn.execute("PRAGMA table_info(summaries)").fetchall()
+        }
+        if "key_figures_md" not in existing:
+            self.conn.execute(
+                "ALTER TABLE summaries ADD COLUMN key_figures_md TEXT NOT NULL DEFAULT ''"
+            )
 
     def upsert_item(self, item: Item) -> bool:
         before = self.conn.total_changes
@@ -77,8 +88,8 @@ class Database:
             INSERT INTO summaries (
               item_id, one_line_summary, technical_summary, key_points,
               quant_relevance, possible_use_case, limitations, read_priority,
-              model_name, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              model_name, created_at, key_figures_md
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(item_id) DO UPDATE SET
               one_line_summary = excluded.one_line_summary,
               technical_summary = excluded.technical_summary,
@@ -88,7 +99,8 @@ class Database:
               limitations = excluded.limitations,
               read_priority = excluded.read_priority,
               model_name = excluded.model_name,
-              created_at = excluded.created_at
+              created_at = excluded.created_at,
+              key_figures_md = excluded.key_figures_md
             """,
             (
                 summary.item_id,
@@ -101,6 +113,7 @@ class Database:
                 summary.read_priority,
                 summary.model_name,
                 summary.created_at,
+                summary.key_figures_md,
             ),
         )
         self.conn.commit()
@@ -175,6 +188,7 @@ class Database:
               s.possible_use_case,
               s.limitations,
               s.read_priority,
+              s.key_figures_md,
               sc.relevance_score,
               sc.novelty_score,
               sc.academic_score,
@@ -206,6 +220,7 @@ class Database:
               s.possible_use_case,
               s.limitations,
               s.read_priority,
+              s.key_figures_md,
               sc.relevance_score,
               sc.novelty_score,
               sc.academic_score,
@@ -234,6 +249,7 @@ class Database:
               s.possible_use_case,
               s.limitations,
               s.read_priority,
+              s.key_figures_md,
               sc.relevance_score,
               sc.novelty_score,
               sc.academic_score,

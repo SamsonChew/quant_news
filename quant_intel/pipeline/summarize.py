@@ -24,6 +24,7 @@ CATEGORY_RELEVANCE = {
     "Crypto Quant": "和加密资产市场结构、链上信号、衍生品以及跨交易所交易相关。",
     "Data Engineering": "和市场数据采集、特征流水线、数据质量以及研究基础设施相关。",
     "Backtesting / Research Tools": "和实验效率、可复现性、仿真质量以及研究基础设施相关。",
+    "Industry / Career": "和量化团队招聘、竞业约束、职业路径、合规沟通以及人员流动风险相关。",
 }
 
 
@@ -40,6 +41,7 @@ CATEGORY_USE_CASE = {
     "Crypto Quant": "可以在高流动性交易所上验证，并纳入手续费、资金费率和滑点。",
     "Data Engineering": "可以用于数据采集、校验、血缘追踪或特征生成。",
     "Backtesting / Research Tools": "可以先在沙盒环境里试用，评估接口、复现性和维护风险。",
+    "Industry / Career": "可以放入团队管理和合规备忘录，不直接进入策略研究池。",
 }
 
 
@@ -113,23 +115,25 @@ def summary_from_llm_payload(
     if priority not in {"高", "中", "低"}:
         priority = fallback.read_priority
 
+    # Prefer the new title_one_line over old one_line_summary as the display title
+    one_line = text_field("title_one_line", "") or text_field("one_line_summary", fallback.one_line_summary)
+    # Use core_idea as the richer technical summary if available
+    technical = text_field("core_idea", "") or text_field("technical_summary", fallback.technical_summary)
+    # quant_impact is a new field; fall back to quant_relevance
+    quant_relevance = text_field("quant_impact", "") or text_field("quant_relevance", fallback.quant_relevance)
+
     return Summary(
         item_id=item.id,
-        one_line_summary=truncate(
-            text_field("one_line_summary", fallback.one_line_summary),
-            220,
-        ),
-        technical_summary=truncate(
-            text_field("technical_summary", fallback.technical_summary),
-            1200,
-        ),
+        one_line_summary=truncate(one_line, 300),
+        technical_summary=truncate(technical, 1200),
         key_points=[truncate(point, 220) for point in key_points],
-        quant_relevance=text_field("quant_relevance", fallback.quant_relevance),
+        quant_relevance=quant_relevance,
         possible_use_case=text_field("possible_use_case", fallback.possible_use_case),
         limitations=text_field("limitations", fallback.limitations),
         read_priority=priority,
         model_name=model_name,
         created_at=utc_now_iso(),
+        key_figures_md=str(payload.get("key_figures_md", "") or ""),
     )
 
 
@@ -139,6 +143,8 @@ def _limitations_for(item: Item) -> str:
     if item.source_type == "github":
         return "需要检查开源协议、维护活跃度、测试覆盖、接口稳定性，以及示例是否匹配你的资产类别。"
     if item.source_type == "forum":
+        if item.category == "Industry / Career":
+            return "职业和合规类讨论需要结合司法辖区、合同条款和公司政策核对，不能当作交易或研究结论。"
         return "论坛观点先视为经验性信息，只有经过可复现数据、成本和风控验证后才能进入研究结论。"
     if item.source_type in {"social", "zhihu", "x"}:
         return "社交媒体内容适合捕捉趋势和共识变化，但需要回到论文、代码或数据验证后再形成研究判断。"

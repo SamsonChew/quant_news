@@ -1,0 +1,55 @@
+name: Daily Quant Intelligence Report
+
+on:
+  schedule:
+    # 07:00 SGT (UTC+8) = 23:00 UTC previous day
+    - cron: "0 23 * * *"
+  workflow_dispatch: # allow manual trigger from GitHub UI
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Cache the SQLite database so 7-day history persists across runs.
+      # Key rotates weekly so the cache stays small.
+      - name: Restore database cache
+        uses: actions/cache@v4
+        with:
+          path: data/
+          key: quant-db-${{ github.run_number }}
+          restore-keys: |
+            quant-db-
+
+      - name: Run pipeline
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_MODEL: deepseek-chat
+        run: |
+          mkdir -p data output/daily
+          python run_daily.py \
+            --summary-provider deepseek \
+            --history-days 7
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./output/daily
+          publish_branch: gh-pages
+          force_orphan: false
+          commit_message: "📊 Daily report ${{ github.run_number }} - $(date -u +%Y-%m-%d)"

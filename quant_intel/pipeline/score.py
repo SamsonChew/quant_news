@@ -4,7 +4,7 @@ from datetime import date, datetime
 from math import exp, log10
 
 from quant_intel.models import Item, Score, utc_now_iso
-from quant_intel.pipeline.classify import CATEGORY_KEYWORDS
+from quant_intel.pipeline.classify import CATEGORY_KEYWORDS, _keyword_in_text
 
 
 def _clamp(value: float) -> float:
@@ -24,11 +24,11 @@ def _age_days(item: Item, today: date) -> int:
 def score_item(item: Item, weights: dict[str, float], today: date) -> Score:
     text = item.readable_text.lower()
     category_keywords = CATEGORY_KEYWORDS.get(item.category, [])
-    keyword_hits = sum(1 for keyword in category_keywords if keyword in text)
+    keyword_hits = sum(1 for keyword in category_keywords if _keyword_in_text(keyword, text))
     broad_hits = sum(
         1
         for keyword in ("quant", "trading", "finance", "portfolio", "alpha", "risk")
-        if keyword in text
+        if _keyword_in_text(keyword, text)
     )
 
     relevance = _clamp(3.0 + keyword_hits * 1.2 + broad_hits * 0.7)
@@ -45,6 +45,7 @@ def score_item(item: Item, weights: dict[str, float], today: date) -> Score:
         "social": 4.0,
         "zhihu": 4.5,
         "x": 4.0,
+        "quantml": 6.0,
     }.get(item.source_type, 4.0)
     academic = _clamp(source_academic + min(len(item.abstract) / 800.0, 1.5))
 
@@ -76,9 +77,11 @@ def score_item(item: Item, weights: dict[str, float], today: date) -> Score:
     actionable = 4.5
     if item.category in actionable_categories:
         actionable += 2.0
+    if item.category == "Industry / Career":
+        actionable -= 1.5
     if item.source_type == "github":
         actionable += 1.5
-    if any(keyword in text for keyword in ("code", "dataset", "implementation", "backtest")):
+    if any(_keyword_in_text(keyword, text) for keyword in ("code", "dataset", "implementation", "backtest")):
         actionable += 1.0
     actionable = _clamp(actionable)
 

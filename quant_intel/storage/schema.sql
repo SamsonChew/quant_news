@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS summaries (
   read_priority TEXT NOT NULL,
   model_name TEXT NOT NULL,
   created_at TEXT NOT NULL,
+  key_figures_md TEXT NOT NULL DEFAULT '',
   FOREIGN KEY(item_id) REFERENCES items(id)
 );
 

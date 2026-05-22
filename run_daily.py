@@ -19,9 +19,9 @@ from quant_intel.pipeline.score import score_item
 from quant_intel.pipeline.summarize import summarize_item, summary_from_llm_payload
 from quant_intel.reports import build_daily_report, build_home_dashboard
 from quant_intel.reports import build_html_dashboard
-from quant_intel.reports.daily_report import select_history_rows, select_report_rows
+from quant_intel.reports.daily_report import select_history_rows, select_report_rows, build_alpha_section
 from quant_intel.sources import ArxivSource, GitHubSource, LocalJsonSource
-from quant_intel.sources import RSSSource, SampleSource
+from quant_intel.sources import QuantMLSource, RSSSource, SampleSource
 from quant_intel.storage import Database
 
 
@@ -37,6 +37,15 @@ def build_sources(config: dict, sample: bool) -> list:
                 queries=arxiv_cfg.get("queries", []),
                 max_results=int(arxiv_cfg.get("max_results", 15)),
                 delay_seconds=float(arxiv_cfg.get("delay_seconds", 3.2)),
+            )
+        )
+
+    quantml_cfg = config.get("quantml", {})
+    if quantml_cfg.get("enabled", False):
+        sources.append(
+            QuantMLSource(
+                url=quantml_cfg.get("url", "https://www.quantml.cn/"),
+                max_results=int(quantml_cfg.get("max_results", 8)),
             )
         )
 
@@ -83,22 +92,24 @@ def build_summary_client(provider: str) -> DeepSeekClient | None:
 
 def summarize_for_run(item, score, client: DeepSeekClient | None):
     if client is None:
-        return summarize_item(item, score)
+        return summarize_item(item, score), False  # (summary, skipped)
 
     try:
         payload = client.summarize(item, score)
+        if payload.get("skip"):
+            return summarize_item(item, score), True
         return summary_from_llm_payload(
             item=item,
             score=score,
             payload=payload,
             model_name=f"deepseek:{client.config.model}",
-        )
+        ), False
     except Exception as exc:
         print(
             "[warn] DeepSeek summary failed; using rule-based summary: "
             f"{item.title[:90]}: {exc}"
         )
-        return summarize_item(item, score)
+        return summarize_item(item, score), False
 
 
 def run(args: argparse.Namespace) -> int:
@@ -133,16 +144,24 @@ def run(args: argparse.Namespace) -> int:
             if not db.upsert_item(item):
                 continue
             stored += 1
-            run_item_ids.append(item.id)
             db.upsert_score(score)
 
-            summary = summarize_for_run(item, score, summary_client)
+            summary, skipped = summarize_for_run(item, score, summary_client)
             db.upsert_summary(summary)
+
+            if not skipped:
+                run_item_ids.append(item.id)
 
     rows = db.fetch_report_rows_by_ids(run_item_ids)
     selected_rows = select_report_rows(rows, report_config)
-    source_stats = db.source_stats_by_ids(run_item_ids)
-    source_stats.update({f"fetched:{k}": v for k, v in fetched_count.items()})
+    source_stats = dict(Counter(str(row.get("source", "Unknown")) for row in selected_rows))
+
+    alpha_md = ""
+    if summary_client is not None and selected_rows:
+        try:
+            alpha_md = summary_client.generate_alpha_idea(selected_rows)
+        except Exception as exc:
+            print(f"[warn] Alpha idea generation failed: {exc}")
 
     report_path = build_daily_report(
         rows=rows,
@@ -150,6 +169,7 @@ def run(args: argparse.Namespace) -> int:
         output_dir=args.output_dir,
         report_config=report_config,
         source_stats=source_stats,
+        alpha_md=alpha_md,
     )
     dashboard_path = build_html_dashboard(
         rows=rows,

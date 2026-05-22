@@ -617,13 +617,13 @@ def _render_dashboard(payload: dict[str, Any]) -> str:
           <div class="metric"><b id="metric-avg">0.0</b><span>平均评分</span></div>
         </div>
 
-        <div class="section-label">情报分区</div>
+        <div class="section-label">两条主线</div>
         <div class="category-list" id="section-list"></div>
 
-        <div class="section-label">分类</div>
+        <div class="section-label">细分标签</div>
         <div class="category-list" id="category-list"></div>
 
-        <div class="section-label">来源</div>
+        <div class="section-label">主力来源</div>
         <ul class="source-list" id="source-list"></ul>
       </aside>
 
@@ -658,7 +658,7 @@ def _render_dashboard(payload: dict[str, Any]) -> str:
     const $ = (id) => document.getElementById(id);
 
     function init() {{
-      $('report-date').textContent = payload.report_date + ' - 生成时间 ' + payload.generated_at;
+      $('report-date').textContent = payload.report_date + ' - 主力源：arXiv / 知乎 / QuantML / 大型论坛 - 生成时间 ' + payload.generated_at;
       $('metric-items').textContent = items.length;
       $('metric-categories').textContent = new Set(items.map((item) => item.category)).size;
       $('metric-high').textContent = items.filter((item) => priorityLabel(item.read_priority) === '高').length;
@@ -694,7 +694,7 @@ def _render_dashboard(payload: dict[str, Any]) -> str:
       const counts = countBy(items, 'category');
       const categories = Object.keys(counts).sort();
       const select = $('category-select');
-      select.innerHTML = option('All', `全部分类 (${{items.length}})`) +
+      select.innerHTML = option('All', `全部细分标签 (${{items.length}})`) +
         categories.map((category) => option(category, `${{categoryLabel(category)}} (${{counts[category]}})`)).join('');
 
       const list = $('category-list');
@@ -714,7 +714,7 @@ def _render_dashboard(payload: dict[str, Any]) -> str:
       const counts = payload.section_counts || {{}};
       const sections = payload.sections || [];
       const select = $('section-select');
-      select.innerHTML = option('All', `全部分区 (${{items.length}})`) +
+      select.innerHTML = option('All', `全部主线 (${{items.length}})`) +
         sections
           .filter((section) => counts[section.key])
           .map((section) => option(section.key, `${{section.label}} (${{counts[section.key]}})`))
@@ -754,7 +754,7 @@ def _render_dashboard(payload: dict[str, Any]) -> str:
       }}
 
       $('feed-title').textContent = feedTitle();
-      $('result-count').textContent = `展示 ${{visible.length}} 条 - 每类最多 ${{payload.report_config.max_items_per_category}} 条`;
+      $('result-count').textContent = `展示 ${{visible.length}} 条 - 两条主线每条最多 ${{payload.report_config.max_items_per_category}} 条`;
       renderSectionActive();
       renderCategoryActive();
       renderItems(visible);
@@ -827,8 +827,8 @@ def _render_dashboard(payload: dict[str, Any]) -> str:
             <div class="score">${{Number(item.final_score).toFixed(1)}}</div>
           </div>
           <div class="meta">
-            <span class="tag">${{escapeHtml(categoryLabel(item.category))}}</span>
             <span class="tag">${{escapeHtml(sectionLabel(item.report_sections?.[0]))}}</span>
+            <span class="tag">${{escapeHtml(categoryLabel(item.category))}}</span>
             <span class="tag">${{escapeHtml(item.source)}}</span>
             <span class="tag">${{escapeHtml(priorityLabel(item.read_priority))}}</span>
           </div>
