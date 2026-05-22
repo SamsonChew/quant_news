@@ -20,7 +20,7 @@ REPORT_SECTIONS = (
     ReportSection(
         key="deep_learning_quant",
         label="深度学习量化未来",
-        description="技术主线：只看深度学习、强化学习、Transformer、图神经网络、表征学习、订单簿预测、金融时间序列大模型等在量化里的应用。这个频道用于给老板快速判断“未来在哪里”。",
+        description="技术主线：深度学习、强化学习、Transformer、图神经网络、表征学习、订单簿预测、金融时间序列大模型等在量化里的应用。",
         source_types=("paper", "forum", "blog", "news", "social", "zhihu", "x", "quantml"),
         keywords=(
             "deep learning",
@@ -56,7 +56,7 @@ REPORT_SECTIONS = (
     ReportSection(
         key="ai_quant_tools",
         label="AI 量化工具",
-        description="工具主线：只看能提升量化研究效率的 AI 工具、代码仓库、研究自动化、智能体、回测/数据工程工具和可接入团队工作流的基础设施。",
+        description="工具主线：能提升量化研究效率的 AI 工具、代码仓库、研究自动化、智能体、回测/数据工程工具和可接入团队工作流的基础设施。",
         categories=("LLM / Agents for Quant", "Backtesting / Research Tools", "Data Engineering"),
         source_types=("github", "quantml"),
         keywords=(
@@ -89,18 +89,35 @@ REPORT_SECTIONS = (
             "数据流水线",
         ),
     ),
+    ReportSection(
+        key="daily_news",
+        label="量化每日 Top 5 新闻",
+        description="社区主线：论坛热帖、行业动态、职业话题、量化圈子里的每日热议，来自 Reddit、QuantNet、StackExchange 等社区。",
+        source_types=("forum", "news", "zhihu", "x"),
+        categories=(
+            "Alpha / Factor Research",
+            "Portfolio Construction",
+            "Risk Management",
+            "Options / Volatility",
+            "Market Microstructure",
+            "Execution / Transaction Cost",
+            "Statistical Arbitrage",
+            "Industry / Career",
+            "Crypto Quant",
+        ),
+    ),
 )
 
 
 def row_section_keys(row: dict[str, Any]) -> list[str]:
-    # The product intentionally has only two main lanes. Keep them mutually
-    # exclusive so the UI reads like a clear boss-facing map: 技术 vs 工具.
     if _matches_section(row, "ai_quant_tools") and _is_tool_row(row) and _has_quant_context(row):
         return ["ai_quant_tools"]
     if _matches_section(row, "deep_learning_quant") and _has_quant_context(row):
         return ["deep_learning_quant"]
     if _matches_section(row, "ai_quant_tools") and _has_quant_context(row):
         return ["ai_quant_tools"]
+    if _matches_section(row, "daily_news") and _has_quant_context(row):
+        return ["daily_news"]
     return ["other"]
 
 
@@ -246,7 +263,7 @@ def _matches_keywords(row: dict[str, Any], keywords: tuple[str, ...]) -> bool:
 def _keyword_matches(keyword: str, text: str, lower_text: str) -> bool:
     if not keyword:
         return False
-    if any("\u3400" <= char <= "\u9fff" for char in keyword):
+    if any("㐀" <= char <= "鿿" for char in keyword):
         return keyword in text
     normalized = keyword.lower().strip()
     pattern = re.escape(normalized).replace(r"\ ", r"\s+")
