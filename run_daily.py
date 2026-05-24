@@ -13,13 +13,16 @@ from quant_intel.config import (
 )
 from quant_intel.env import load_env_file
 from quant_intel.llm import DeepSeekClient
+from quant_intel.llm.deepseek import PROMPT_VERSION
 from quant_intel.models import utc_now_iso
 from quant_intel.pipeline.classify import classify_item
+from quant_intel.pipeline.normalize import canonical_url
 from quant_intel.pipeline.score import score_item
 from quant_intel.pipeline.summarize import summarize_item, summary_from_llm_payload
 from quant_intel.reports import build_daily_report, build_home_dashboard
 from quant_intel.reports import build_html_dashboard
 from quant_intel.reports.daily_report import select_history_rows, select_report_rows, build_alpha_section
+from quant_intel.reports.sections import row_section_keys
 from quant_intel.sources import ArxivSource, GitHubSource, LocalJsonSource
 from quant_intel.sources import QuantMLSource, RSSSource, SampleSource, ZhihuSource
 from quant_intel.storage import Database
@@ -101,9 +104,35 @@ def build_summary_client(provider: str) -> DeepSeekClient | None:
     return client
 
 
-def summarize_for_run(item, score, client: DeepSeekClient | None):
+def summarize_for_run(
+    item,
+    score,
+    client: DeepSeekClient | None,
+    db: Database | None = None,
+    rescore_all: bool = False,
+):
     if client is None:
         return summarize_item(item, score), False  # (summary, skipped)
+
+    # Skip LLM if an up-to-date summary already exists
+    if not rescore_all and db is not None:
+        existing = db.get_summary(item.id)
+        if existing and existing.get("prompt_version") == PROMPT_VERSION:
+            from quant_intel.models import Summary
+            return Summary(
+                item_id=existing["item_id"],
+                one_line_summary=existing["one_line_summary"],
+                technical_summary=existing["technical_summary"],
+                key_points=existing["key_points"] if isinstance(existing["key_points"], list) else [],
+                quant_relevance=existing["quant_relevance"],
+                possible_use_case=existing["possible_use_case"],
+                limitations=existing["limitations"],
+                read_priority=existing["read_priority"],
+                model_name=existing["model_name"],
+                created_at=existing["created_at"],
+                key_figures_md=existing.get("key_figures_md", ""),
+                prompt_version=existing["prompt_version"],
+            ), False
 
     try:
         payload = client.summarize(item, score)
@@ -114,6 +143,7 @@ def summarize_for_run(item, score, client: DeepSeekClient | None):
             score=score,
             payload=payload,
             model_name=f"deepseek:{client.config.model}",
+            prompt_version=PROMPT_VERSION,
         ), False
     except Exception as exc:
         print(
@@ -121,6 +151,28 @@ def summarize_for_run(item, score, client: DeepSeekClient | None):
             f"{item.title[:90]}: {exc}"
         )
         return summarize_item(item, score), False
+
+
+def _print_section_breakdown(all_rows: list, selected_rows: list) -> None:
+    counts: dict[str, int] = {}
+    for row in all_rows:
+        for key in row_section_keys(row):
+            counts[key] = counts.get(key, 0) + 1
+    selected_ids = {row["id"] for row in selected_rows}
+    section_order = ["deep_learning_quant", "ai_quant_tools", "daily_news", "other"]
+    parts = []
+    for key in section_order:
+        n = counts.get(key, 0)
+        if n:
+            label = f"{key}(dropped)" if key == "other" else key
+            parts.append(f"{label}: {n}")
+    print(f"[sections] {' | '.join(parts)}")
+    other_rows = [r for r in all_rows if row_section_keys(r) == ["other"]]
+    if other_rows:
+        top = sorted(other_rows, key=lambda r: r.get("final_score", 0), reverse=True)[:3]
+        print("[sections] other 分桶最高分前 3（可能需要调整关键词）:")
+        for r in top:
+            print(f"  {r.get('final_score', 0):.2f}  [{r.get('category', '')}]  {r.get('title', '')[:80]}")
 
 
 def run(args: argparse.Namespace) -> int:
@@ -139,6 +191,8 @@ def run(args: argparse.Namespace) -> int:
     stored = 0
     run_item_ids: list[str] = []
     today = date.fromisoformat(args.report_date)
+    deepseek_calls = 0
+    max_deepseek = args.max_deepseek_items
 
     for source in sources:
         try:
@@ -152,19 +206,42 @@ def run(args: argparse.Namespace) -> int:
             item = classify_item(item)
             score = score_item(item, scoring_config, today=today)
 
+            # TODO 2: skip if another item with the same canonical URL is already in DB
+            if db.get_item_id_by_canonical_url(item.url):
+                existing_id = db.get_item_id_by_canonical_url(item.url)
+                if existing_id and existing_id != item.id:
+                    run_item_ids.append(existing_id)
+                    continue
+
             if not db.upsert_item(item):
                 continue
             stored += 1
             db.upsert_score(score)
 
-            summary, skipped = summarize_for_run(item, score, summary_client)
+            use_llm = summary_client is not None and (max_deepseek <= 0 or deepseek_calls < max_deepseek)
+            summary, skipped = summarize_for_run(
+                item, score, summary_client if use_llm else None, db=db, rescore_all=args.rescore_all
+            )
+            if use_llm and not skipped:
+                deepseek_calls += 1
             db.upsert_summary(summary)
 
             if not skipped:
                 run_item_ids.append(item.id)
 
     rows = db.fetch_report_rows_by_ids(run_item_ids)
+
+    # TODO 3: blend feedback adjustments into final_score before selection
+    for row in rows:
+        signal = db.get_feedback(row["id"])
+        if signal:
+            adj = 1.5 if signal > 0 else -2.0
+            row["final_score"] = round(max(0.0, min(10.0, row["final_score"] + adj)), 3)
+
     selected_rows = select_report_rows(rows, report_config)
+
+    # TODO 4: print section breakdown so dropped items are visible
+    _print_section_breakdown(rows, selected_rows)
     source_stats = dict(Counter(str(row.get("source", "Unknown")) for row in selected_rows))
 
     alpha_md = ""
@@ -242,6 +319,17 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=Path(".env"),
         help="Optional env file for DEEPSEEK_API_KEY and related settings.",
+    )
+    parser.add_argument(
+        "--rescore-all",
+        action="store_true",
+        help=f"Force re-summarise all items even if already at prompt version {PROMPT_VERSION}.",
+    )
+    parser.add_argument(
+        "--max-deepseek-items",
+        type=int,
+        default=0,
+        help="Cap DeepSeek API calls per run (0 = unlimited). Remaining items use rule-based summary.",
     )
     return parser.parse_args()
 
