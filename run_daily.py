@@ -21,6 +21,7 @@ from quant_intel.pipeline.score import score_item
 from quant_intel.pipeline.summarize import summarize_item, summary_from_llm_payload
 from quant_intel.reports import build_daily_report, build_home_dashboard
 from quant_intel.reports import build_html_dashboard
+from quant_intel.reports.crypto_alpha import load_alpha_history, save_crypto_alpha
 from quant_intel.reports.daily_report import select_history_rows, select_report_rows, build_alpha_section
 from quant_intel.reports.sections import row_section_keys
 from quant_intel.sources import ArxivSource, GitHubSource, LocalJsonSource
@@ -251,6 +252,15 @@ def run(args: argparse.Namespace) -> int:
         except Exception as exc:
             print(f"[warn] Alpha ideas generation failed: {exc}")
 
+    if summary_client is not None and rows:
+        try:
+            print("[info] Generating daily crypto alpha idea...")
+            crypto_alpha = summary_client.generate_daily_crypto_alpha(rows, args.report_date)
+            alpha_path = save_crypto_alpha(crypto_alpha, args.report_date, args.output_dir)
+            print(f"[info] Crypto alpha saved: {alpha_path}")
+        except Exception as exc:
+            print(f"[warn] Crypto alpha generation failed: {exc}")
+
     report_path = build_daily_report(
         rows=rows,
         report_date=args.report_date,
@@ -278,6 +288,7 @@ def run(args: argparse.Namespace) -> int:
     history_rows = db.fetch_rows_between(start_date, args.report_date)
     history_rows = select_history_rows(history_rows, report_config)
     history_stats = dict(Counter(str(row.get("source", "Unknown")) for row in history_rows))
+    alpha_history = load_alpha_history(args.output_dir)
     home_path = build_home_dashboard(
         rows=history_rows,
         end_date=args.report_date,
@@ -285,6 +296,7 @@ def run(args: argparse.Namespace) -> int:
         output_dir=args.output_dir,
         report_config=report_config,
         source_stats=history_stats,
+        alpha_history=alpha_history,
     )
     db.close()
 

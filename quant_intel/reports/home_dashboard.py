@@ -20,6 +20,7 @@ def build_home_dashboard(
     output_dir: Path,
     report_config: dict[str, int],
     source_stats: dict[str, int],
+    alpha_history: list[dict[str, Any]] | None = None,
 ) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     enriched = [_with_display_labels(row) for row in rows]
@@ -44,6 +45,7 @@ def build_home_dashboard(
         "category_labels": CATEGORY_ZH,
         "priority_labels": PRIORITY_ZH,
         "source_type_labels": SOURCE_TYPE_ZH,
+        "alpha_history": alpha_history or [],
     }
     path = output_dir / "index.html"
     path.write_text(_render_home(payload), encoding="utf-8")
@@ -332,6 +334,18 @@ def _render_home(payload: dict[str, Any]) -> str:
       background: linear-gradient(90deg, var(--blue), var(--red), var(--yellow), var(--green));
     }}
 
+    .card[data-section="deep_learning_quant"]::before {{
+      background: linear-gradient(90deg, #1a73e8, #4285f4, #34a8f4);
+    }}
+
+    .card[data-section="ai_quant_tools"]::before {{
+      background: linear-gradient(90deg, #34a853, #00c667, #34a853);
+    }}
+
+    .card[data-section="daily_news"]::before {{
+      background: linear-gradient(90deg, #fbbc04, #f9a825, #ff9800);
+    }}
+
     .card:hover {{
       border-color: #c6dafc;
       box-shadow: var(--shadow);
@@ -347,7 +361,7 @@ def _render_home(payload: dict[str, Any]) -> str:
 
     .card h4 {{
       margin: 0;
-      font-size: 16px;
+      font-size: 19px;
       line-height: 1.3;
     }}
 
@@ -419,6 +433,11 @@ def _render_home(payload: dict[str, Any]) -> str:
       line-height: 1.48;
     }}
 
+    .reader-block:first-child p {{
+      font-size: 15px;
+      line-height: 1.52;
+    }}
+
     .reader-block ol {{
       margin: 0;
       padding-left: 18px;
@@ -471,6 +490,338 @@ def _render_home(payload: dict[str, Any]) -> str:
       background: rgba(255, 255, 255, 0.72);
       color: var(--muted);
       padding: 28px;
+    }}
+
+    /* Hero section (Plan A) */
+    .hero-section {{
+      margin-bottom: 28px;
+    }}
+
+    .hero-label {{
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 12px;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }}
+
+    .hero-label::before {{
+      content: "";
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--blue);
+      animation: pulse 1.8s ease-in-out infinite;
+      flex-shrink: 0;
+    }}
+
+    @keyframes pulse {{
+      0%, 100% {{ opacity: 1; transform: scale(1); }}
+      50% {{ opacity: 0.45; transform: scale(0.8); }}
+    }}
+
+    .hero-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 14px;
+    }}
+
+    .hero-card {{
+      position: relative;
+      overflow: hidden;
+      display: grid;
+      gap: 12px;
+      border: 1.5px solid #c6dafc;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #f0f4ff 0%, #fff 60%);
+      box-shadow: 0 2px 10px rgba(26, 115, 232, 0.13);
+      padding: 20px;
+      transition: transform 140ms ease, box-shadow 140ms ease;
+    }}
+
+    .hero-card::before {{
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--blue), var(--red), var(--yellow), var(--green));
+    }}
+
+    .hero-card:hover {{
+      box-shadow: 0 6px 24px rgba(26, 115, 232, 0.22);
+      transform: translateY(-3px);
+    }}
+
+    .hero-rank {{
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--blue);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }}
+
+    .hero-card h4 {{
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.3;
+      padding-right: 32px;
+    }}
+
+    /* Bookmark / action buttons (Plan B) */
+    .card-actions {{
+      display: flex;
+      gap: 7px;
+      flex-wrap: wrap;
+    }}
+
+    .action-btn {{
+      height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      padding: 0 10px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 120ms;
+      white-space: nowrap;
+    }}
+
+    .action-btn:hover {{
+      border-color: var(--blue);
+      color: var(--blue);
+      background: var(--blue-soft);
+    }}
+
+    .action-btn.bookmarked {{
+      border-color: #e6a800;
+      color: #7a4f00;
+      background: var(--yellow-soft);
+    }}
+
+    .card.read-done > .card-top > h4,
+    .card.read-done > .card-top {{
+      opacity: 0.55;
+    }}
+
+    /* Search highlight (Plan D) */
+    mark {{
+      background: #fff0a0;
+      color: inherit;
+      border-radius: 2px;
+      padding: 0 1px;
+    }}
+
+    /* Crypto Alpha section */
+    .alpha-banner {{
+      position: relative;
+      overflow: hidden;
+      border: 1.5px solid #d2a8ff;
+      border-radius: 20px;
+      background: linear-gradient(135deg, #1a0533 0%, #0d1b2a 100%);
+      padding: 22px 24px;
+      margin-bottom: 28px;
+      color: #e8d5ff;
+    }}
+
+    .alpha-banner::before {{
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 3px;
+      background: linear-gradient(90deg, #a855f7, #ec4899, #f59e0b, #10b981);
+    }}
+
+    .alpha-banner-header {{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }}
+
+    .alpha-banner-badge {{
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid #a855f7;
+      border-radius: 999px;
+      background: rgba(168, 85, 247, 0.18);
+      color: #d8b4fe;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }}
+
+    .alpha-conf-badge {{
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 10px;
+    }}
+    .alpha-conf-badge.high {{ background: rgba(16, 185, 129, 0.2); color: #6ee7b7; border: 1px solid #10b981; }}
+    .alpha-conf-badge.medium {{ background: rgba(245, 158, 11, 0.2); color: #fcd34d; border: 1px solid #f59e0b; }}
+    .alpha-conf-badge.low {{ background: rgba(107, 114, 128, 0.2); color: #9ca3af; border: 1px solid #6b7280; }}
+
+    .alpha-name {{
+      margin: 0 0 4px;
+      font-size: 20px;
+      font-weight: 800;
+      color: #f3e8ff;
+    }}
+
+    .alpha-hypothesis {{
+      margin: 0 0 16px;
+      font-size: 14px;
+      color: #c4b5fd;
+      line-height: 1.5;
+    }}
+
+    .alpha-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }}
+
+    .alpha-block {{
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 12px;
+    }}
+
+    .alpha-block-label {{
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #a78bfa;
+      margin-bottom: 5px;
+    }}
+
+    .alpha-block-value {{
+      font-size: 12px;
+      color: #e2d9f3;
+      line-height: 1.5;
+    }}
+
+    .alpha-sources {{
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 12px;
+      margin-top: 4px;
+    }}
+
+    .alpha-sources-label {{
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #a78bfa;
+      margin-bottom: 8px;
+    }}
+
+    .alpha-source-item {{
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 6px;
+      font-size: 12px;
+    }}
+
+    .alpha-source-item a {{
+      color: #818cf8;
+      text-decoration: none;
+      font-weight: 600;
+    }}
+
+    .alpha-source-item a:hover {{
+      text-decoration: underline;
+    }}
+
+    .alpha-source-why {{
+      color: #9ca3af;
+      font-size: 11px;
+    }}
+
+    .alpha-quickstart {{
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      border-radius: 10px;
+      padding: 10px 14px;
+      margin-top: 12px;
+      font-size: 12px;
+      color: #6ee7b7;
+    }}
+
+    .alpha-quickstart strong {{
+      display: block;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #34d399;
+      margin-bottom: 4px;
+    }}
+
+    .alpha-risks {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }}
+
+    .alpha-risk-tag {{
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 999px;
+      color: #fca5a5;
+      font-size: 11px;
+      padding: 2px 9px;
+    }}
+
+    /* Alpha history in left rail */
+    .alpha-hist-item {{
+      border: 1px solid rgba(168, 85, 247, 0.25);
+      border-radius: 10px;
+      background: rgba(168, 85, 247, 0.05);
+      padding: 8px 10px;
+      margin-bottom: 7px;
+      cursor: pointer;
+      transition: background 120ms;
+    }}
+
+    .alpha-hist-item:hover {{
+      background: rgba(168, 85, 247, 0.12);
+    }}
+
+    .alpha-hist-date {{
+      font-size: 10px;
+      color: #9ca3af;
+      margin-bottom: 3px;
+    }}
+
+    .alpha-hist-name {{
+      font-size: 12px;
+      font-weight: 700;
+      color: #c4b5fd;
+      line-height: 1.3;
     }}
 
     @media (max-width: 980px) {{
@@ -733,6 +1084,17 @@ def _render_home(payload: dict[str, Any]) -> str:
       <div class="section-label">细分标签</div>
       <div class="nav-list" id="category-list"></div>
 
+      <div class="section-label">&#9889; Crypto Alpha 历史</div>
+      <div id="alpha-hist-list"></div>
+
+      <div class="section-label">我的收藏</div>
+      <div class="nav-list">
+        <button class="nav-button" type="button" id="bookmarks-btn">
+          <span>&#128278; 收藏夹</span>
+          <span class="count" id="bookmark-count">0</span>
+        </button>
+      </div>
+
       <div class="section-label">主力来源</div>
       <ul class="source-list" id="source-list"></ul>
     </aside>
@@ -742,6 +1104,7 @@ def _render_home(payload: dict[str, Any]) -> str:
         <h2 id="feed-title">最近资讯</h2>
         <span id="result-count"></span>
       </div>
+      <div id="alpha-container"></div>
       <div id="feed"></div>
     </section>
   </main>
@@ -753,7 +1116,7 @@ def _render_home(payload: dict[str, Any]) -> str:
     const categoryLabels = payload.category_labels || {{}};
     const priorityLabels = payload.priority_labels || {{}};
     const sourceTypeLabels = payload.source_type_labels || {{}};
-    const state = {{ query: '', day: 'All', section: 'All', category: 'All' }};
+    const state = {{ query: '', day: 'All', section: 'All', category: 'All', bookmarksOnly: false }};
     const $ = (id) => document.getElementById(id);
 
     function init() {{
@@ -771,13 +1134,21 @@ def _render_home(payload: dict[str, Any]) -> str:
       buildSectionControls();
       buildCategoryControls();
       buildSourceList();
+      buildAlphaHistory();
+      renderAlphaBanner();
       bindControls();
+      updateBookmarkCount();
       render();
     }}
 
     function bindControls() {{
       $('search').addEventListener('input', (event) => {{
         state.query = event.target.value.trim().toLowerCase();
+        render();
+      }});
+      $('bookmarks-btn').addEventListener('click', () => {{
+        state.bookmarksOnly = !state.bookmarksOnly;
+        $('bookmarks-btn').classList.toggle('active', state.bookmarksOnly);
         render();
       }});
       $('day-select').addEventListener('change', (event) => {{
@@ -864,6 +1235,7 @@ def _render_home(payload: dict[str, Any]) -> str:
     }}
 
     function matchesFilters(item) {{
+      if (state.bookmarksOnly && !isBookmarked(item.id || item.url)) return false;
       if (state.day !== 'All' && dayOf(item) !== state.day) return false;
       if (state.section !== 'All' && !(item.report_sections || []).includes(state.section)) return false;
       if (state.category !== 'All' && item.category !== state.category) return false;
@@ -896,22 +1268,32 @@ def _render_home(payload: dict[str, Any]) -> str:
         return;
       }}
       const grouped = groupByDay(visible);
-      feed.innerHTML = Object.keys(grouped).sort().reverse().map((day) => `
-        <section class="day-group">
-          <div class="day-title">
-            <h3>${{day}}</h3>
-            <a href="${{day}}.html">打开当日看板</a>
-          </div>
-          <div class="cards">${{grouped[day].map(card).join('')}}</div>
-        </section>
-      `).join('');
+      const sortedDays = Object.keys(grouped).sort().reverse();
+      const mostRecentDay = sortedDays[0];
+      feed.innerHTML = sortedDays.map((day, idx) => {{
+        const isFirst = idx === 0;
+        const heroHtml = isFirst && !state.bookmarksOnly ? renderHero(grouped[day]) : '';
+        return `
+          <section class="day-group">
+            <div class="day-title">
+              <h3>${{day === mostRecentDay ? '今日 ' + day : day}}</h3>
+              <a href="${{day}}.html">打开当日看板</a>
+            </div>
+            ${{heroHtml}}
+            <div class="cards">${{grouped[day].map(card).join('')}}</div>
+          </section>
+        `;
+      }}).join('');
     }}
 
     function card(item) {{
+      const itemId = item.id || item.url || item.title || '';
+      const section = (item.report_sections || [])[0] || '';
+      const bmed = isBookmarked(itemId);
       return `
-        <article class="card">
+        <article class="card" data-section="${{escapeAttr(section)}}">
           <div class="card-top">
-            <h4>${{escapeHtml(item.display_title || item.title)}}</h4>
+            <h4>${{highlight(item.display_title || item.title, state.query)}}</h4>
             <div class="score">${{Number(item.final_score || 0).toFixed(1)}}</div>
           </div>
           <div class="meta">
@@ -919,6 +1301,12 @@ def _render_home(payload: dict[str, Any]) -> str:
             <span class="tag">${{escapeHtml(categoryLabel(item.category))}}</span>
             <span class="tag">${{escapeHtml(sourceTypeLabel(item.source_type))}}</span>
             <span class="tag">${{escapeHtml(priorityLabel(item.read_priority))}}</span>
+          </div>
+          <div class="card-actions">
+            <button class="action-btn ${{bmed ? 'bookmarked' : ''}}" data-bmid="${{escapeAttr(itemId)}}"
+              onclick="toggleBookmark('${{escapeAttr(itemId)}}')" title="${{bmed ? '取消收藏' : '收藏'}}">
+              ${{bmed ? '&#128278;' : '&#128276;'}} <span class="bm-label">${{bmed ? '已收藏' : '收藏'}}</span>
+            </button>
           </div>
           ${{readerFormat(item)}}
         </article>
@@ -931,7 +1319,7 @@ def _render_home(payload: dict[str, Any]) -> str:
         <div class="reader-format">
           <div class="reader-block">
             <h5>1. 这篇文章的太长不读</h5>
-            <p>${{escapeHtml(item.tldr || item.one_line_summary || '')}}</p>
+            <p>${{highlight(item.tldr || item.one_line_summary || '', state.query)}}</p>
           </div>
           <div class="reader-block">
             <h5>2. 核心价值，对我量化的工作能够提供什么样的帮助</h5>
@@ -1036,6 +1424,153 @@ def _render_home(payload: dict[str, Any]) -> str:
 
     function escapeAttr(value) {{
       return escapeHtml(value).replaceAll('`', '&#096;');
+    }}
+
+    // ── Plan D: Search highlight ──────────────────────────────────────────────
+    function highlight(text, query) {{
+      if (!query) return escapeHtml(text);
+      const escaped = escapeHtml(text);
+      if (!query) return escaped;
+      const safe = query.replace(/[.*+?^${{}}()|[\\]\\\\]/g, '\\\\$&');
+      return escaped.replace(new RegExp(`(${{safe}})`, 'gi'), '<mark>$1</mark>');
+    }}
+
+    // ── Plan B: Bookmarks ─────────────────────────────────────────────────────
+    const BM_KEY = 'samson_quant_bookmarks_v1';
+    function getBookmarks() {{
+      try {{ return JSON.parse(localStorage.getItem(BM_KEY) || '[]'); }}
+      catch {{ return []; }}
+    }}
+    function isBookmarked(id) {{ return getBookmarks().includes(id); }}
+    function toggleBookmark(id) {{
+      const bm = getBookmarks();
+      const idx = bm.indexOf(id);
+      if (idx >= 0) bm.splice(idx, 1); else bm.push(id);
+      localStorage.setItem(BM_KEY, JSON.stringify(bm));
+      updateBookmarkCount();
+      markActive();
+      // Re-render only if filtering by bookmarks
+      if (state.bookmarksOnly) render();
+      else document.querySelectorAll(`[data-bmid="${{id}}"]`).forEach((btn) => {{
+        btn.classList.toggle('bookmarked', isBookmarked(id));
+        btn.title = isBookmarked(id) ? '取消收藏' : '收藏';
+        btn.querySelector('.bm-label').textContent = isBookmarked(id) ? '已收藏' : '收藏';
+      }});
+    }}
+    function updateBookmarkCount() {{
+      const count = getBookmarks().length;
+      $('bookmark-count').textContent = count;
+      $('bookmarks-btn').classList.toggle('active', state.bookmarksOnly);
+    }}
+
+    // ── Crypto Alpha ─────────────────────────────────────────────────────────
+    const alphaHistory = payload.alpha_history || [];
+    let activeAlphaIdx = 0;
+
+    function buildAlphaHistory() {{
+      const list = $('alpha-hist-list');
+      if (!alphaHistory.length) {{
+        list.innerHTML = '<div style="font-size:11px;color:var(--muted);padding:4px 0 10px 2px">暂无 Alpha 记录，运行完整 pipeline 后生成</div>';
+        return;
+      }}
+      list.innerHTML = alphaHistory.map((a, i) => `
+        <div class="alpha-hist-item ${{i === 0 ? 'active' : ''}}" onclick="showAlpha(${{i}})">
+          <div class="alpha-hist-date">${{a.date || ''}}</div>
+          <div class="alpha-hist-name">${{escapeHtml(a.alpha_name || '未命名')}}</div>
+        </div>
+      `).join('');
+    }}
+
+    function showAlpha(idx) {{
+      activeAlphaIdx = idx;
+      document.querySelectorAll('.alpha-hist-item').forEach((el, i) => {{
+        el.classList.toggle('active', i === idx);
+      }});
+      renderAlphaBanner();
+    }}
+
+    function renderAlphaBanner() {{
+      const container = $('alpha-container');
+      if (!container) return;
+      if (!alphaHistory.length) {{
+        container.innerHTML = '';
+        return;
+      }}
+      const a = alphaHistory[activeAlphaIdx] || {{}};
+      const conf = (a.confidence || 'medium').toLowerCase();
+      const confLabels = {{ high: '高信心', medium: '中等信心', low: '低信心' }};
+      const sources = Array.isArray(a.supporting_sources) ? a.supporting_sources : [];
+      const risks = Array.isArray(a.risk_factors) ? a.risk_factors : [];
+      const data = Array.isArray(a.data_needed) ? a.data_needed : [];
+      container.innerHTML = `
+        <div class="alpha-banner">
+          <div class="alpha-banner-header">
+            <span class="alpha-banner-badge">&#9889; Crypto Alpha · ${{escapeHtml(a.date || '')}}</span>
+            <span class="alpha-conf-badge ${{conf}}">${{escapeHtml(confLabels[conf] || conf)}}</span>
+          </div>
+          <h3 class="alpha-name">${{escapeHtml(a.alpha_name || '未命名')}}</h3>
+          <p class="alpha-hypothesis">${{escapeHtml(a.hypothesis || '')}}</p>
+          <div class="alpha-grid">
+            <div class="alpha-block">
+              <div class="alpha-block-label">&#128268; 信号逻辑</div>
+              <div class="alpha-block-value">${{escapeHtml(a.signal_logic || '')}}</div>
+            </div>
+            <div class="alpha-block">
+              <div class="alpha-block-label">&#128202; 所需数据</div>
+              <div class="alpha-block-value">${{data.map((d) => `• ${{escapeHtml(d)}}`).join('<br>')}}</div>
+            </div>
+            <div class="alpha-block">
+              <div class="alpha-block-label">&#128200; 回测方案</div>
+              <div class="alpha-block-value">${{escapeHtml(a.backtest_approach || '')}}</div>
+            </div>
+          </div>
+          ${{risks.length ? `<div class="alpha-risks">${{risks.map((r) => `<span class="alpha-risk-tag">&#9888; ${{escapeHtml(r)}}</span>`).join('')}}</div>` : ''}}
+          ${{a.quick_start ? `<div class="alpha-quickstart"><strong>&#128640; 今天的第一步</strong>${{escapeHtml(a.quick_start)}}</div>` : ''}}
+          ${{sources.length ? `
+            <div class="alpha-sources">
+              <div class="alpha-sources-label">&#128196; 支撑来源</div>
+              ${{sources.map((s) => `
+                <div class="alpha-source-item">
+                  ${{s.url
+                    ? `<a href="${{escapeAttr(s.url)}}" target="_blank" rel="noopener noreferrer">${{escapeHtml(s.title || s.url)}}</a>`
+                    : `<span style="color:#c4b5fd">${{escapeHtml(s.title || '')}}</span>`
+                  }}
+                  ${{s.why ? `<span class="alpha-source-why">— ${{escapeHtml(s.why)}}</span>` : ''}}
+                </div>
+              `).join('')}}
+            </div>
+          ` : ''}}
+          <div style="margin-top:12px;font-size:10px;color:#6b7280">由 ${{escapeHtml(a.model || 'deepseek-reasoner')}} 生成 · ${{escapeHtml(a.generated_at || '')}}</div>
+        </div>
+      `;
+    }}
+
+    // ── Plan A: Hero section ──────────────────────────────────────────────────
+    function renderHero(dayItems) {{
+      const top3 = dayItems.slice(0, 3);
+      if (!top3.length) return '';
+      return `
+        <div class="hero-section">
+          <div class="hero-label">今日精选 TOP ${{top3.length}}</div>
+          <div class="hero-grid">${{top3.map((item, i) => heroCard(item, i + 1)).join('')}}</div>
+        </div>
+      `;
+    }}
+
+    function heroCard(item, rank) {{
+      const section = (item.report_sections || [])[0] || '';
+      return `
+        <article class="hero-card" data-section="${{escapeAttr(section)}}">
+          <div class="hero-rank">${{rank}}</div>
+          <h4>${{highlight(item.display_title || item.title, state.query)}}</h4>
+          <div class="meta">
+            <span class="tag">${{escapeHtml((item.report_section_labels || [])[0] || '其他')}}</span>
+            <span class="tag">${{escapeHtml(categoryLabel(item.category))}}</span>
+          </div>
+          <p class="summary">${{highlight(item.tldr || item.one_line_summary || '', state.query)}}</p>
+          ${{referenceHtml(item)}}
+        </article>
+      `;
     }}
 
     init();

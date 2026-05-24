@@ -19,6 +19,7 @@ from quant_intel.pipeline.classify import classify_item
 from quant_intel.pipeline.score import score_item
 from quant_intel.pipeline.summarize import summarize_item
 from quant_intel.reports import build_daily_report, build_home_dashboard, build_html_dashboard
+from quant_intel.reports.crypto_alpha import load_alpha_history
 from quant_intel.reports.daily_report import select_history_rows, select_report_rows
 from quant_intel.storage import Database
 
@@ -75,6 +76,7 @@ def refresh_existing(
         report_config=report_config,
         source_stats=today_stats,
     )
+    alpha_history = load_alpha_history(output_dir)
     build_home_dashboard(
         rows=history_rows,
         end_date=report_date,
@@ -82,6 +84,7 @@ def refresh_existing(
         output_dir=output_dir,
         report_config=report_config,
         source_stats=source_stats,
+        alpha_history=alpha_history,
     )
     db.close()
     return updated

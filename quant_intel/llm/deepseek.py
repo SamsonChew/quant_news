@@ -236,6 +236,102 @@ class DeepSeekClient:
         except Exception as exc:
             return f"> Alpha idea 生成失败：{exc}"
 
+    def generate_daily_crypto_alpha(
+        self, rows: list[dict[str, Any]], date_str: str
+    ) -> dict[str, Any]:
+        """Generate a structured daily crypto alpha idea backed by today's content."""
+        crypto_rows = [
+            r for r in rows
+            if str(r.get("category", "")).lower() == "crypto quant"
+            or any(kw in (r.get("title", "") + r.get("one_line_summary", "")).lower()
+                   for kw in ("crypto", "bitcoin", "btc", "ethereum", "eth", "defi",
+                              "on-chain", "blockchain", "perpetual", "funding rate",
+                              "liquidation", "binance", "bybit", "altcoin"))
+        ]
+        candidates = crypto_rows if len(crypto_rows) >= 2 else rows
+        top = sorted(candidates, key=lambda r: float(r.get("final_score", 0)), reverse=True)[:12]
+
+        items_text = "\n\n".join(
+            f"### [{i+1}] {r.get('display_title') or r.get('title', '')}\n"
+            f"来源：{r.get('source', '')} | 类型：{r.get('source_type', '')} | 分类：{r.get('category', '')}\n"
+            f"摘要：{r.get('tldr') or r.get('one_line_summary') or r.get('abstract') or r.get('raw_text', '')[:350]}\n"
+            f"URL：{r.get('reference_url') or r.get('url', '')}"
+            for i, r in enumerate(top)
+        )
+
+        context_note = (
+            f"（今日共找到 {len(crypto_rows)} 条 Crypto 相关内容，从中选取最相关条目）"
+            if len(crypto_rows) >= 2
+            else f"（今日 Crypto 专项内容较少，综合全类别 {len(top)} 条高分内容推断 Crypto alpha）"
+        )
+
+        prompt = f"""日期：{date_str}
+{context_note}
+
+今日量化情报精选如下：
+
+{items_text}
+
+---
+
+你是专注加密货币的量化研究员。请根据以上内容，提炼一个今日最值得测试的 Crypto Alpha Idea。
+要求：
+- Alpha 必须有可获取的数据支撑（币安/Bybit OHLCV、链上数据、资金费率等皆可）
+- 信号逻辑要具体到频率、时间窗口、触发条件
+- 回测方法要明确（资产池、时间段、评估指标）
+- supporting_sources 必须来自上方内容列表（标题和 URL 对应原文）
+
+输出严格 JSON，全部字段必须有值：
+{{
+  "alpha_name": "不超过 20 字的 alpha 名称",
+  "hypothesis": "一句话：市场为什么存在这个机会，谁是对手盘",
+  "signal_logic": "具体信号：数据字段、计算方式、触发条件、持仓方向",
+  "data_needed": ["数据来源 1（具体到交易所/链/API）", "数据来源 2"],
+  "backtest_approach": "回测资产池、时间窗口、频率、止损、评估指标（夏普/最大回撤等）",
+  "supporting_sources": [
+    {{"title": "来自上方列表的文章标题", "url": "对应的原文 URL", "why": "这条内容如何支持这个 alpha"}}
+  ],
+  "risk_factors": ["风险 1", "风险 2", "风险 3"],
+  "confidence": "high 或 medium 或 low",
+  "confidence_reason": "一句话说明信心来源或局限",
+  "quick_start": "今天可以立即做的第一步（具体到数据下载命令或代码思路）"
+}}
+
+只输出 JSON，不要有任何解释文字。"""
+
+        reasoner_model = (
+            os.environ.get("DEEPSEEK_REASONER_MODEL", "deepseek-reasoner").strip()
+            or "deepseek-reasoner"
+        )
+        payload = {
+            "model": reasoner_model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "你是专注加密货币量化的资深研究员，擅长从信息流中发现可测试的 alpha。只输出 JSON。",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "response_format": {"type": "json_object"},
+        }
+        request = urllib.request.Request(
+            self.config.base_url,
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.config.api_key}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=120) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        content = data["choices"][0]["message"]["content"]
+        result = _extract_json(content)
+        result["model"] = reasoner_model
+        result["date"] = date_str
+        return result
+
     def _prompt(self, item: Item, score: Score) -> str:
         body = truncate(item.readable_text, self.config.max_input_chars)
         arxiv_html = _arxiv_html_url(item.url)
