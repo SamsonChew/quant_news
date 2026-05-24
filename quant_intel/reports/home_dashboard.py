@@ -134,8 +134,9 @@ def _render_home(payload: dict[str, Any]) -> str:
 
     .controls {{
       display: grid;
-      grid-template-columns: 1fr 140px 160px 160px;
+      grid-template-columns: 1fr 140px 160px 160px auto;
       gap: 10px;
+      align-items: center;
     }}
 
     .control {{
@@ -500,9 +501,205 @@ def _render_home(payload: dict[str, Any]) -> str:
         grid-template-columns: 1fr;
       }}
     }}
+
+    /* Onboarding overlay */
+    .ob-overlay {{
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: rgba(32, 33, 36, 0.55);
+      backdrop-filter: blur(6px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }}
+
+    .ob-overlay.hidden {{
+      display: none;
+    }}
+
+    .ob-modal {{
+      width: 100%;
+      max-width: 680px;
+      border-radius: 24px;
+      background: #fff;
+      box-shadow: 0 8px 48px rgba(32, 33, 36, 0.28);
+      padding: 36px;
+      animation: ob-in 220ms ease;
+    }}
+
+    @keyframes ob-in {{
+      from {{ opacity: 0; transform: translateY(12px); }}
+      to   {{ opacity: 1; transform: translateY(0); }}
+    }}
+
+    .ob-header {{
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 24px;
+    }}
+
+    .ob-logo {{
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: conic-gradient(from 0deg, var(--blue) 0 25%, var(--red) 0 50%, var(--yellow) 0 75%, var(--green) 0 100%);
+      box-shadow: inset 0 0 0 10px #fff;
+      flex-shrink: 0;
+    }}
+
+    .ob-header h2 {{
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+    }}
+
+    .ob-header p {{
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }}
+
+    .ob-steps {{
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-bottom: 28px;
+    }}
+
+    .ob-step {{
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+    }}
+
+    .ob-step-icon {{
+      font-size: 24px;
+      line-height: 1;
+      margin-bottom: 10px;
+    }}
+
+    .ob-step h3 {{
+      margin: 0 0 6px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--blue);
+    }}
+
+    .ob-step p {{
+      margin: 0;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.55;
+    }}
+
+    .ob-footer {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }}
+
+    .ob-footer small {{
+      color: var(--muted);
+      font-size: 12px;
+    }}
+
+    .ob-btn {{
+      height: 42px;
+      border: none;
+      border-radius: 999px;
+      background: var(--blue);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 0 24px;
+      cursor: pointer;
+      transition: background 140ms;
+    }}
+
+    .ob-btn:hover {{
+      background: #1557b0;
+    }}
+
+    /* Help button */
+    .help-btn {{
+      height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 0 14px;
+      cursor: pointer;
+      white-space: nowrap;
+    }}
+
+    .help-btn:hover {{
+      border-color: var(--blue);
+      color: var(--blue);
+    }}
+
+    /* Pulse hint on section nav */
+    .nav-hint {{
+      font-size: 11px;
+      color: var(--blue);
+      margin: 4px 0 10px 10px;
+      opacity: 0.8;
+    }}
+
+    @media (max-width: 620px) {{
+      .ob-steps {{
+        grid-template-columns: 1fr;
+      }}
+    }}
   </style>
 </head>
 <body>
+  <!-- First-visit onboarding overlay -->
+  <div class="ob-overlay hidden" id="ob-overlay">
+    <div class="ob-modal">
+      <div class="ob-header">
+        <div class="ob-logo"></div>
+        <div>
+          <h2>欢迎使用 samson 量化情报台</h2>
+          <p>每天自动聚合 arXiv 论文、量化论坛、知乎和 QuantML，生成结构化中文情报</p>
+        </div>
+      </div>
+      <div class="ob-steps">
+        <div class="ob-step">
+          <div class="ob-step-icon">&#128250;</div>
+          <h3>两条主线传送门</h3>
+          <p>左侧「两条主线」可以按方向筛选：<br>
+            <b>深度学习量化未来</b>——看 AI/DL 技术趋势<br>
+            <b>AI 量化工具</b>——看可用的工具和代码
+          </p>
+        </div>
+        <div class="ob-step">
+          <div class="ob-step-icon">&#128196;</div>
+          <h3>四段式阅读格式</h3>
+          <p>每条情报统一展示：<br>
+            1. 太长不读<br>
+            2. 对量化工作的价值<br>
+            3. 关键核心点<br>
+            4. 原文链接
+          </p>
+        </div>
+        <div class="ob-step">
+          <div class="ob-step-icon">&#128269;</div>
+          <h3>搜索和过滤</h3>
+          <p>顶栏可按关键词搜索全文，左侧可按日期、主线、细分标签组合筛选。<br>点「打开当日看板」进入详情视图。</p>
+        </div>
+      </div>
+      <div class="ob-footer">
+        <small>下次不再显示 · 右上角「使用指南」可随时重新打开</small>
+        <button class="ob-btn" id="ob-dismiss">了解了，开始使用</button>
+      </div>
+    </div>
+  </div>
   <header class="topbar">
     <div class="brand">
       <h1>samson 量化情报台</h1>
@@ -513,6 +710,7 @@ def _render_home(payload: dict[str, Any]) -> str:
       <select class="control" id="day-select"></select>
       <select class="control" id="section-select"></select>
       <select class="control" id="category-select"></select>
+      <button class="help-btn" id="help-btn">使用指南</button>
     </div>
   </header>
 
@@ -528,7 +726,8 @@ def _render_home(payload: dict[str, Any]) -> str:
       <div class="section-label">日期</div>
       <div class="nav-list" id="day-list"></div>
 
-      <div class="section-label">两条主线</div>
+      <div class="section-label">两条主线 <span style="font-weight:400;color:var(--muted)">· 点击进入</span></div>
+      <div class="nav-hint" id="section-hint">&#x1F449; 选择方向，快速定位今日重点</div>
       <div class="nav-list" id="section-list"></div>
 
       <div class="section-label">细分标签</div>
@@ -563,6 +762,11 @@ def _render_home(payload: dict[str, Any]) -> str:
       $('metric-days').textContent = Object.keys(payload.day_counts || {{}}).length;
       $('metric-high').textContent = items.filter((item) => priorityLabel(item.read_priority) === '高').length;
       $('metric-refs').textContent = items.filter((item) => item.reference_url).length;
+
+      // Default to most recent day so the homepage opens on today's items
+      const days = Object.keys(payload.day_counts || {{}}).sort().reverse();
+      if (days.length > 0) state.day = days[0];
+
       buildDayControls();
       buildSectionControls();
       buildCategoryControls();
@@ -596,7 +800,8 @@ def _render_home(payload: dict[str, Any]) -> str:
       $('day-select').innerHTML = option('All', `全部日期 (${{items.length}})`) +
         days.map((day) => option(day, `${{day}} (${{counts[day]}})`)).join('');
       $('day-list').innerHTML = navButton('day', 'All', '全部', items.length) +
-        days.map((day) => navButton('day', day, day, counts[day])).join('');
+        days.map((day) => navButton('day', day, day === days[0] ? `今日 ${{day}}` : day, counts[day])).join('');
+      $('day-select').value = state.day;
       bindNav('day');
     }}
 
@@ -768,11 +973,13 @@ def _render_home(payload: dict[str, Any]) -> str:
     }}
 
     function title() {{
+      const days = Object.keys(payload.day_counts || {{}}).sort().reverse();
+      const isToday = state.day !== 'All' && state.day === days[0];
       const parts = [];
-      if (state.day !== 'All') parts.push(state.day);
+      if (state.day !== 'All') parts.push(isToday ? '今日情报' : state.day);
       if (state.section !== 'All') parts.push(sectionLabel(state.section));
       if (state.category !== 'All') parts.push(categoryLabel(state.category));
-      return parts.length ? parts.join(' / ') : '最近资讯';
+      return parts.length ? parts.join(' / ') : '全部情报';
     }}
 
     function groupByDay(list) {{
@@ -832,6 +1039,29 @@ def _render_home(payload: dict[str, Any]) -> str:
     }}
 
     init();
+
+    // Onboarding logic
+    const OB_KEY = 'samson_quant_onboarded_v1';
+    function showOnboarding() {{
+      $('ob-overlay').classList.remove('hidden');
+    }}
+    function hideOnboarding() {{
+      $('ob-overlay').classList.add('hidden');
+      localStorage.setItem(OB_KEY, '1');
+      const hint = $('section-hint');
+      if (hint) hint.style.display = 'none';
+    }}
+    $('ob-dismiss').addEventListener('click', hideOnboarding);
+    $('ob-overlay').addEventListener('click', (e) => {{
+      if (e.target === $('ob-overlay')) hideOnboarding();
+    }});
+    $('help-btn').addEventListener('click', showOnboarding);
+    if (!localStorage.getItem(OB_KEY)) {{
+      showOnboarding();
+    }} else {{
+      const hint = $('section-hint');
+      if (hint) hint.style.display = 'none';
+    }}
   </script>
 </body>
 </html>

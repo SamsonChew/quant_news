@@ -565,6 +565,34 @@ def _render_dashboard(payload: dict[str, Any]) -> str:
       font-weight: 700;
     }}
 
+    .feedback-row {{
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+    }}
+
+    .feedback-btn {{
+      background: #f1f3f4;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 120ms, border-color 120ms;
+    }}
+
+    .feedback-btn:hover {{ background: var(--blue-soft); }}
+    .feedback-btn.active-up {{ background: var(--green-soft); border-color: var(--green); }}
+    .feedback-btn.active-down {{ background: var(--red-soft); border-color: var(--red); }}
+
+    .feedback-hint {{
+      color: var(--muted);
+      font-size: 11px;
+    }}
+
     .empty {{
       border: 1px dashed var(--line);
       border-radius: var(--radius);
@@ -689,6 +717,20 @@ def _render_dashboard(payload: dict[str, Any]) -> str:
 
     const priorityRank = {{ High: 3, Medium: 2, Low: 1, '高': 3, '中': 2, '低': 1 }};
     const $ = (id) => document.getElementById(id);
+
+    // --- Feedback ---
+    const _feedbackStore = JSON.parse(localStorage.getItem('quant-feedback') || '{{}}');
+    function getFeedback(id) {{ return _feedbackStore[id] || 0; }}
+    function setFeedback(id, signal) {{
+      if (_feedbackStore[id] === signal) {{ delete _feedbackStore[id]; signal = 0; }}
+      else {{ _feedbackStore[id] = signal; }}
+      localStorage.setItem('quant-feedback', JSON.stringify(_feedbackStore));
+      fetch('http://localhost:8080/feedback', {{
+        method: 'POST',
+        headers: {{ 'Content-Type': 'application/json' }},
+        body: JSON.stringify({{ id, signal }}),
+      }}).catch(() => {{}});
+    }}
 
     function init() {{
       $('report-date').textContent = payload.report_date + ' - 主力源：arXiv / 知乎 / QuantML / 大型论坛 - 生成时间 ' + payload.generated_at;
@@ -857,6 +899,7 @@ def _render_dashboard(payload: dict[str, Any]) -> str:
 
     function itemCard(item) {{
       const sec = item.report_sections?.[0] || 'other';
+      const sig = getFeedback(item.id);
       return `
         <article class="item ${{item.id === state.activeId ? 'active' : ''}}"
                  data-id="${{escapeAttr(item.id)}}"
@@ -871,6 +914,11 @@ def _render_dashboard(payload: dict[str, Any]) -> str:
             <span class="tag">${{escapeHtml(priorityLabel(item.read_priority))}}</span>
           </div>
           ${{readerFormat(item, true)}}
+          <div class="feedback-row">
+            <button class="feedback-btn ${{sig === 1 ? 'active-up' : ''}}" data-feedback="1" title="有用">👍</button>
+            <button class="feedback-btn ${{sig === -1 ? 'active-down' : ''}}" data-feedback="-1" title="跳过">👎</button>
+            <span class="feedback-hint">${{sig === 1 ? '已标记有用' : sig === -1 ? '已标记跳过' : ''}}</span>
+          </div>
         </article>
       `;
     }}
@@ -918,6 +966,14 @@ def _render_dashboard(payload: dict[str, Any]) -> str:
       container.querySelectorAll('.item').forEach((node) => {{
         node.addEventListener('click', () => {{
           state.activeId = node.dataset.id;
+          render();
+        }});
+      }});
+      container.querySelectorAll('.feedback-btn').forEach((btn) => {{
+        btn.addEventListener('click', (e) => {{
+          e.stopPropagation();
+          const itemNode = btn.closest('.item');
+          setFeedback(itemNode.dataset.id, parseInt(btn.dataset.feedback, 10));
           render();
         }});
       }});

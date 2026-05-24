@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import date
 from urllib.parse import urlencode
 
@@ -16,9 +17,10 @@ GITHUB_SEARCH_API = "https://api.github.com/search/repositories"
 class GitHubSource(Source):
     name = "GitHub"
 
-    def __init__(self, queries: list[str], max_results: int = 15) -> None:
+    def __init__(self, queries: list[str], max_results: int = 15, fetch_readme: bool = False) -> None:
         self.queries = queries
         self.max_results = max_results
+        self.fetch_readme = fetch_readme
 
     def fetch(self) -> list[Item]:
         items: list[Item] = []
@@ -41,6 +43,32 @@ class GitHubSource(Source):
                 items.append(item)
         return items
 
+    def _fetch_readme(self, full_name: str) -> str:
+        """Fetch the raw README text for a GitHub repo. Returns '' on any error."""
+        try:
+            url = f"https://api.github.com/repos/{full_name}/readme"
+            return fetch_text(url, headers={"Accept": "application/vnd.github.raw+json"})
+        except Exception:
+            return ""
+
+    def _extract_readme_summary(self, readme: str) -> str:
+        """Strip badge lines and keep up to (not including) the 4th ## section header."""
+        if not readme:
+            return ""
+        lines = readme.splitlines()
+        # Strip badge lines (lines starting with [![)
+        lines = [line for line in lines if not line.strip().startswith("[![")]
+        # Keep content up to (but not including) the 4th ## section header
+        section_count = 0
+        result_lines: list[str] = []
+        for line in lines:
+            if re.match(r"^##\s", line):
+                section_count += 1
+                if section_count >= 4:
+                    break
+            result_lines.append(line)
+        return "\n".join(result_lines).strip()[:2000]
+
     def _repo_to_item(self, repo: dict) -> Item:
         full_name = clean_text(repo.get("full_name", ""))
         description = clean_text(repo.get("description", ""))
@@ -48,6 +76,13 @@ class GitHubSource(Source):
         url = repo.get("html_url", "")
         updated_at = normalize_date(repo.get("updated_at")) or date.today().isoformat()
         text = f"{description} Topics: {', '.join(topics)}"
+
+        if self.fetch_readme:
+            readme = self._fetch_readme(full_name)
+            summary = self._extract_readme_summary(readme)
+            if summary:
+                text = summary
+
         return Item(
             id=stable_hash(["github", url or full_name]),
             source=self.name,

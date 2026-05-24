@@ -33,6 +33,10 @@ class Database:
             self.conn.execute(
                 "ALTER TABLE summaries ADD COLUMN key_figures_md TEXT NOT NULL DEFAULT ''"
             )
+        if "prompt_version" not in existing:
+            self.conn.execute(
+                "ALTER TABLE summaries ADD COLUMN prompt_version TEXT NOT NULL DEFAULT ''"
+            )
 
     def upsert_item(self, item: Item) -> bool:
         before = self.conn.total_changes
@@ -88,8 +92,8 @@ class Database:
             INSERT INTO summaries (
               item_id, one_line_summary, technical_summary, key_points,
               quant_relevance, possible_use_case, limitations, read_priority,
-              model_name, created_at, key_figures_md
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              model_name, created_at, key_figures_md, prompt_version
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(item_id) DO UPDATE SET
               one_line_summary = excluded.one_line_summary,
               technical_summary = excluded.technical_summary,
@@ -100,7 +104,8 @@ class Database:
               read_priority = excluded.read_priority,
               model_name = excluded.model_name,
               created_at = excluded.created_at,
-              key_figures_md = excluded.key_figures_md
+              key_figures_md = excluded.key_figures_md,
+              prompt_version = excluded.prompt_version
             """,
             (
                 summary.item_id,
@@ -114,9 +119,60 @@ class Database:
                 summary.model_name,
                 summary.created_at,
                 summary.key_figures_md,
+                summary.prompt_version,
             ),
         )
         self.conn.commit()
+
+    def get_summary(self, item_id: str) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            "SELECT * FROM summaries WHERE item_id = ?",
+            (item_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        data = dict(row)
+        if isinstance(data.get("key_points"), str):
+            try:
+                data["key_points"] = json.loads(data["key_points"])
+            except json.JSONDecodeError:
+                data["key_points"] = []
+        return data
+
+    def get_item_id_by_canonical_url(self, url: str) -> str | None:
+        """Return the id of an item whose URL canonicalises to the same arXiv paper, or None."""
+        import re
+        if not url:
+            return None
+        m = re.search(r"arxiv\.org/(?:abs|pdf)/(\d{4}\.\d+)", url)
+        if not m:
+            return None
+        arxiv_id = m.group(1)
+        row = self.conn.execute(
+            "SELECT id FROM items WHERE url LIKE ? OR url LIKE ? LIMIT 1",
+            (f"%arxiv.org/abs/{arxiv_id}%", f"%arxiv.org/pdf/{arxiv_id}%"),
+        ).fetchone()
+        return str(row["id"]) if row else None
+
+    def upsert_feedback(self, item_id: str, signal: int) -> None:
+        from quant_intel.models import utc_now_iso
+        self.conn.execute(
+            """
+            INSERT INTO feedback (item_id, signal, created_at) VALUES (?, ?, ?)
+            ON CONFLICT(item_id) DO UPDATE SET
+              signal = excluded.signal,
+              created_at = excluded.created_at
+            """,
+            (item_id, signal, utc_now_iso()),
+        )
+        self.conn.commit()
+
+    def get_feedback(self, item_id: str) -> int:
+        row = self.conn.execute(
+            "SELECT signal FROM feedback WHERE item_id = ?",
+            (item_id,),
+        ).fetchone()
+        return int(row["signal"]) if row else 0
 
     def upsert_score(self, score: Score) -> None:
         self.conn.execute(

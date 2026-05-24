@@ -54,3 +54,9 @@ CREATE TABLE IF NOT EXISTS reports (
   item_count INTEGER NOT NULL,
   source_stats TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS feedback (
+  item_id TEXT PRIMARY KEY,
+  signal INTEGER NOT NULL,
+  created_at TEXT NOT NULL
+);

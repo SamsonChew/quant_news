@@ -42,6 +42,7 @@ class Summary:
     model_name: str = "rule_based_v0"
     created_at: str = ""
     key_figures_md: str = ""
+    prompt_version: str = ""
 
 
 @dataclass(slots=True)

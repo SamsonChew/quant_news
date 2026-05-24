@@ -48,3 +48,18 @@ def truncate(value: str, limit: int) -> str:
     if len(text) <= limit:
         return text
     return text[: limit - 1].rstrip() + "..."
+
+
+def canonical_url(url: str) -> str:
+    """Normalise a URL so the same content from different sources compares equal.
+
+    Currently handles arXiv: strips /pdf/ vs /abs/ difference and version suffixes (v1, v2 …).
+    For all other URLs returns the URL lowercased and stripped.
+    """
+    if not url:
+        return ""
+    # arXiv: normalise to https://arxiv.org/abs/{id} without version suffix
+    m = re.search(r"arxiv\.org/(?:abs|pdf)/(\d{4}\.\d+)(?:v\d+)?", url)
+    if m:
+        return f"https://arxiv.org/abs/{m.group(1)}"
+    return url.lower().strip()

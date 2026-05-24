@@ -13,6 +13,8 @@ from quant_intel.i18n import source_type_zh
 from quant_intel.models import Item, Score
 from quant_intel.pipeline.normalize import truncate
 
+PROMPT_VERSION = "v2"
+
 _INSTRUCTIONS_PATH = Path(__file__).resolve().parents[2] / "prompts" / "summary_instructions.md"
 
 _INSTRUCTIONS_CACHE: str | None = None
@@ -240,7 +242,8 @@ class DeepSeekClient:
         figure_hint = (
             f"\narXiv HTML 版（含原图）：{arxiv_html}" if arxiv_html else ""
         )
-        return f"""请按系统指令处理以下内容。
+        source_hint = _source_type_hint(item.source_type)
+        return f"""请按系统指令处理以下内容。{source_hint}
 
 元数据：
 - 标题：{item.title}
@@ -252,6 +255,49 @@ class DeepSeekClient:
 
 原文：
 {body}""".strip()
+
+
+def _source_type_hint(source_type: str) -> str:
+    if source_type == "paper":
+        return (
+            '\n\n【内容类型：学术论文】'
+            '重点提取：研究问题、数据集、模型方法、关键量化指标（夏普、精度、收益等）、图表。'
+            ' key_points[0]=核心方法或发现（含具体数字）；'
+            'key_points[1]=量化可用性（数据要求、实现难度、可复现性）；'
+            'key_points[2]=局限性批判（样本外、成本假设、过拟合风险）。'
+            ' read_priority 以「样本外可复现性 + 量化直接可用性」为标准。'
+        )
+    if source_type in ("forum", "social", "x", "zhihu"):
+        return (
+            '\n\n【内容类型：社区讨论 / 社交媒体】'
+            '重点提取：社区共识、实战经验、可操作建议、工具推荐、踩坑教训。'
+            ' key_figures 必须返回 []（没有图表）。'
+            ' key_points[0]=社区核心共识或最有价值的观点；'
+            'key_points[1]=具体可操作的建议、方法或工具推荐；'
+            'key_points[2]=争议点、注意事项或潜在风险。'
+            ' core_idea 描述讨论的核心话题和社区主流观点，不要套用论文分析框架。'
+            ' read_priority 以「讨论热度 + 实战价值」为标准，有可操作内容就给「高」，不要因为缺乏严格实验就降级。'
+        )
+    if source_type == "github":
+        return (
+            '\n\n【内容类型：GitHub 仓库】'
+            '重点提取：工具功能、解决的量化问题、接入量化工作流的方式。'
+            ' key_figures 必须返回 []。'
+            ' key_points[0]=主要功能和解决的核心量化问题；'
+            'key_points[1]=接入难度、依赖栈、代码质量（是否有测试、文档）；'
+            'key_points[2]=局限性、维护活跃度、许可证风险。'
+            ' possible_use_case 写具体的接入步骤，例如「替换现有回测框架的执行模块」。'
+        )
+    if source_type in ("blog", "news"):
+        return (
+            '\n\n【内容类型：博客 / 新闻】'
+            '重点提取：作者核心论点、量化可操作性、支撑论据。'
+            ' key_figures 返回 []（除非有具体数据图表）。'
+            ' key_points[0]=作者最核心的量化观点；'
+            'key_points[1]=支撑论点的证据或数据；'
+            'key_points[2]=潜在偏差、幸存者偏差或需要独立验证的结论。'
+        )
+    return ""
 
 
 def _arxiv_html_url(url: str) -> str:

@@ -61,6 +61,20 @@ def select_report_rows(
                 seen_ids.add(row["id"])
 
     selected.sort(key=lambda r: r["final_score"], reverse=True)
+
+    # Dedup by canonical URL — same arXiv paper from ArxivSource + QuantMLSource must not appear twice
+    from quant_intel.pipeline.normalize import canonical_url as _canonical_url
+    url_seen: dict[str, str] = {}  # canonical_url -> item id of the best row we already kept
+    deduped: list[dict[str, Any]] = []
+    for row in selected:
+        cu = _canonical_url(str(row.get("url", "")))
+        if cu and cu in url_seen:
+            continue  # already have a better-scored row for this URL (list is sorted desc)
+        if cu:
+            url_seen[cu] = row["id"]
+        deduped.append(row)
+    selected = deduped
+
     return selected[:max_total]
 
 

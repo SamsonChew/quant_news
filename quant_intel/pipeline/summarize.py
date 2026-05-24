@@ -89,6 +89,7 @@ def summarize_item(item: Item, score: Score) -> Summary:
         limitations=limitations,
         read_priority=priority,
         created_at=utc_now_iso(),
+        prompt_version="rule_v1",
     )
 
 
@@ -97,6 +98,7 @@ def summary_from_llm_payload(
     score: Score,
     payload: dict[str, Any],
     model_name: str,
+    prompt_version: str = "",
 ) -> Summary:
     fallback = summarize_item(item, score)
 
@@ -134,6 +136,7 @@ def summary_from_llm_payload(
         model_name=model_name,
         created_at=utc_now_iso(),
         key_figures_md=str(payload.get("key_figures_md", "") or ""),
+        prompt_version=prompt_version,
     )
 
 
