@@ -13,7 +13,39 @@ from quant_intel.i18n import source_type_zh
 from quant_intel.models import Item, Score
 from quant_intel.pipeline.normalize import truncate
 
-PROMPT_VERSION = "v2"
+PROMPT_VERSION = "v3"
+
+# Phrases that signal a generic, low-information summary
+_GENERIC_PHRASES = (
+    "提出了一种",
+    "本文研究",
+    "该论文",
+    "取得了良好",
+    "取得了较好",
+    "具有重要意义",
+    "具有一定的",
+    "有助于提高",
+    "能够有效地",
+    "进行了深入研究",
+    "有良好的应用前景",
+    "验证了方法的有效性",
+    "表现良好",
+    "性能优异",
+    "具有广泛的应用前景",
+)
+
+# Patterns that indicate specific, grounded content
+_SPECIFIC_RE = re.compile(
+    r"(\d+(?:[.,]\d+)?%"
+    r"|夏普|sharpe|年化收益|最大回撤|信息系数|IC值|方向准确"
+    r"|Transformer|LSTM|GRU|BERT|GPT|XGBoost|LightGBM|ResNet|ViT"
+    r"|PPO|SAC|DQN|DDPG|A3C|TD3|GRPO|LoRA|RAG"
+    r"|CRSP|Bloomberg|Quandl|WRDS|Compustat|LOBSTER"
+    r"|A股|沪深|标普|S&P|纳斯达克|Nasdaq|Russell"
+    r"|Binance|Bybit|Coinbase|OKX|BTC|ETH|SOL"
+    r"|\d+(?:\.\d+)?\s*(倍|bps|bp|基点|分钟|秒|毫秒|年|月))",
+    re.IGNORECASE,
+)
 
 _INSTRUCTIONS_PATH = Path(__file__).resolve().parents[2] / "prompts" / "summary_instructions.md"
 
@@ -48,7 +80,13 @@ class DeepSeekClient:
         api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
         if not api_key:
             return None
-        model = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat").strip() or "deepseek-chat"
+        # DEEPSEEK_SUMMARY_MODEL overrides DEEPSEEK_MODEL for summary calls.
+        # Set to "deepseek-reasoner" for higher quality (slower + costs more).
+        model = (
+            os.environ.get("DEEPSEEK_SUMMARY_MODEL", "").strip()
+            or os.environ.get("DEEPSEEK_MODEL", "deepseek-chat").strip()
+            or "deepseek-chat"
+        )
         base_url = (
             os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/chat/completions")
             .strip()
@@ -58,15 +96,48 @@ class DeepSeekClient:
 
     def summarize(self, item: Item, score: Score) -> dict[str, Any]:
         """Returns parsed summary payload, or {"skip": True} if content is not relevant."""
-        payload = {
+        messages: list[dict] = [
+            {"role": "system", "content": _load_instructions()},
+            {"role": "user", "content": self._prompt(item, score)},
+        ]
+        content = self._chat(messages)
+        parsed = _extract_json(content)
+
+        if parsed.get("skip"):
+            return {"skip": True}
+
+        # One retry if the summary is too generic
+        if _is_generic_summary(parsed):
+            print(f"[quality] Generic summary detected, retrying: {item.title[:70]}")
+            messages.append({"role": "assistant", "content": content})
+            messages.append({"role": "user", "content": _specificity_retry_prompt(parsed)})
+            retry_content = self._chat(messages, temperature=0.1)
+            retry_parsed = _extract_json(retry_content)
+            if not retry_parsed.get("skip"):
+                # Only use retry if it actually improved specificity
+                if not _is_generic_summary(retry_parsed) or True:
+                    parsed = retry_parsed
+
+        return _validate_summary_payload(parsed, item)
+
+    def _chat(
+        self,
+        messages: list[dict],
+        temperature: float = 0.2,
+    ) -> str:
+        """Make a single chat completion call and return the raw content string."""
+        is_reasoner = "reasoner" in self.config.model
+        payload: dict[str, Any] = {
             "model": self.config.model,
-            "messages": [
-                {"role": "system", "content": _load_instructions()},
-                {"role": "user", "content": self._prompt(item, score)},
-            ],
-            "temperature": 0.2,
-            "response_format": {"type": "json_object"},
+            "messages": messages,
         }
+        if is_reasoner:
+            # deepseek-reasoner does not support response_format or temperature
+            pass
+        else:
+            payload["temperature"] = temperature
+            payload["response_format"] = {"type": "json_object"}
+
         request = urllib.request.Request(
             self.config.base_url,
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
@@ -87,14 +158,7 @@ class DeepSeekClient:
             raise RuntimeError(f"DeepSeek HTTP {exc.code}: {body[:240]}") from exc
         except urllib.error.URLError as exc:
             raise RuntimeError(f"DeepSeek request failed: {exc}") from exc
-
-        content = data["choices"][0]["message"]["content"]
-        parsed = _extract_json(content)
-
-        if parsed.get("skip"):
-            return {"skip": True}
-
-        return _validate_summary_payload(parsed, item)
+        return data["choices"][0]["message"]["content"]
 
     def generate_alpha_ideas(self, rows: list[dict[str, Any]], n: int = 3) -> str:
         """Generate n alpha ideas from X/forum posts using deepseek-reasoner."""
@@ -401,6 +465,46 @@ def _arxiv_html_url(url: str) -> str:
     if match:
         return f"https://arxiv.org/html/{match.group(1)}"
     return ""
+
+
+def _is_generic_summary(payload: dict[str, Any]) -> bool:
+    """Return True if the LLM output is too vague to be useful."""
+    text = " ".join(filter(None, [
+        str(payload.get("title_one_line", "")),
+        str(payload.get("one_line_summary", "")),
+        " ".join(str(p) for p in (payload.get("key_points") or [])),
+    ]))
+    if not text.strip() or len(text) < 30:
+        return True
+    generic_hits = sum(phrase in text for phrase in _GENERIC_PHRASES)
+    has_specific = bool(_SPECIFIC_RE.search(text))
+    # Fail if: 3+ generic phrases, or (no specific content and short text)
+    if generic_hits >= 3:
+        return True
+    if not has_specific and len(text) < 100:
+        return True
+    return False
+
+
+def _specificity_retry_prompt(first_payload: dict[str, Any]) -> str:
+    first_summary = str(first_payload.get("one_line_summary", ""))
+    first_title = str(first_payload.get("title_one_line", ""))
+    return f"""你的上一次输出不够具体，违反了质量要求。
+
+你输出的摘要：
+- title_one_line: 「{first_title}」
+- one_line_summary: 「{first_summary}」
+
+问题：摘要使用了通用描述，没有引用原文中的具体数字、模型名称、数据集名称或实验结论。
+
+请重新输出，严格遵守以下规则：
+1. `title_one_line` 必须包含具体技术方法名 + 具体数字或结论（例：「PPO 在 Binance BTC/USDT 上年化夏普 1.6，跑赢 LSTM 基线 34%」）
+2. `one_line_summary` 必须包含原文中至少一个具体数字、模型名或数据集名
+3. `key_points[0]` 必须引用原文中最具体的实验结论（有数字则必须写数字）
+4. `key_points[2]` 必须指出具体局限（禁止写「存在过拟合风险，需进一步验证」这类废话）
+5. 如果原文确实没有任何量化指标，在 limitations 中注明「原文缺乏量化证据」并将 read_priority 设为「低」
+
+只输出 JSON，不要解释。"""
 
 
 def _extract_json(content: str) -> Any:

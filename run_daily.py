@@ -138,7 +138,9 @@ def summarize_for_run(
     try:
         payload = client.summarize(item, score)
         if payload.get("skip"):
-            return summarize_item(item, score), True
+            rule_summary = summarize_item(item, score)
+            rule_summary.prompt_version = PROMPT_VERSION
+            return rule_summary, True
         return summary_from_llm_payload(
             item=item,
             score=score,
