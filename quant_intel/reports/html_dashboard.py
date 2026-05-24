@@ -305,6 +305,35 @@ def _render_dashboard(payload: dict[str, Any]) -> str:
       gap: 10px;
     }}
 
+    .section-group-header {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 2px 4px;
+      margin-top: 10px;
+      border-bottom: 2px solid var(--line);
+    }}
+
+    .section-group-header:first-child {{
+      margin-top: 0;
+    }}
+
+    .section-group-title {{
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }}
+
+    .section-group-header[data-section="deep_learning_quant"] .section-group-title {{ color: var(--blue); }}
+    .section-group-header[data-section="ai_quant_tools"] .section-group-title {{ color: var(--green); }}
+    .section-group-header[data-section="daily_news"] .section-group-title {{ color: var(--yellow); }}
+
+    .section-group-count {{
+      color: var(--muted);
+      font-size: 12px;
+    }}
+
     .item {{
       position: relative;
       overflow: hidden;
@@ -324,6 +353,10 @@ def _render_dashboard(payload: dict[str, Any]) -> str:
       height: 4px;
       background: linear-gradient(90deg, var(--blue), var(--red), var(--yellow), var(--green));
     }}
+
+    .item[data-section="deep_learning_quant"]::before {{ background: var(--blue); }}
+    .item[data-section="ai_quant_tools"]::before {{ background: var(--green); }}
+    .item[data-section="daily_news"]::before {{ background: var(--yellow); }}
 
     .item:hover,
     .item.active {{
@@ -822,28 +855,66 @@ def _render_dashboard(payload: dict[str, Any]) -> str:
       }});
     }}
 
-    function renderItems(visible) {{
-      const container = $('items');
-      if (!visible.length) {{
-        container.innerHTML = '<div class="empty">当前筛选条件下没有匹配内容。</div>';
-        return;
-      }}
-      container.innerHTML = visible.map((item) => `
-        <article class="item ${{item.id === state.activeId ? 'active' : ''}}" data-id="${{escapeAttr(item.id)}}">
+    function itemCard(item) {{
+      const sec = item.report_sections?.[0] || 'other';
+      return `
+        <article class="item ${{item.id === state.activeId ? 'active' : ''}}"
+                 data-id="${{escapeAttr(item.id)}}"
+                 data-section="${{escapeAttr(sec)}}">
           <div class="item-top">
             <h3>${{escapeHtml(item.display_title || item.title)}}</h3>
             <div class="score">${{Number(item.final_score).toFixed(1)}}</div>
           </div>
           <div class="meta">
-            <span class="tag">${{escapeHtml(sectionLabel(item.report_sections?.[0]))}}</span>
             <span class="tag">${{escapeHtml(categoryLabel(item.category))}}</span>
             <span class="tag">${{escapeHtml(item.source)}}</span>
             <span class="tag">${{escapeHtml(priorityLabel(item.read_priority))}}</span>
           </div>
           ${{readerFormat(item, true)}}
         </article>
-      `).join('');
+      `;
+    }}
 
+    function sectionGroupHeader(section, count) {{
+      return `
+        <div class="section-group-header" data-section="${{escapeAttr(section.key)}}">
+          <span class="section-group-title">${{escapeHtml(section.label)}}</span>
+          <span class="section-group-count">${{count}} 条</span>
+        </div>
+      `;
+    }}
+
+    function renderItems(visible) {{
+      const container = $('items');
+      if (!visible.length) {{
+        container.innerHTML = '<div class="empty">当前筛选条件下没有匹配内容。</div>';
+        return;
+      }}
+
+      let html = '';
+      if (state.section === 'All') {{
+        // Group by section in defined order, with a header for each group
+        const grouped = {{}};
+        for (const item of visible) {{
+          const sec = item.report_sections?.[0] || 'other';
+          if (!grouped[sec]) grouped[sec] = [];
+          grouped[sec].push(item);
+        }}
+        for (const section of (payload.sections || [])) {{
+          const group = grouped[section.key];
+          if (!group || !group.length) continue;
+          html += sectionGroupHeader(section, group.length);
+          html += group.map((item) => itemCard(item)).join('');
+        }}
+        // Append any items that fell into 'other' (shouldn't normally happen)
+        if (grouped['other']?.length) {{
+          html += grouped['other'].map((item) => itemCard(item)).join('');
+        }}
+      }} else {{
+        html = visible.map((item) => itemCard(item)).join('');
+      }}
+
+      container.innerHTML = html;
       container.querySelectorAll('.item').forEach((node) => {{
         node.addEventListener('click', () => {{
           state.activeId = node.dataset.id;
