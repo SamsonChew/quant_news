@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS items (
 CREATE INDEX IF NOT EXISTS idx_items_collected_at ON items(collected_at);
 CREATE INDEX IF NOT EXISTS idx_items_category ON items(category);
 CREATE INDEX IF NOT EXISTS idx_items_source_type ON items(source_type);
+CREATE INDEX IF NOT EXISTS idx_items_url ON items(url);
 
 CREATE TABLE IF NOT EXISTS summaries (
   item_id TEXT PRIMARY KEY,

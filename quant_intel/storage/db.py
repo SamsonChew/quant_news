@@ -39,29 +39,15 @@ class Database:
             )
 
     def upsert_item(self, item: Item) -> bool:
-        before = self.conn.total_changes
+        """Insert item if new. Returns True only for first-time inserts."""
         try:
-            self.conn.execute(
+            cursor = self.conn.execute(
                 """
-                INSERT INTO items (
+                INSERT OR IGNORE INTO items (
                   id, source, source_type, title, url, authors, published_at,
                   collected_at, raw_text, abstract, content_hash, category, tags,
                   language, metadata
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                  source = excluded.source,
-                  source_type = excluded.source_type,
-                  title = excluded.title,
-                  url = excluded.url,
-                  authors = excluded.authors,
-                  published_at = excluded.published_at,
-                  collected_at = excluded.collected_at,
-                  raw_text = excluded.raw_text,
-                  abstract = excluded.abstract,
-                  category = excluded.category,
-                  tags = excluded.tags,
-                  language = excluded.language,
-                  metadata = excluded.metadata
                 """,
                 (
                     item.id,
@@ -84,7 +70,7 @@ class Database:
         except sqlite3.IntegrityError:
             return False
         self.conn.commit()
-        return self.conn.total_changes > before
+        return cursor.rowcount > 0  # True only for genuinely new inserts
 
     def upsert_summary(self, summary: Summary) -> None:
         self.conn.execute(
@@ -140,17 +126,37 @@ class Database:
         return data
 
     def get_item_id_by_canonical_url(self, url: str) -> str | None:
-        """Return the id of an item whose URL canonicalises to the same arXiv paper, or None."""
+        """Return the id of an existing item whose canonical URL matches, or None."""
+        from quant_intel.pipeline.normalize import canonical_url
         import re
         if not url:
             return None
-        m = re.search(r"arxiv\.org/(?:abs|pdf)/(\d{4}\.\d+)", url)
-        if not m:
+        cu = canonical_url(url)
+        if not cu:
             return None
-        arxiv_id = m.group(1)
+
+        # arXiv: fast path via LIKE on stored URL
+        m = re.search(r"arxiv\.org/abs/(\d{4}\.\d+)", cu)
+        if m:
+            arxiv_id = m.group(1)
+            row = self.conn.execute(
+                "SELECT id FROM items WHERE url LIKE ? OR url LIKE ? LIMIT 1",
+                (f"%arxiv.org/abs/{arxiv_id}%", f"%arxiv.org/pdf/{arxiv_id}%"),
+            ).fetchone()
+            return str(row["id"]) if row else None
+
+        # GitHub: match on repo root (cu is already stripped to repo root)
+        if "github.com" in cu:
+            row = self.conn.execute(
+                "SELECT id FROM items WHERE lower(url) LIKE ? LIMIT 1",
+                (f"{cu}%",),
+            ).fetchone()
+            return str(row["id"]) if row else None
+
+        # General: exact canonical match
         row = self.conn.execute(
-            "SELECT id FROM items WHERE url LIKE ? OR url LIKE ? LIMIT 1",
-            (f"%arxiv.org/abs/{arxiv_id}%", f"%arxiv.org/pdf/{arxiv_id}%"),
+            "SELECT id FROM items WHERE lower(url) = ? LIMIT 1",
+            (cu,),
         ).fetchone()
         return str(row["id"]) if row else None
 
