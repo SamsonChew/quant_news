@@ -112,10 +112,13 @@ def summarize_for_run(
     db: Database | None = None,
     rescore_all: bool = False,
 ):
+    # Returns (summary, skipped, called_api)
+    # skipped=True  → DeepSeek said non-quant, use rule fallback
+    # called_api=True → an actual DeepSeek API call was made (counts against cap)
     if client is None:
-        return summarize_item(item, score), False  # (summary, skipped)
+        return summarize_item(item, score), False, False
 
-    # Skip LLM if an up-to-date summary already exists
+    # Return cached summary without calling the API
     if not rescore_all and db is not None:
         existing = db.get_summary(item.id)
         if existing and existing.get("prompt_version") == PROMPT_VERSION:
@@ -133,27 +136,27 @@ def summarize_for_run(
                 created_at=existing["created_at"],
                 key_figures_md=existing.get("key_figures_md", ""),
                 prompt_version=existing["prompt_version"],
-            ), False
+            ), False, False  # cache hit — no API call
 
     try:
         payload = client.summarize(item, score)
         if payload.get("skip"):
             rule_summary = summarize_item(item, score)
             rule_summary.prompt_version = PROMPT_VERSION
-            return rule_summary, True
+            return rule_summary, True, True  # API called, content skipped as non-quant
         return summary_from_llm_payload(
             item=item,
             score=score,
             payload=payload,
             model_name=f"deepseek:{client.config.model}",
             prompt_version=PROMPT_VERSION,
-        ), False
+        ), False, True  # API called successfully
     except Exception as exc:
         print(
             "[warn] DeepSeek summary failed; using rule-based summary: "
             f"{item.title[:90]}: {exc}"
         )
-        return summarize_item(item, score), False
+        return summarize_item(item, score), False, False  # API failed, don't count
 
 
 def _print_section_breakdown(all_rows: list, selected_rows: list) -> None:
@@ -222,10 +225,10 @@ def run(args: argparse.Namespace) -> int:
             db.upsert_score(score)
 
             use_llm = summary_client is not None and (max_deepseek <= 0 or deepseek_calls < max_deepseek)
-            summary, skipped = summarize_for_run(
+            summary, skipped, called_api = summarize_for_run(
                 item, score, summary_client if use_llm else None, db=db, rescore_all=args.rescore_all
             )
-            if use_llm and not skipped:
+            if called_api:
                 deepseek_calls += 1
             db.upsert_summary(summary)
 
