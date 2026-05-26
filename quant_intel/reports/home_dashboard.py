@@ -1642,11 +1642,57 @@ def _render_home(payload: dict[str, Any]) -> str:
         '<div class="md-content">' + (report.html || '<p style="color:var(--muted)">（无内容）</p>') + '</div>';
     }}
 
-    // ── API helpers ────────────────────────────────────────────────────────────
+    // ── API helpers (live API → static JSON fallback for GitHub Pages) ───────────
+    let _staticItemsCache = null;
+
     async function apiGet(url) {{
-      const r = await fetch(url);
-      if (!r.ok) throw new Error('API ' + url + ': ' + r.status);
-      return r.json();
+      // Try live API first (works when serve.py is running)
+      try {{
+        const r = await fetch(url);
+        if (r.ok) return r.json();
+      }} catch(e) {{}}
+
+      // Static fallback — pre-generated JSON files for GitHub Pages
+      const path = url.split('?')[0].replace(/.*\/(api\/)/, '$1');
+      const params = new URLSearchParams(url.includes('?') ? url.split('?')[1] : '');
+
+      if (path === 'api/summary') {{
+        const r = await fetch('api/summary.json');
+        if (r.ok) return r.json();
+      }}
+      if (path === 'api/items') {{
+        if (!_staticItemsCache) {{
+          const r = await fetch('api/items.json');
+          if (!r.ok) throw new Error('Static items.json not found');
+          const d = await r.json();
+          _staticItemsCache = d.items || [];
+        }}
+        return _filterStatic(_staticItemsCache, params);
+      }}
+      if (path === 'api/alpha') {{
+        try {{ const r = await fetch('api/alpha.json'); if (r.ok) return r.json(); }} catch(e) {{}}
+        return {{ history: [] }};
+      }}
+      throw new Error('API unavailable: ' + url);
+    }}
+
+    function _filterStatic(all, params) {{
+      let items = all.slice();
+      const reqDate = params.get('date') || '';
+      const section = params.get('section') || 'All';
+      const category = params.get('category') || 'All';
+      const q = (params.get('q') || '').toLowerCase().trim();
+      if (reqDate) items = items.filter(function(i) {{ return String(i.collected_at || '').startsWith(reqDate); }});
+      if (section !== 'All') items = items.filter(function(i) {{ return (i.report_sections || []).includes(section); }});
+      if (category !== 'All') items = items.filter(function(i) {{ return i.category === category; }});
+      if (q) items = items.filter(function(i) {{
+        const t = [i.title, i.display_title, i.one_line_summary, i.tldr, i.core_value, i.source, i.category, i.source_type].join(' ').toLowerCase();
+        return t.includes(q);
+      }});
+      const total = items.length;
+      const offset = parseInt(params.get('offset') || '0');
+      const limit = parseInt(params.get('limit') || '30');
+      return {{ items: items.slice(offset, offset + limit), total: total, offset: offset, limit: limit }};
     }}
 
     // ── Boot (async, API-driven) ───────────────────────────────────────────────

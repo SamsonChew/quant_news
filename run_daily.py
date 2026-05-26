@@ -277,7 +277,9 @@ def run(args: argparse.Namespace) -> int:
         if summary_client is None:
             print("[rescan] skipped — no DeepSeek client available")
         else:
-            rescan_summaries(db, summary_client, args.rescan_summaries, only_date=args.rescan_date)
+            # Default to today — never touch previous days unless explicitly overridden
+            target_date = args.rescan_date or args.report_date
+            rescan_summaries(db, summary_client, args.rescan_summaries, only_date=target_date)
         return 0
 
     fetched_count = Counter()
@@ -407,7 +409,44 @@ def run(args: argparse.Namespace) -> int:
     print(f"Report: {report_path}")
     print(f"Dashboard: {dashboard_path}")
     print(f"Home: {home_path}")
+
+    _deploy_to_github(args.output_dir, args.report_date)
     return 0
+
+
+def _deploy_to_github(output_dir: Path, report_date: str) -> None:
+    """Generate static JSON files and push to gh-pages if git remote is configured."""
+    import subprocess
+
+    git_dir = output_dir / ".git"
+    if not git_dir.exists():
+        return  # no git repo in output dir — skip silently
+
+    print("[deploy] Generating static JSON files...")
+    try:
+        from build_static import build_static
+        build_static(output_dir=output_dir)
+    except Exception as exc:
+        print(f"[deploy] build_static failed: {exc}")
+        return
+
+    try:
+        subprocess.run(["git", "-C", str(output_dir), "add", "-A"], check=True)
+        result = subprocess.run(
+            ["git", "-C", str(output_dir), "diff", "--cached", "--quiet"],
+            capture_output=True,
+        )
+        if result.returncode == 0:
+            print("[deploy] Nothing changed — skipping push")
+            return
+        subprocess.run(
+            ["git", "-C", str(output_dir), "commit", "-m", f"Update {report_date}"],
+            check=True,
+        )
+        subprocess.run(["git", "-C", str(output_dir), "push"], check=True)
+        print(f"[deploy] Pushed → https://samsonchew.github.io/quant-intel/")
+    except subprocess.CalledProcessError as exc:
+        print(f"[deploy] git push failed: {exc}")
 
 
 def parse_args() -> argparse.Namespace:
@@ -449,13 +488,13 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=0,
         metavar="N",
-        help="Re-summarize up to N existing rule_v1 items with DeepSeek (top N by score). Skips normal fetch.",
+        help="Re-summarize up to N rule_v1 items with DeepSeek (defaults to today only). Skips normal fetch.",
     )
     parser.add_argument(
         "--rescan-date",
         default="",
         metavar="YYYY-MM-DD",
-        help="Limit --rescan-summaries to items collected on this date.",
+        help="Override date for --rescan-summaries (default: today). Use carefully to avoid touching old articles.",
     )
     return parser.parse_args()
 
