@@ -14,7 +14,7 @@ from quant_intel.config import (
 from quant_intel.env import load_env_file
 from quant_intel.llm import DeepSeekClient
 from quant_intel.llm.deepseek import PROMPT_VERSION
-from quant_intel.models import utc_now_iso
+from quant_intel.models import Item, Score, utc_now_iso
 from quant_intel.pipeline.classify import classify_item
 from quant_intel.pipeline.normalize import canonical_url, dedup_by_title
 from quant_intel.pipeline.score import score_item
@@ -184,6 +184,83 @@ def _print_section_breakdown(all_rows: list, selected_rows: list) -> None:
             print(f"  {r.get('final_score', 0):.2f}  [{r.get('category', '')}]  {r.get('title', '')[:80]}")
 
 
+def rescan_summaries(db: "Database", client: "DeepSeekClient", max_items: int, only_date: str = "") -> int:
+    """Re-summarize existing items that only have rule-based summaries, by score desc."""
+    import json
+    if only_date:
+        rows = db.conn.execute(
+            """
+            SELECT i.id, i.source, i.source_type, i.title, i.url,
+                   i.authors, i.published_at, i.collected_at, i.raw_text,
+                   i.abstract, i.content_hash, i.category, i.tags, i.language, i.metadata,
+                   sc.relevance_score, sc.novelty_score, sc.academic_score,
+                   sc.discussion_score, sc.actionable_score, sc.final_score, sc.created_at AS score_at
+            FROM items i
+            JOIN summaries s ON s.item_id = i.id
+            JOIN scores sc ON sc.item_id = i.id
+            WHERE s.prompt_version != ? AND substr(i.collected_at, 1, 10) = ?
+            ORDER BY sc.final_score DESC
+            LIMIT ?
+            """,
+            (PROMPT_VERSION, only_date, max_items),
+        ).fetchall()
+    else:
+        rows = db.conn.execute(
+            """
+            SELECT i.id, i.source, i.source_type, i.title, i.url,
+                   i.authors, i.published_at, i.collected_at, i.raw_text,
+                   i.abstract, i.content_hash, i.category, i.tags, i.language, i.metadata,
+                   sc.relevance_score, sc.novelty_score, sc.academic_score,
+                   sc.discussion_score, sc.actionable_score, sc.final_score, sc.created_at AS score_at
+            FROM items i
+            JOIN summaries s ON s.item_id = i.id
+            JOIN scores sc ON sc.item_id = i.id
+            WHERE s.prompt_version != ?
+            ORDER BY sc.final_score DESC
+            LIMIT ?
+            """,
+            (PROMPT_VERSION, max_items),
+        ).fetchall()
+
+    print(f"[rescan] {len(rows)} items need re-summarization (top {max_items} by score)")
+    updated = 0
+    for row in rows:
+        def _j(v):
+            if isinstance(v, str):
+                try:
+                    return json.loads(v)
+                except Exception:
+                    return []
+            return v or []
+
+        item = Item(
+            id=row["id"], source=row["source"], source_type=row["source_type"],
+            title=row["title"], url=row["url"],
+            authors=_j(row["authors"]), published_at=row["published_at"] or "",
+            collected_at=row["collected_at"] or "", raw_text=row["raw_text"] or "",
+            abstract=row["abstract"] or "", content_hash=row["content_hash"] or "",
+            category=row["category"] or "Unclassified",
+            tags=_j(row["tags"]), language=row["language"] or "en",
+            metadata=_j(row["metadata"]) if isinstance(_j(row["metadata"]), dict) else {},
+        )
+        score = Score(
+            item_id=row["id"],
+            relevance_score=float(row["relevance_score"] or 0),
+            novelty_score=float(row["novelty_score"] or 0),
+            academic_score=float(row["academic_score"] or 0),
+            discussion_score=float(row["discussion_score"] or 0),
+            actionable_score=float(row["actionable_score"] or 0),
+            final_score=float(row["final_score"] or 0),
+            created_at=row["score_at"] or "",
+        )
+        summary, skipped, called = summarize_for_run(item, score, client, rescore_all=True)
+        db.upsert_summary(summary)
+        updated += 1
+        status = "skip" if skipped else ("ok" if called else "rule")
+        print(f"[rescan] {updated}/{len(rows)} [{status}] {item.title[:70]}")
+    return updated
+
+
 def run(args: argparse.Namespace) -> int:
     load_env_file(args.env_file)
 
@@ -195,6 +272,13 @@ def run(args: argparse.Namespace) -> int:
     report_config = load_report_config()
     sources = build_sources(source_config, sample=args.sample)
     summary_client = build_summary_client(args.summary_provider)
+
+    if args.rescan_summaries > 0:
+        if summary_client is None:
+            print("[rescan] skipped — no DeepSeek client available")
+        else:
+            rescan_summaries(db, summary_client, args.rescan_summaries, only_date=args.rescan_date)
+        return 0
 
     fetched_count = Counter()
     stored = 0
@@ -359,6 +443,19 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=0,
         help="Cap DeepSeek API calls per run (0 = unlimited). Remaining items use rule-based summary.",
+    )
+    parser.add_argument(
+        "--rescan-summaries",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Re-summarize up to N existing rule_v1 items with DeepSeek (top N by score). Skips normal fetch.",
+    )
+    parser.add_argument(
+        "--rescan-date",
+        default="",
+        metavar="YYYY-MM-DD",
+        help="Limit --rescan-summaries to items collected on this date.",
     )
     return parser.parse_args()
 

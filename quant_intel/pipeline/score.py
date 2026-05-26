@@ -42,6 +42,7 @@ def score_item(item: Item, weights: dict[str, float], today: date) -> Score:
         "forum": 4.0,
         "github": 4.5,
         "news": 4.0,
+        "crypto_news": 5.5,
         "social": 4.0,
         "zhihu": 4.5,
         "x": 4.0,

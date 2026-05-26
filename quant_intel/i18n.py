@@ -39,6 +39,7 @@ SOURCE_TYPE_ZH = {
     "zhihu": "知乎",
     "x": "X",
     "quantml": "QuantML",
+    "crypto_news": "加密市场新闻",
 }
 
 

@@ -91,20 +91,10 @@ REPORT_SECTIONS = (
     ),
     ReportSection(
         key="daily_news",
-        label="量化每日 Top 5 新闻",
-        description="社区主线：论坛热帖、行业动态、职业话题、量化圈子里的每日热议，来自 Reddit、QuantNet、StackExchange 等社区。",
-        source_types=("forum", "news", "zhihu", "x"),
-        categories=(
-            "Alpha / Factor Research",
-            "Portfolio Construction",
-            "Risk Management",
-            "Options / Volatility",
-            "Market Microstructure",
-            "Execution / Transaction Cost",
-            "Statistical Arbitrage",
-            "Industry / Career",
-            "Crypto Quant",
-        ),
+        label="Crypto 市场每日 Top 5",
+        description="加密市场新闻主线：来自 CoinDesk、CoinTelegraph、The Block、Decrypt、Blockworks 等主流媒体当日最重要的 Crypto 市场报道。",
+        source_types=("crypto_news",),
+        categories=(),
     ),
 )
 
@@ -191,6 +181,8 @@ def _is_tool_row(row: dict[str, Any]) -> bool:
 
 
 def _has_quant_context(row: dict[str, Any]) -> bool:
+    if str(row.get("source_type", "")) == "crypto_news":
+        return True
     return _matches_keywords(
         row,
         (
@@ -219,6 +211,12 @@ def _has_quant_context(row: dict[str, Any]) -> bool:
             "strategy",
             "factor",
             "crypto",
+            "bitcoin",
+            "btc",
+            "ethereum",
+            "eth",
+            "defi",
+            "blockchain",
             "量化",
             "交易",
             "金融",
@@ -231,6 +229,8 @@ def _has_quant_context(row: dict[str, Any]) -> bool:
             "订单簿",
             "回测",
             "因子",
+            "比特币",
+            "以太坊",
         ),
     )
 

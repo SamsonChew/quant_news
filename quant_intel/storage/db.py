@@ -370,6 +370,36 @@ class Database:
         ).fetchall()
         return {str(row["source"]): int(row["count"]) for row in rows}
 
+    def get_days_with_counts(self, start_date: str, end_date: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT substr(i.collected_at, 1, 10) AS date, COUNT(*) AS count
+            FROM items i
+            JOIN summaries s ON s.item_id = i.id
+            JOIN scores sc ON sc.item_id = i.id
+            WHERE substr(i.collected_at, 1, 10) BETWEEN ? AND ?
+            GROUP BY date
+            ORDER BY date DESC
+            """,
+            (start_date, end_date),
+        ).fetchall()
+        return [{"date": str(row["date"]), "count": int(row["count"])} for row in rows]
+
+    def get_category_counts_between(self, start_date: str, end_date: str) -> dict[str, int]:
+        rows = self.conn.execute(
+            """
+            SELECT i.category, COUNT(*) AS count
+            FROM items i
+            JOIN summaries s ON s.item_id = i.id
+            JOIN scores sc ON sc.item_id = i.id
+            WHERE substr(i.collected_at, 1, 10) BETWEEN ? AND ?
+            GROUP BY i.category
+            ORDER BY count DESC
+            """,
+            (start_date, end_date),
+        ).fetchall()
+        return {str(row["category"]): int(row["count"]) for row in rows}
+
     @staticmethod
     def _row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
         data = dict(row)

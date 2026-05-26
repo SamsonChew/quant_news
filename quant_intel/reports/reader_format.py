@@ -252,7 +252,7 @@ def display_title(row: dict[str, Any]) -> str:
 
 def tldr(row: dict[str, Any]) -> str:
     text = str(row.get("one_line_summary") or "").strip()
-    if _has_cjk(text) and not _looks_generic(text):
+    if text and not _looks_generic(text):
         return text
 
     category = category_zh(str(row.get("category") or "未分类"))
@@ -372,7 +372,7 @@ def key_points(row: dict[str, Any], limit: int = 3) -> list[str]:
     if isinstance(points, str):
         points = [points]
     clean_points = [str(point).strip() for point in points if str(point).strip()]
-    if clean_points and any(_has_cjk(point) for point in clean_points) and not _points_are_generic(clean_points):
+    if clean_points and not _points_are_generic(clean_points):
         cleaned = [_zh_cleanup(point) for point in clean_points]
         while len(cleaned) < limit:
             cleaned.append(_validation_point(row))

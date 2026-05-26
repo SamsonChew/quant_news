@@ -65,7 +65,7 @@ def _load_instructions() -> str:
 @dataclass(frozen=True, slots=True)
 class DeepSeekConfig:
     api_key: str
-    model: str = "deepseek-chat"
+    model: str = "deepseek-reasoner"
     base_url: str = "https://api.deepseek.com/chat/completions"
     timeout_seconds: int = 45
     max_input_chars: int = 6000
@@ -84,8 +84,8 @@ class DeepSeekClient:
         # Set to "deepseek-reasoner" for higher quality (slower + costs more).
         model = (
             os.environ.get("DEEPSEEK_SUMMARY_MODEL", "").strip()
-            or os.environ.get("DEEPSEEK_MODEL", "deepseek-chat").strip()
-            or "deepseek-chat"
+            or os.environ.get("DEEPSEEK_MODEL", "deepseek-reasoner").strip()
+            or "deepseek-reasoner"
         )
         base_url = (
             os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/chat/completions")
@@ -456,6 +456,18 @@ def _source_type_hint(source_type: str) -> str:
             ' key_points[0]=作者最核心的量化观点；'
             'key_points[1]=支撑论点的证据或数据；'
             'key_points[2]=潜在偏差、幸存者偏差或需要独立验证的结论。'
+        )
+    if source_type == "crypto_news":
+        return (
+            '\n\n【内容类型：Crypto 市场新闻】'
+            '这是来自主流加密媒体的当日市场报道，不按学术论文框架处理。'
+            ' 过滤标准：只要和加密资产市场、价格、监管、机构动态、DeFi、链上数据有关就通过，不要因为缺乏量化公式就 skip。'
+            ' key_figures 返回 []。'
+            ' key_points[0]=核心市场事件或价格/数据变动（含具体数字）；'
+            'key_points[1]=对加密量化交易者的直接影响或可操作信息；'
+            'key_points[2]=不确定因素、风险点或信息来源局限。'
+            ' possible_use_case 写对量化交易者的直接参考价值，例如「可作为 BTC 日内波动信号参考」。'
+            ' read_priority 只要事件重要就给「高」，不要因为是新闻而降级。'
         )
     return ""
 
