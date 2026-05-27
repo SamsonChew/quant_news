@@ -26,16 +26,24 @@ def build_home_dashboard(
 ) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     enriched = [_with_display_labels(row) for row in rows]
-    payload = {
+
+    from collections import Counter as _Counter
+    day_counts = dict(_Counter(_day(row) for row in enriched))
+    days_list = sorted(
+        [{"date": d, "count": c} for d, c in day_counts.items()],
+        key=lambda x: x["date"],
+        reverse=True,
+    )
+
+    summary = {
         "end_date": end_date,
         "history_days": history_days,
         "generated_at": utc_now_iso(),
-        "items": enriched,
+        "days": days_list,
         "source_stats": source_stats,
         "report_config": report_config,
-        "day_counts": dict(Counter(_day(row) for row in enriched)),
         "section_counts": _section_counts_from_field(enriched),
-        "category_counts": dict(Counter(row["category"] for row in enriched)),
+        "category_counts": dict(_Counter(row["category"] for row in enriched)),
         "sections": [
             {
                 "key": section.key,
@@ -47,16 +55,29 @@ def build_home_dashboard(
         "category_labels": CATEGORY_ZH,
         "priority_labels": PRIORITY_ZH,
         "source_type_labels": SOURCE_TYPE_ZH,
-        "alpha_history": alpha_history or [],
         "notes": notes or [],
         "weekly_reports": weekly_reports or [],
     }
+
+    # Write static API JSON files (used as fallback on GitHub Pages)
+    api_dir = output_dir / "api"
+    api_dir.mkdir(exist_ok=True)
+    (api_dir / "summary.json").write_text(
+        json.dumps(summary, ensure_ascii=False), encoding="utf-8"
+    )
+    (api_dir / "items.json").write_text(
+        json.dumps({"items": enriched}, ensure_ascii=False), encoding="utf-8"
+    )
+    (api_dir / "alpha.json").write_text(
+        json.dumps({"history": alpha_history or []}, ensure_ascii=False), encoding="utf-8"
+    )
+
     path = output_dir / "index.html"
-    path.write_text(_render_home(payload), encoding="utf-8")
+    path.write_text(_render_home(), encoding="utf-8")
     return path
 
 
-def _render_home(payload: dict[str, Any]) -> str:
+def _render_home() -> str:
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -1653,7 +1674,7 @@ def _render_home(payload: dict[str, Any]) -> str:
       }} catch(e) {{}}
 
       // Static fallback — pre-generated JSON files for GitHub Pages
-      const path = url.split('?')[0].replace(/.*\/(api\/)/, '$1');
+      const path = url.split('?')[0].replace(/.*\\/(api\\/)/, '$1');
       const params = new URLSearchParams(url.includes('?') ? url.split('?')[1] : '');
 
       if (path === 'api/summary') {{
