@@ -328,8 +328,6 @@ def run(args: argparse.Namespace) -> int:
     stored = 0
     run_item_ids: list[str] = []
     today = date.fromisoformat(args.report_date)
-    deepseek_calls = 0
-    max_deepseek = args.max_deepseek_items
 
     for source in sources:
         try:
@@ -355,16 +353,18 @@ def run(args: argparse.Namespace) -> int:
             stored += 1
             db.upsert_score(score)
 
-            use_llm = summary_client is not None and (max_deepseek <= 0 or deepseek_calls < max_deepseek)
-            summary, skipped, called_api = summarize_for_run(
-                item, score, summary_client if use_llm else None, db=db, rescore_all=args.rescore_all
+            # Always call DeepSeek when client is available — no cap
+            summary, skipped, _ = summarize_for_run(
+                item, score, summary_client, db=db, rescore_all=args.rescore_all
             )
-            if called_api:
-                deepseek_calls += 1
             db.upsert_summary(summary)
 
             if not skipped:
                 run_item_ids.append(item.id)
+
+    # Auto-rescan today's articles that got rule-based summaries (DeepSeek failures, etc.)
+    if summary_client is not None:
+        rescan_summaries(db, summary_client, max_items=200, only_date=args.report_date)
 
     rows = db.fetch_report_rows_by_ids(run_item_ids)
 
@@ -518,12 +518,6 @@ def parse_args() -> argparse.Namespace:
         "--rescore-all",
         action="store_true",
         help=f"Force re-summarise all items even if already at prompt version {PROMPT_VERSION}.",
-    )
-    parser.add_argument(
-        "--max-deepseek-items",
-        type=int,
-        default=0,
-        help="Cap DeepSeek API calls per run (0 = unlimited). Remaining items use rule-based summary.",
     )
     parser.add_argument(
         "--rescan-summaries",
