@@ -1,0 +1,1086 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>samson 量化情报台 - 2026-05-28</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --panel: #ffffff;
+      --ink: #202124;
+      --muted: #5f6368;
+      --line: #dadce0;
+      --blue: #1a73e8;
+      --red: #ea4335;
+      --yellow: #fbbc04;
+      --green: #34a853;
+      --blue-soft: #e8f0fe;
+      --green-soft: #e6f4ea;
+      --yellow-soft: #fef7e0;
+      --red-soft: #fce8e6;
+      --shadow: 0 1px 2px rgba(60, 64, 67, 0.16), 0 8px 24px rgba(60, 64, 67, 0.10);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(66, 133, 244, 0.07), transparent 30%),
+        radial-gradient(circle at top right, rgba(251, 188, 4, 0.08), transparent 26%),
+        var(--bg);
+      color: var(--ink);
+      font-family: "Google Sans", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(280px, 620px);
+      gap: 24px;
+      align-items: center;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand h1 {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin: 0;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+
+    .brand h1::before {
+      content: "";
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background:
+        conic-gradient(from 0deg, var(--blue) 0 25%, var(--red) 0 50%, var(--yellow) 0 75%, var(--green) 0 100%);
+      box-shadow: inset 0 0 0 7px #fff;
+    }
+
+    .date-pill {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 170px 170px 150px;
+      gap: 10px;
+    }
+
+    .control {
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 12px;
+      outline: none;
+    }
+
+    .control:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.14);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 260px minmax(420px, 1fr) 420px;
+      gap: 22px;
+      padding: 24px 32px 36px;
+    }
+
+    .rail,
+    .detail {
+      position: sticky;
+      top: 86px;
+      height: calc(100vh - 112px);
+      overflow: auto;
+    }
+
+    .rail,
+    .detail,
+    .feed {
+      min-width: 0;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      padding: 12px;
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
+    }
+
+    .metric:nth-child(1) { border-top: 3px solid var(--blue); }
+    .metric:nth-child(2) { border-top: 3px solid var(--red); }
+    .metric:nth-child(3) { border-top: 3px solid var(--yellow); }
+    .metric:nth-child(4) { border-top: 3px solid var(--green); }
+
+    .metric b {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .section-label {
+      margin: 18px 0 8px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .category-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .category-button {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--ink);
+      padding: 8px 10px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .category-button:hover,
+    .category-button.active {
+      border-color: transparent;
+      background: var(--blue-soft);
+      color: #174ea6;
+    }
+
+    .count {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .source-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .source-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .feed-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .feed-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .result-count {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .items {
+      display: grid;
+      gap: 10px;
+    }
+
+    .section-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 2px 4px;
+      margin-top: 10px;
+      border-bottom: 2px solid var(--line);
+    }
+
+    .section-group-header:first-child {
+      margin-top: 0;
+    }
+
+    .section-group-title {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .section-group-header[data-section="deep_learning_quant"] .section-group-title { color: var(--blue); }
+    .section-group-header[data-section="ai_quant_tools"] .section-group-title { color: var(--green); }
+    .section-group-header[data-section="daily_news"] .section-group-title { color: var(--yellow); }
+
+    .section-group-count {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .item {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.10);
+      padding: 18px;
+      cursor: pointer;
+      transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+    }
+
+    .item::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--blue), var(--red), var(--yellow), var(--green));
+    }
+
+    .item[data-section="deep_learning_quant"]::before { background: var(--blue); }
+    .item[data-section="ai_quant_tools"]::before { background: var(--green); }
+    .item[data-section="daily_news"]::before { background: var(--yellow); }
+
+    .item:hover,
+    .item.active {
+      border-color: #c6dafc;
+      box-shadow: var(--shadow);
+      transform: translateY(-2px);
+    }
+
+    .item-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .item h3 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.28;
+    }
+
+    .score {
+      min-width: 54px;
+      border-radius: 999px;
+      background: var(--blue-soft);
+      color: #174ea6;
+      padding: 6px 8px;
+      text-align: center;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .tag {
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: #f1f3f4;
+      padding: 3px 8px;
+    }
+
+    .tag:nth-child(1) { background: var(--blue-soft); color: #174ea6; }
+    .tag:nth-child(2) { background: var(--green-soft); color: #137333; }
+    .tag:nth-child(3) { background: var(--yellow-soft); color: #8a5a00; }
+    .tag:nth-child(4) { background: var(--red-soft); color: #b3261e; }
+
+    .summary {
+      margin: 0;
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .reference-link {
+      display: inline-flex;
+      width: fit-content;
+      border-top: 1px solid var(--line);
+      color: var(--blue);
+      padding-top: 9px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .reader-format {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .reader-format.compact {
+      gap: 8px;
+    }
+
+    .reader-block {
+      border-top: 1px solid var(--line);
+      padding-top: 9px;
+    }
+
+    .reader-block:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .reader-block h4 {
+      margin: 0 0 5px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .reader-block p,
+    .reader-block li {
+      margin: 0;
+      color: #30342d;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .reader-block ol {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .reader-reference {
+      color: var(--blue);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
+    .reference-url {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .detail {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .detail h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+
+    .detail-block {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .detail-block h3 {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+
+    .detail-block p,
+    .detail-block li {
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .detail-block ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .breakdown {
+      display: grid;
+      gap: 8px;
+    }
+
+    .bar {
+      display: grid;
+      grid-template-columns: 118px 1fr 40px;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .bar-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e7eadf;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--blue), var(--green), var(--yellow), var(--red));
+    }
+
+    .open-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      margin-top: 16px;
+      border: 1px solid var(--blue);
+      border-radius: var(--radius);
+      color: var(--blue);
+      text-decoration: none;
+      padding: 0 12px;
+      font-weight: 700;
+    }
+
+    .feedback-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+    }
+
+    .feedback-btn {
+      background: #f1f3f4;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 120ms, border-color 120ms;
+    }
+
+    .feedback-btn:hover { background: var(--blue-soft); }
+    .feedback-btn.active-up { background: var(--green-soft); border-color: var(--green); }
+    .feedback-btn.active-down { background: var(--red-soft); border-color: var(--red); }
+
+    .feedback-hint {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      padding: 28px;
+      color: var(--muted);
+      background: var(--panel);
+    }
+
+    @media (max-width: 1180px) {
+      .layout {
+        grid-template-columns: 220px 1fr;
+      }
+
+      .detail {
+        position: static;
+        grid-column: 1 / -1;
+        height: auto;
+      }
+    }
+
+    @media (max-width: 820px) {
+      .topbar {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .brand {
+        display: grid;
+        gap: 4px;
+      }
+
+      .brand h1 {
+        white-space: normal;
+        font-size: 21px;
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .rail,
+      .detail {
+        position: static;
+        height: auto;
+      }
+
+      .metric-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <h1>samson 量化情报台</h1>
+        <span class="date-pill" id="report-date"></span>
+      </div>
+      <div class="controls">
+        <input class="control" id="search" type="search" placeholder="搜索标题、摘要、分类..." />
+        <select class="control" id="section-select"></select>
+        <select class="control" id="category-select"></select>
+        <select class="control" id="sort-select">
+          <option value="score">按评分排序</option>
+          <option value="priority">按优先级排序</option>
+          <option value="source">按来源排序</option>
+        </select>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="rail">
+        <div class="metric-grid">
+          <div class="metric"><b id="metric-items">0</b><span>报告条目</span></div>
+          <div class="metric"><b id="metric-categories">0</b><span>分类数量</span></div>
+          <div class="metric"><b id="metric-high">0</b><span>高优先级</span></div>
+          <div class="metric"><b id="metric-avg">0.0</b><span>平均评分</span></div>
+        </div>
+
+        <div class="section-label">两条主线</div>
+        <div class="category-list" id="section-list"></div>
+
+        <div class="section-label">细分标签</div>
+        <div class="category-list" id="category-list"></div>
+
+        <div class="section-label">主力来源</div>
+        <ul class="source-list" id="source-list"></ul>
+      </aside>
+
+      <section class="feed">
+        <div class="feed-header">
+          <h2 id="feed-title">今日情报</h2>
+          <span class="result-count" id="result-count"></span>
+        </div>
+        <div class="items" id="items"></div>
+      </section>
+
+      <aside class="detail" id="detail"></aside>
+    </main>
+  </div>
+
+  <script id="dashboard-data" type="application/json">{"report_date": "2026-05-28", "generated_at": "2026-05-28T00:19:24Z", "items": [{"id": "9550830b6c85460663320f5643a630f4dd42a22a921ce585663c7da5bd7f9cf7", "source": "arXiv", "source_type": "paper", "title": "Eureka: Intelligent Feature Engineering for Enterprise AI Cloud Resource Demand Prediction", "url": "http://arxiv.org/abs/2605.25297v1", "authors": ["Hangxuan Li", "Renjun Jia", "Xuezhang Wu", "Yunjie Qian", "Zeqi Zheng", "Xianling Zhang"], "published_at": "2026-05-24", "collected_at": "2026-05-28T00:00:39Z", "raw_text": "Effective features are crucial for predictive model performance, but creating them often requires domain expertise, limiting scalability across applications. We define feature engineering as an agentic code generation problem: features are not static data transformations, but executable programs that can be generated, evaluated, and iteratively improved. We present Eureka, an LLM-driven framework with three stages. (1) An Expert Agent, fine-tuned via SFT on domain knowledge, produces structured feature design plans in JSON format. (2) An LLM Feature Factory translates each plan into executable Python code through chain-of-thought reasoning, turning feature hypotheses into runnable programs. (3) A Self-Evolving Alignment Engine uses Reinforcement Learning (GRPO) with dual-channel reward (metric-based utility + semantic alignment) to enhance code quality. By expressing features as programs, the learned generation patterns can transfer across domains. Evaluated on 7 public benchmarks in healthcare, finance, and social domains, Eureka consistently outperforms both traditional AutoFE and LLM-based baselines. We further demonstrate Eureka's effectiveness on cloud GPU resource demand prediction at Alibaba Cloud, where Eureka improves demand fulfillment rate by 16% and lowers computing resource migration rates by 33%.", "abstract": "Effective features are crucial for predictive model performance, but creating them often requires domain expertise, limiting scalability across applications. We define feature engineering as an agentic code generation problem: features are not static data transformations, but executable programs that can be generated, evaluated, and iteratively improved. We present Eureka, an LLM-driven framework with three stages. (1) An Expert Agent, fine-tuned via SFT on domain knowledge, produces structured feature design plans in JSON format. (2) An LLM Feature Factory translates each plan into executable Python code through chain-of-thought reasoning, turning feature hypotheses into runnable programs. (3) A Self-Evolving Alignment Engine uses Reinforcement Learning (GRPO) with dual-channel reward (metric-based utility + semantic alignment) to enhance code quality. By expressing features as programs, the learned generation patterns can transfer across domains. Evaluated on 7 public benchmarks in healthcare, finance, and social domains, Eureka consistently outperforms both traditional AutoFE and LLM-based baselines. We further demonstrate Eureka's effectiveness on cloud GPU resource demand prediction at Alibaba Cloud, where Eureka improves demand fulfillment rate by 16% and lowers computing resource migration rates by 33%.", "content_hash": "49197a0a3f54b3f227cfe76f453d5dd8ea4dcc48aefa696153267ca77157908a", "category": "LLM / Agents for Quant", "tags": ["agent", "chain-of-thought", "feature engineering", "grpo", "llm", "reasoning", "reinforcement learning"], "language": "en", "metadata": {"arxiv_categories": ["cs.CL", "cs.AI", "cs.LG"]}, "one_line_summary": "Eureka框架用LLM+强化学习自动生成特征代码，在云资源预测上提升16% fulfillment率", "technical_summary": "手动特征工程依赖领域专家、难以规模化。Eureka将特征工程定义为agentic代码生成问题。框架三步：1) Expert Agent（SFT微调）生成结构化特征计划JSON；2) LLM Feature Factory将计划转化为可执行Python代码；3) Self-Evolving Alignment Engine使用GRPO强化学习，结合度量效用和语义对齐双通道奖励提升代码质量。在7个公开基准（医疗、金融、社交）上一致优于传统AutoFE和LLM基线。在阿里云GPU需求预测上，需求满足率提升16%，资源迁移率降低33%。", "key_points": ["核心方法：Eureka框架使用LLM代理生成特征计划，结合GRPO强化学习优化代码质量，在阿里云场景将需求满足率提升16%、资源迁移率降低33%。", "量化可用性：方法可复用性高，需领域数据微调Expert Agent，基础LLM可通用；代码生成自动化，但需GPU资源训练。", "局限性：仅在云资源预测场景详细验证，金融领域有效性需独立测试；未报告交易成本或市场微观结构适应性；GRPO训练计算成本高。"], "quant_relevance": "因子/alpha信号（自动因子挖掘）、研究工具/工作流提效（自动化特征工程）", "possible_use_case": "可作为量化因子挖掘的自动化流水线：先对日频数据（如A股全量）生成候选特征计划，再通过回测评估效用，迭代优化。", "limitations": "原文虽提到金融基准但未给出具体金融时间序列测试结果；缺乏对过拟合的讨论；强化学习训练成本较高；样本外迁移能力（如跨市场）尚未验证。", "read_priority": "高", "key_figures_md": "- **Figure 2**：7个公开基准上Eureka与传统AutoFE及LLM基线的性能对比（准确率、F1等指标）\n- **Figure 3**：阿里云GPU资源需求预测中需求满足率和计算资源迁移率的改进\n- [原文图表（HTML版）](https://arxiv.org/html/2605.25297)", "relevance_score": 9.7, "novelty_score": 9.149, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 7.5, "final_score": 8.04, "display_title": "特征工程、大模型、强化学习、人工智能研究论文", "tldr": "Eureka框架用LLM+强化学习自动生成特征代码，在云资源预测上提升16% fulfillment率", "core_value": "对你的量化工作帮助：把它转成一个特征工程实验，对比原始价格特征、差分特征和分数阶差分特征，重点看平稳性、信息保留、样本外泛化和是否引入未来函数。", "key_points_list": ["核心方法：Eureka框架使用LLM代理生成特征计划，结合GRPO强化学习优化代码质量，在阿里云场景将需求满足率提升16%、资源迁移率降低33%。", "量化可用性：方法可复用性高，需领域数据微调Expert 智能体，基础LLM可通用；代码生成自动化，但需GPU资源训练。", "局限性：仅在云资源预测场景详细验证，金融领域有效性需独立测试；未报告交易成本或市场微观结构适应性；GRPO训练计算成本高。"], "reference_url": "http://arxiv.org/abs/2605.25297v1", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "量化大模型 / 智能体", "priority_label": "高", "source_type_label": "论文"}, {"id": "9c32bb56c57a7d9a93eedc771c0c8b02128675ba6efedef8e6f2a76e372b4db4", "source": "arXiv", "source_type": "paper", "title": "Assessing the Operational Viability of Foundation Models for Time Series Forecasting", "url": "http://arxiv.org/abs/2605.24381v1", "authors": ["Kavin Soni", "Debanshu Das", "Vamshi Guduguntla"], "published_at": "2026-05-23", "collected_at": "2026-05-28T00:00:39Z", "raw_text": "Time series forecasting drives operational decisions in areas like finance, transportation, and energy. While supervised learning approaches achieve strong performance, they require domain-specific training, feature engineering, and ongoing maintenance. Large-scale foundation models have recently emerged as a zero-shot alternative, avoiding task-specific training much like LLMs. In this work, we evaluate foundation models against standard supervised approaches. Rather than focusing solely on aggregate accuracy, we analyze performance across four operational regimes: periodic human-centric systems, physically constrained processes, stochastic financial markets, and heterogeneous demand forecasting. Our results characterize optimal deployment areas. Foundation models perform well in domains with transferable periodic structures and are efficient for cold-start or long-tail scenarios. Conversely, supervised specialists maintain higher precision in systems governed by strict physical constraints. In financial domains, newer foundation models are rapidly closing the performance gap with supervised specialists. We further quantify trade-offs in inference latency, data drift adaptability, and deployment constraints. Finally, we propose a Complexity Router that assigns each series to the optimal model class using empirical features. We demonstrate that this selective routing achieves higher accuracy and significantly lower inference costs compared to deploying a universal foundation model, providing a practical framework for balancing generalization and efficiency.", "abstract": "Time series forecasting drives operational decisions in areas like finance, transportation, and energy. While supervised learning approaches achieve strong performance, they require domain-specific training, feature engineering, and ongoing maintenance. Large-scale foundation models have recently emerged as a zero-shot alternative, avoiding task-specific training much like LLMs. In this work, we evaluate foundation models against standard supervised approaches. Rather than focusing solely on aggregate accuracy, we analyze performance across four operational regimes: periodic human-centric systems, physically constrained processes, stochastic financial markets, and heterogeneous demand forecasting. Our results characterize optimal deployment areas. Foundation models perform well in domains with transferable periodic structures and are efficient for cold-start or long-tail scenarios. Conversely, supervised specialists maintain higher precision in systems governed by strict physical constraints. In financial domains, newer foundation models are rapidly closing the performance gap with supervised specialists. We further quantify trade-offs in inference latency, data drift adaptability, and deployment constraints. Finally, we propose a Complexity Router that assigns each series to the optimal model class using empirical features. We demonstrate that this selective routing achieves higher accuracy and significantly lower inference costs compared to deploying a universal foundation model, providing a practical framework for balancing generalization and efficiency.", "content_hash": "3fdbe548cffc2be39591239b752e207d59c38533a64d2453c066341aa7309d17", "category": "Machine Learning for Finance", "tags": ["feature engineering", "forecasting", "foundation model", "routing", "time series"], "language": "en", "metadata": {"arxiv_categories": ["cs.LG", "cs.AI", "stat.AP", "stat.ML"]}, "one_line_summary": "评估时间序列基础模型的操作可行性：在金融等四大场景对比监督学习，提出 Complexity Router 自动路由模型", "technical_summary": "1) 基础模型（如 Lag-Llama）作为零样本替代方案，无需领域训练即可用于时间序列预测。2) 在四个运行场景（周期人类中心、物理约束、随机金融市场、异质需求）中对比基础模型与监督学习。3) 基础模型在可迁移的周期性结构上表现好，在物理约束场景不如监督模型，在金融领域差距快速缩小。4) 提出 Complexity Router，利用序列经验特征（如平稳性、周期强度、噪声水平）分配模型，比通用基础模型更准确且推理成本更低。", "key_points": ["基础模型在周期性强的序列（如日内交易量）上表现好，在物理约束系统（如电力负载）上不如监督学习；金融领域中基础模型正缩小差距但无具体数字。", "数据要求低（零样本），可复现需基础模型权重（如 Lag-Llama）和代码；Complexity Router 实现简单，但金融场景需验证特征选取的鲁棒性。", "论文缺乏具体量化指标（准确率、夏普、收益等），结论基于定性分析；复杂性路由器的特征阈值可能过拟合特定数据集，泛化性未知；未考虑金融交易成本和延迟。"], "quant_relevance": "研究工具/工作流提效：提出 Complexity Router 根据序列特征自动选择最优模型类（基础模型或监督模型），降低模型部署决策成本，提升预测效率。", "possible_use_case": "在日频金融数据（如股票收益、波动率）预测中，先用 Complexity Router 判断序列特征，然后自动选择使用基础模型（如 Chronos）还是训练一个 LSTM/Transformer，尤其适合低流动性或冷启动资产。", "limitations": "原文未给出任何具体实验指标（如 RMSE、夏普、年化收益），结论完全基于定性表述；复杂性路由器的特征阈值未公开，跨市场/跨资产泛化性未验证；金融场景中的交易成本、滑点、延迟等影响未纳入。", "read_priority": "低", "key_figures_md": "", "relevance_score": 8.5, "novelty_score": 8.948, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 7.44, "display_title": "特征工程、预测、时间序列、能源交易研究论文", "tldr": "评估时间序列基础模型的操作可行性：在金融等四大场景对比监督学习，提出 Complexity Router 自动路由模型", "core_value": "对你的量化工作帮助：把它转成一个特征工程实验，对比原始价格特征、差分特征和分数阶差分特征，重点看平稳性、信息保留、样本外泛化和是否引入未来函数。", "key_points_list": ["基础模型在周期性强的序列（如日内交易量）上表现好，在物理约束系统（如电力负载）上不如监督学习；金融领域中基础模型正缩小差距但无具体数字。", "数据要求低（零样本），可复现需基础模型权重（如 Lag-Llama）和代码；Complexity Router 实现简单，但金融场景需验证特征选取的鲁棒性。", "论文缺乏具体量化指标（准确率、夏普、收益等），结论基于定性分析；复杂性路由器的特征阈值可能过拟合特定数据集，泛化性未知；未考虑金融交易成本和延迟。"], "reference_url": "http://arxiv.org/abs/2605.24381v1", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "金融机器学习", "priority_label": "低", "source_type_label": "论文"}, {"id": "f1288bd829955b2ecbf10603c7946825511c208f5404bdae919cc9185da5bdb3", "source": "arXiv", "source_type": "paper", "title": "AI-Powered Sustainable Finance: An Integrative Taxonomy and Framework of AI Applications for Sustainable Investment Decision-Making", "url": "http://arxiv.org/abs/2605.26076v1", "authors": ["Eduardo C. Garrido-Merchán", "Esther Vaquero Lafuente", "Elisa Aracil"], "published_at": "2026-05-25", "collected_at": "2026-05-28T00:00:39Z", "raw_text": "The integration of Artificial Intelligence into sustainable finance represents a transformative paradigm shift in how Environmental, Social, and Governance factors are analyzed, predicted, and incorporated into investment decisions. This review provides a comprehensive taxonomy of AI approaches applicable to sustainable investment decision-making, categorizing methodologies based on their underlying algorithms and their impact on ESG-related financial processes. The proposed AI Taxonomy includes machine learning paradigms -- including supervised, unsupervised, and reinforcement learning -- as well as natural language processing techniques and optimization algorithms, examining their specific applications in ESG score prediction, controversy detection, portfolio management, and sustainability report analysis. By synthesizing findings from the recent literature, a framework emerges on AI-powered sustainable finance that identifies technological applications to overcome ESG data barriers.", "abstract": "The integration of Artificial Intelligence into sustainable finance represents a transformative paradigm shift in how Environmental, Social, and Governance factors are analyzed, predicted, and incorporated into investment decisions. This review provides a comprehensive taxonomy of AI approaches applicable to sustainable investment decision-making, categorizing methodologies based on their underlying algorithms and their impact on ESG-related financial processes. The proposed AI Taxonomy includes machine learning paradigms -- including supervised, unsupervised, and reinforcement learning -- as well as natural language processing techniques and optimization algorithms, examining their specific applications in ESG score prediction, controversy detection, portfolio management, and sustainability report analysis. By synthesizing findings from the recent literature, a framework emerges on AI-powered sustainable finance that identifies technological applications to overcome ESG data barriers.", "content_hash": "010575391e05a730ce6b16b808066e245e1dd92771a606ff4faeafbe9ac3db17", "category": "Portfolio Construction", "tags": ["machine learning", "optimization", "portfolio", "reinforcement learning"], "language": "en", "metadata": {"arxiv_categories": ["cs.CE"]}, "one_line_summary": "综述AI在ESG投资中的应用：分类法涵盖ML、NLP、强化学习及优化算法", "technical_summary": "1. 解决ESG数据质量差、非标准化问题，将AI方法分类为监督、无监督、强化学习、NLP和优化算法。 2. 基于文献综述构建框架，识别AI在ESG预测、争议检测、投资组合优化中的具体应用。 3. 无实验数据和量化指标，仅定性描述各方法的适用场景。", "key_points": ["原文缺乏量化指标，结论待复核；综述了AI在ESG评分预测中使用监督学习、NLP处理非结构化数据。", "可用性高：方法框架可作为ESG因子研究起点，但需自行收集数据并复现模型。", "局限性：无样本外测试、未考虑交易成本，综述未区分方法优劣，实用性依赖后续实证。"], "quant_relevance": "为ESG因子挖掘和可持续组合构建提供方法学分类，但缺乏实证，需自行验证。", "possible_use_case": "可作为ESG因子研究的方法论地图，按分类选择技术路线（如用NLP从新闻中提取ESG争议事件）。", "limitations": "综述无任何实验数据或量化比较，结论基于文献定性描述，需后续量化验证。", "read_priority": "低", "key_figures_md": "", "relevance_score": 6.8, "novelty_score": 9.355, "academic_score": 9.75, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 6.974, "display_title": "机器学习、优化、组合、强化学习研究论文", "tldr": "综述AI在ESG投资中的应用：分类法涵盖ML、NLP、强化学习及优化算法", "core_value": "对你的量化工作帮助：把它拆成一个组合构建复现任务，先验证机器学习、优化、组合、强化学习是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["原文缺乏量化指标，结论待复核；综述了AI在ESG评分预测中使用监督学习、NLP处理非结构化数据。", "可用性高：方法框架可作为ESG因子研究起点，但需自行收集数据并复现模型。", "局限性：无样本外测试、未考虑交易成本，综述未区分方法优劣，实用性依赖后续实证。"], "reference_url": "http://arxiv.org/abs/2605.26076v1", "report_sections": ["deep_learning_quant"], "report_section_labels": ["深度学习量化未来"], "category_label": "组合构建", "priority_label": "低", "source_type_label": "论文"}, {"id": "888b0e652e780bd2d7caa7ecf847c0a4fd4ef984d25204e703522ec8bc19f313", "source": "arXiv", "source_type": "paper", "title": "Predicting Stock Price Direction on Earnings Announcement Days using Multi-modal Deep Learning", "url": "http://arxiv.org/abs/2605.25894v1", "authors": ["Manuel Noseda", "Nathan Soldati", "Marco Paina"], "published_at": "2026-05-25", "collected_at": "2026-05-28T00:00:21Z", "raw_text": "Predicting stock price movements during Earnings Announcements (EAs) is a significant challenge due to market noise and high-impact price discontinuities. In this study, we evaluate whether pre-announcement news sentiment, firm fundamentals, and recent market dynamics jointly predict the directional price movement of equities on EA days. We construct a multi-modal feature space combining 15 fundamental metrics, 3 price-based technical indicators and sentiment scores derived from financial news articles processed using FinBERT. We compare a Long Short-Term Memory (LSTM) network and a Transformer-based architecture against a logistic regression baseline, and further assess all models with and without sentiment features to quantify their incremental value. Our results indicate that while the LSTM demonstrates higher precision through a conservative safe-bet strategy, the Transformer model exhibits superior sensitivity in identifying volatile movements, achieving a higher macro F1-score, with ablation experiments showing a consistent benefit from incorporating news sentiment.", "abstract": "Predicting stock price movements during Earnings Announcements (EAs) is a significant challenge due to market noise and high-impact price discontinuities. In this study, we evaluate whether pre-announcement news sentiment, firm fundamentals, and recent market dynamics jointly predict the directional price movement of equities on EA days. We construct a multi-modal feature space combining 15 fundamental metrics, 3 price-based technical indicators and sentiment scores derived from financial news articles processed using FinBERT. We compare a Long Short-Term Memory (LSTM) network and a Transformer-based architecture against a logistic regression baseline, and further assess all models with and without sentiment features to quantify their incremental value. Our results indicate that while the LSTM demonstrates higher precision through a conservative safe-bet strategy, the Transformer model exhibits superior sensitivity in identifying volatile movements, achieving a higher macro F1-score, with ablation experiments showing a consistent benefit from incorporating news sentiment.", "content_hash": "7020e1ee43c418ebe158f7a20229b19e21e3196ca87a252ed1987976dc92a80f", "category": "Machine Learning for Finance", "tags": ["deep learning", "lstm", "transformer"], "language": "en", "metadata": {"arxiv_categories": ["cs.LG", "q-fin.ST"]}, "one_line_summary": "多模态深度学习预测财报公告日股价方向，Transformer宏F1优于LSTM，情感特征带来增量收益", "technical_summary": "1. 解决预测财报公告日股价方向的问题，市场噪声大且存在价格跳跃。2. 构建多模态特征：15个基本面指标、3个技术指标、FinBERT新闻情感分数。3. 对比LSTM、Transformer和逻辑回归基线。4. 结论：LSTM精度高但保守，Transformer更敏感且宏F1更高，消融实验证实情感特征有增量价值。5. 原文未报告具体指标数值，仅给出定性对比。", "key_points": ["核心发现：LSTM精度高但保守（更少但更准的正向预测），Transformer宏F1更高，情感特征在两种模型中均有增益。", "量化可用性：需财报日数据、基本面、技术指标和新闻文本；FinBERT和深度学习模型有成熟库；若有公开代码可复现，否则实现复杂度中等。", "局限性：未报告具体精度/F1值，难以量化策略收益；仅针对财报日事件，可能过拟合；未考虑交易成本，实盘效果存疑。"], "quant_relevance": "提供财报公告日事件驱动的股价方向alpha信号，可直接用于事件驱动策略的信号生成模块。", "possible_use_case": "在财报日前收盘前，用该模型预测次一交易日的股价方向，结合持仓风险预算与冲击成本，构建多空仓位。可先在小样本股票池上回测。", "limitations": "原文缺乏具体的数值报告（精度、回撤、样本外时间），无法直接评估策略表现；仅在财报日应用，泛化性未知；未考虑交易成本和滑点；FinBERT情感分数可能引入主观偏差。", "read_priority": "中", "key_figures_md": "- **Table 1: 模型性能对比**：LSTM、Transformer与逻辑回归在精度、召回率、F1上的对比（数值未在摘要中提供）\n- **Figure 2: 消融实验**：加入/去除情感特征后的模型性能变化\n- [原文图表（HTML版）](https://arxiv.org/html/2605.25894)", "relevance_score": 6.6, "novelty_score": 9.355, "academic_score": 9.86, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 6.93, "display_title": "深度学习、Transformer研究论文", "tldr": "多模态深度学习预测财报公告日股价方向，Transformer宏F1优于LSTM，情感特征带来增量收益", "core_value": "对你的量化工作帮助：把它拆成一个金融机器学习复现任务，先验证深度学习、Transformer 是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["核心发现：LSTM精度高但保守（更少但更准的正向预测），Transformer 宏F1更高，情感特征在两种模型中均有增益。", "量化可用性：需财报日数据、基本面、技术指标和新闻文本；FinBERT和深度学习模型有成熟库；若有公开代码可复现，否则实现复杂度中等。", "局限性：未报告具体精度/F1值，难以量化策略收益；仅针对财报日事件，可能过拟合；未考虑交易成本，实盘效果存疑。"], "reference_url": "http://arxiv.org/abs/2605.25894v1", "report_sections": ["deep_learning_quant"], "report_section_labels": ["深度学习量化未来"], "category_label": "金融机器学习", "priority_label": "中", "source_type_label": "论文"}, {"id": "d99218daf4668b8fca498950b38775cac8e0955950833ffcd59b4519beb99628", "source": "Reddit algotrading", "source_type": "forum", "title": "Journey of developing algo infra and questions regarding your algos infra.", "url": "https://www.reddit.com/r/algotrading/comments/1tpmn05/journey_of_developing_algo_infra_and_questions/", "authors": ["/u/Local-March-7400"], "published_at": "2026-05-27", "collected_at": "2026-05-28T00:15:05Z", "raw_text": "Ive been wondering this for a while now, how many of you are seriously developing a big trading infrastructure. After creating a first strategy that seems stable enouth with all the necessary testing and ironing out all the backtesting bugs my engine had (and that i could find), ive started to develop my bot to trade the strategy in paper and then live. However, after understanding better and better what kind of management for execution, orchestration, robustness and logging / analysis needed, the Development is spireling out of control. What started with a simple IBKR Python bot that saved data in json (i know...) is becoming bigger and bigger, first i wanted a proper postgres DB for telemetry of strategy and integration of my custom made Tax and cost engine (first in R then switched to python). Then wanted a proper React Frontend. Now it had around a few thousend to 10k LOC. After researching and testing further ive realised that even buying and selling Options on my wanted products on US markets did work as EU citizen. No problem i thought, then i just switch to the EU Products. Found out about Market impact analysis with calculating Slippage using Almgren-Chriss model tempory market impact (slippage) total cost of trade Found out that with EU products my capacity would drop to 100k from Millions! Realized after lots of research that the only broker who could handle it was Tastytrade to circument the UCITS ba (has an api, YES! but citadel takes a cut). Therefore needed now multi broker orchestration, integration of market impact before trading, Tax Engine V2, telemetry got more complicated, market data maybe from multiple sources, basicaly had to build a full institutional trading application. Also added tons of robustness features, smart execution engine based on slippage and supported order types based on broker, degrading instead of crashing, alerting/reporting to mobile and possible kill switch. Found out in testing that bot needs to know when there is a national holiday or half days or shutdowns of exchanges (shocker!), otherwise tons of orders went to the broker and engine could not understand why they wont coming through. After working on it i halfway thought that maybe i should consider switching to a standard engine like Nautilus or Lean instead of custom made, but quickly realized that for EU traders who need Tax tracking, integration of not so common brokers like tastytrade, advanced telemetry and MFID2 / UCITS robustness 0 software existed. The market ... is non existing. Hacking a already established platform would probely take just as long. By now my platform is about 200 to 250k NLOC big and ive been working on my strategy and this Trading software for almost 2 years now. Looking to finish EOY. This a major pain in the ass and i cannot imagine that a lot of people in this sub are going through this. Therefore i have a few Questions: - How long did your infrastructure creation take and how have you minimized the complexity of your algo? - Tipps from EU traders? - Are you using Custom engine or a already build one? - how you handle taxes? - Tipps for designing the architecture (have the feeling my architecture became to cluttered and to legacy code dependent. Also its a module based architecture so its less rigid) - How much complexity do you have? NLOC? - Time to live, did it also take you years of basicaly non stop work? Thanks for answers and best regards submitted by /u/Local-March-7400 [link] [comments]", "abstract": "Ive been wondering this for a while now, how many of you are seriously developing a big trading infrastructure. After creating a first strategy that seems stable enouth with all the necessary testing and ironing out all the backtesting bugs my engine had (and that i could find), ive started to develop my bot to trade the strategy in paper and then live. However, after understanding better and better what kind of management for execution, orchestration, robustness and logging / analysis needed, the Development is spireling out of control. What started with a simple IBKR Python bot that saved data in json (i know...) is becoming bigger and bigger, first i wanted a proper postgres DB for telemetry of strategy and integration of my custom made Tax and cost engine (first in R then switched to python). Then wanted a proper React Frontend. Now it had around a few thousend to 10k LOC. After researching and testing further ive realised that even buying and selling Options on my wanted products on US markets did work as EU citizen. No problem i thought, then i just switch to the EU Products. Found out about Market impact analysis with calculating Slippage using Almgren-Chriss model tempory market impact (slippage) total cost of trade Found out that with EU products my capacity would drop to 100k from Millions! Realized after lots of research that the only broker who could handle it was Tastytrade to circument the UCITS ba (has an api, YES! but citadel takes a cut). Therefore needed now multi broker orchestration, integration of market impact before trading, Tax Engine V2, telemetry got more complicated, market data maybe from multiple sources, basicaly had to build a full institutional trading application. Also added tons of robustness features, smart execution engine based on slippage and supported order types based on broker, degrading instead of crashing, alerting/reporting to mobile and possible kill switch. Found out in testing that bot needs to know when there is a national holiday or half days or shutdowns of exchanges (shocker!), otherwise tons of orders went to the broker and engine could not understand why they wont coming through. After working on it i halfway thought that maybe i should consider switching to a standard engine like Nautilus or Lean instead of custom made, but quickly realized that for EU traders who need Tax tracking, integration of not so common brokers like tastytrade, advanced telemetry and MFID2 / UCITS robustness 0 software existed. The market ... is non existing. Hacking a already established platform would probely take just as long. By now my platform is about 200 to 250k NLOC big and ive been working on my strategy and this Trading software for almost 2 years now. Looking to finish EOY. This a major pain in the ass and i cannot imagine that a lot of people in this sub are going through this. Therefore i have a few Questions: - How long did your infrastructure creation take and how have you minimized the complexity of your algo? - Tipps from EU traders? - Are you using Custom engine or a already build one? - how you handle taxes? - Tipps for designing the architecture (have the feeling my architecture became to cluttered and to legacy code dependent. Also its a module based architecture so its less rigid) - How much complexity do you have? NLOC? - Time to live, did it also take you years of basicaly non stop work? Thanks for answers and best regards submitted by /u/Local-March-7400 [link] [comments]", "content_hash": "fbe0e941b2f13103f89ff620a08d8f828038bc83d4fb3f6b6cdc03736e55ed18", "category": "Execution / Transaction Cost", "tags": ["backtesting", "execution", "market data", "market impact", "slippage"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "EU量化交易者自建基础设施的两年血泪史：从IBKR简单bot到20万行代码的多经纪商平台", "technical_summary": "核心话题是EU个人量化交易者自建交易基础设施的痛点和决策。作者从IBKR Python bot起步，随着实盘需求（税务、多经纪商、市场冲击、节假日处理、破产保护）涌现，代码膨胀至20-25万行。发现EU数据导致容量从数百万美元降至10万，唯一可选经纪商Tastytrade又有citadel抽成。主流框架（Nautilus、Lean）无法满足EU税务、MFID2/UCITS合规和少数经纪商集成，只能自建。平台包括：Postgres数据库、React前端、税务引擎、市场冲击分析、智能执行引擎、降级机制、移动告警/杀停。工期近2年，预计年底完成。", "key_points": ["EU个人量化交易者自建交易基础设施，代码规模20-25万行，耗时2年，核心痛点是税务、合规、少数经纪商（如Tastytrade）的集成不存在现成开源方案。", "具体可操作：1）使用Almgren-Chriss模型计算市场冲击以优化执行；2）需内置交易所节假日日历避免无效订单；3）考虑模块化架构和降级机制而非全有全无。", "局限性：自建基础设施极其耗时（2年+），且容纳资金规模受限于EU产品容量（约10万欧元），Tastytrade经citadel执行有额外成本，需评估投入产出比。"], "quant_relevance": "执行/交易成本：需整合Almgren-Chriss模型计算市场冲击，影响订单拆分和经纪商选择；研究工具/工作流提效：自建平台可定制税务引擎、多经纪商编排、智能执行，但成本极高。", "possible_use_case": "可作为EU量化团队评估基础设施决策的案例：在自建与现有框架（Nautilus/Lean）间选择时，需先评估税务、经纪商兼容性和合规需求，避免低估工程复杂度。", "limitations": "这是单一用户的个人经验，未考虑团队协作、资金规模和策略多样性；社区讨论并非严格实验，具体数据（容量10万欧元）依赖交易产品和经纪商，需验证。", "read_priority": "高", "key_figures_md": "", "relevance_score": 7.3, "novelty_score": 9.78, "academic_score": 5.5, "discussion_score": 3.0, "actionable_score": 7.5, "final_score": 6.921, "display_title": "回测、交易执行、市场数据、市场冲击实践讨论", "tldr": "EU量化交易者自建基础设施的两年血泪史：从IBKR简单bot到20万行代码的多经纪商平台", "core_value": "对你的量化工作帮助：把它当作回测、交易执行、市场数据、市场冲击的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["EU个人量化交易者自建交易基础设施，代码规模20-25万行，耗时2年，核心痛点是税务、合规、少数经纪商（如Tastytrade）的集成不存在现成开源方案。", "具体可操作：1）使用Almgren-Chriss模型计算市场冲击以优化执行；2）需内置交易所节假日日历避免无效订单；3）考虑模块化架构和降级机制而非全有全无。", "局限性：自建基础设施极其耗时（2年+），且容纳资金规模受限于EU产品容量（约10万欧元），Tastytrade经citadel执行有额外成本，需评估投入产出比。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1tpmn05/journey_of_developing_algo_infra_and_questions/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "交易执行 / 交易成本", "priority_label": "高", "source_type_label": "论坛"}, {"id": "a1c904e711718b2c183c3caa2cc603a10a7f13f853baf890eedc2bca1ff94a20", "source": "arXiv", "source_type": "paper", "title": "DeepSeekMath Meets Order Book: Group-Aware Policy Optimization for High-Frequency Directional Trading", "url": "http://arxiv.org/abs/2605.25527v1", "authors": ["Sayak Charabarty", "Souradip Pal"], "published_at": "2026-05-25", "collected_at": "2026-05-28T00:00:39Z", "raw_text": "This paper studies reinforcement learning for high-frequency trading on limit order books by pairing an Order-Flow-based state model with policy-gradient methods. Instead of value-based RL techniques like tabular Q-learning, our approach deploys policy-based methods like vanilla PPO and DeepSeekMath-inspired variants like GRPO and GSPO, that use group-normalized updates and downside-aware shaping. On backtests with financial assets AMZN, AAPL, and GOOG under a simplified backtesting setup based on spread-scaled rewards, these new policies improve net average PnL, profitability, and drawdown over the Q-Learning baseline. Our results show that (1) Order-Flow signals are an adequate state for policy RL and (2) group-aware PPO surrogates are preferable over value-based baselines.", "abstract": "This paper studies reinforcement learning for high-frequency trading on limit order books by pairing an Order-Flow-based state model with policy-gradient methods. Instead of value-based RL techniques like tabular Q-learning, our approach deploys policy-based methods like vanilla PPO and DeepSeekMath-inspired variants like GRPO and GSPO, that use group-normalized updates and downside-aware shaping. On backtests with financial assets AMZN, AAPL, and GOOG under a simplified backtesting setup based on spread-scaled rewards, these new policies improve net average PnL, profitability, and drawdown over the Q-Learning baseline. Our results show that (1) Order-Flow signals are an adequate state for policy RL and (2) group-aware PPO surrogates are preferable over value-based baselines.", "content_hash": "c9765771e2fa8b7184daa672ad3b11742940fa6f3a380896ab5c767d79081325", "category": "Market Microstructure", "tags": ["backtesting", "drawdown", "grpo", "optimization", "order book", "policy optimization", "reinforcement learning", "spread"], "language": "en", "metadata": {"arxiv_categories": ["cs.LG", "cs.CE"]}, "one_line_summary": "使用Order-Flow状态和组归一化策略优化（GSPO）进行高频方向性交易，在AMZN、AAPL、GOOG简化回测中优于Q-learning基线", "technical_summary": "1. 研究如何利用限价订单簿的订单流信号（Order-Flow）作为强化学习的状态表示，学习高频方向性交易策略。2. 采用策略梯度方法，包括PPO、以及受DeepSeekMath启发的GRPO（组相对策略优化）和GSPO（组感知策略优化），它们使用组归一化更新和下行风险感知。3. 在AMZN、AAPL、GOOG三只股票的简化回测中（基于spread-scaled奖励），这些策略梯度方法在净平均PnL、盈利能力和最大回撤上均优于基于Q-learning的基线。4. 结论：订单流信号足以作为策略RL的有效状态，组感知PPO变体优于基于值的方法。但原文未提供具体的夏普、收益百分比等量化指标。", "key_points": ["核心方法：用订单流信号+策略梯度（PPO/GRPO/GSPO）训练高频交易策略，回测表现优于Q-learning基线，但缺少具体数字支撑。", "量化可用性：数据需求高（需高频LOB数据），实现难度中等（需搭建RL环境），可复现性低（回测设置简化，无交易成本假设）。", "局限性：仅在三只美股上测试，使用欠真实的spread-scaled奖励，未考虑真实滑点、市场冲击，过拟合风险未评估。"], "quant_relevance": "执行/交易策略：为高频方向性交易提供基于订单流状态和策略梯度优化的新框架，可能改善实盘策略的PnL和风险管理。", "possible_use_case": "可在自建高频回测环境中复现该框架，先用订单流和PPO训练方向性策略，但需加入真实交易成本与滑点模型，并在更多股票和外推期内验证。", "limitations": "1. 回测设置过于简化（仅基于spread-scaled奖励），未考虑真实交易成本、滑点、市场冲击；2. 仅测试AMZN/AAPL/GOOG三只股票，样本代表性不足；3. 原文缺乏具体量化指标（收益、夏普、胜率等），无法评估统计显著性；4. 强化学习训练可能存在对历史路径的过拟合；5. 未提供样本外时间段的验证。", "read_priority": "低", "key_figures_md": "", "relevance_score": 6.1, "novelty_score": 9.355, "academic_score": 9.482, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 6.323, "display_title": "回测、回撤、优化、订单簿研究论文", "tldr": "使用Order-Flow状态和组归一化策略优化（GSPO）进行高频方向性交易，在AMZN、AAPL、GOOG简化回测中优于Q-learning基线", "core_value": "对你的量化工作帮助：把它拆成一个市场微观结构复现任务，先验证回测、回撤、优化、订单簿是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["核心方法：用订单流信号+策略梯度（PPO/GRPO/GSPO）训练高频交易策略，回测表现优于Q-learning基线，但缺少具体数字支撑。", "量化可用性：数据需求高（需高频LOB数据），实现难度中等（需搭建RL环境），可复现性低（回测设置简化，无交易成本假设）。", "局限性：仅在三只美股上测试，使用欠真实的spread-scaled奖励，未考虑真实滑点、市场冲击，过拟合风险未评估。"], "reference_url": "http://arxiv.org/abs/2605.25527v1", "report_sections": ["deep_learning_quant"], "report_section_labels": ["深度学习量化未来"], "category_label": "市场微观结构", "priority_label": "低", "source_type_label": "论文"}, {"id": "c00cde0c66828a8d9b8f1055c1f24f96f6bf6279837837d1136396138e44e1db", "source": "arXiv", "source_type": "paper", "title": "Nonlinear and Heavy-Tailed Predictability in Transition-Energy Financial Markets", "url": "http://arxiv.org/abs/2605.26890v1", "authors": ["Kpante Emmanuel Gnandi", "Fredy Pokou", "Jules Sadefo Kamdem"], "published_at": "2026-05-26", "collected_at": "2026-05-28T00:00:21Z", "raw_text": "Transition-related financial markets are increasingly exposed to abrupt repricing episodes, elevated volatility, and heterogeneous macro-financial shocks. Under such conditions, conventional Gaussian-linear forecasting frameworks may provide an incomplete representation of the dependence structure linking fossil-energy, renewable-energy, technology, and utility-sector assets. This paper investigates whether transition-related financial returns exhibit residual non-linear predictability after controlling for heavy-tailed multivariate linear dynamics. To address this question, we develop a hybrid forecasting framework combining Student-t Vector Autoregressions with nonlinear recurrent residual learning architectures. The empirical analysis considers six major exchange-traded funds representing broad equity markets and key transition-sensitive sectors. The results reveal substantial departures from Gaussian-linear behavior, including excess kurtosis, volatility clustering, and remaining nonlinear dependence after econometric filtering. Out-of-sample forecasting experiments show that the proposed framework consistently improves predictive accuracy relative to conventional VAR models, standalone machine-learning methods, and alternative hybrid specifications. The forecasting gains become more pronounced during periods of macro-financial stress, particularly during the COVID-19 crisis and the Ukraine-related energy shock. Overall, the findings suggest that transition-related financial systems exhibit regime-sensitive and heavy-tailed predictive dynamics that are insufficiently captured by standard Gaussian-linear models alone.", "abstract": "Transition-related financial markets are increasingly exposed to abrupt repricing episodes, elevated volatility, and heterogeneous macro-financial shocks. Under such conditions, conventional Gaussian-linear forecasting frameworks may provide an incomplete representation of the dependence structure linking fossil-energy, renewable-energy, technology, and utility-sector assets. This paper investigates whether transition-related financial returns exhibit residual non-linear predictability after controlling for heavy-tailed multivariate linear dynamics. To address this question, we develop a hybrid forecasting framework combining Student-t Vector Autoregressions with nonlinear recurrent residual learning architectures. The empirical analysis considers six major exchange-traded funds representing broad equity markets and key transition-sensitive sectors. The results reveal substantial departures from Gaussian-linear behavior, including excess kurtosis, volatility clustering, and remaining nonlinear dependence after econometric filtering. Out-of-sample forecasting experiments show that the proposed framework consistently improves predictive accuracy relative to conventional VAR models, standalone machine-learning methods, and alternative hybrid specifications. The forecasting gains become more pronounced during periods of macro-financial stress, particularly during the COVID-19 crisis and the Ukraine-related energy shock. Overall, the findings suggest that transition-related financial systems exhibit regime-sensitive and heavy-tailed predictive dynamics that are insufficiently captured by standard Gaussian-linear models alone.", "content_hash": "bc0adefbae51ed7d8aa4139e7618135a1c56f72f136ee4ba02b9d67d79968a44", "category": "Alpha / Factor Research", "tags": ["forecasting", "predictability", "var", "volatility"], "language": "en", "metadata": {"arxiv_categories": ["q-fin.CP", "stat.AP", "stat.ML"]}, "one_line_summary": "Student-t VAR结合递归残差学习预测过渡能源ETF，在宏观压力时期预测精度提升", "technical_summary": "1. 过渡能源市场（化石能源、可再生能源、科技、公用事业）存在重尾和非线性依赖，传统高斯线性VAR难以刻画。2. 提出混合模型：先用Student-t VAR捕捉线性重尾动态，再用非线性递归残差学习（如LSTM残差）提取剩余非线性模式。3. 对六只ETF（代表广泛市场和过渡敏感行业）进行样本外预测，结果显示混合模型持续优于VAR和单独ML方法，且压力时期（COVID-19、乌克兰能源危机）增益更明显。原文未给出具体RMSE/MAE数值。", "key_points": ["使用Student-t VAR作为线性重尾基线，叠加递归残差学习捕捉非线性，在六只ETF上预测精度优于传统VAR和单独ML方法。", "仅需六只ETF日度收益率数据，模型可复现性取决于神经网络架构细节（原文未完整公开），需要自行调参。", "论文未报告具体精度改善百分比，未考虑交易成本与回撤，样本外主要覆盖COVID-19和乌克兰危机等极端事件，泛化性待验证。"], "quant_relevance": "因子/alpha信号：为过渡能源相关多资产收益率预测提供非线性信号，尤其适用于宏观压力时期。", "possible_use_case": "在能源转型ETF（如TAN、ICLN、XLE）上直接应用该混合模型生成日频预测信号，用于行业多空组合或配对交易。", "limitations": "缺乏具体量化指标（如RMSE/MAE降低百分比），未考虑交易成本与滑点，神经网络架构细节不完整，样本外时段特殊，可能过度适应极端事件，可复现性低。", "read_priority": "中", "key_figures_md": "", "relevance_score": 4.2, "novelty_score": 9.565, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 6.273, "display_title": "预测、风险价值、波动率、能源交易研究论文", "tldr": "Student-t VAR结合递归残差学习预测过渡能源ETF，在宏观压力时期预测精度提升", "core_value": "对你的量化工作帮助：把它拆成一个阿尔法 / 因子研究复现任务，先验证预测、风险价值、波动率、能源交易是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["使用Student-t VAR作为线性重尾基线，叠加递归残差学习捕捉非线性，在六只ETF上预测精度优于传统VAR和单独ML方法。", "仅需六只ETF日度收益率数据，模型可复现性取决于神经网络架构细节（原文未完整公开），需要自行调参。", "论文未报告具体精度改善百分比，未考虑交易成本与回撤，样本外主要覆盖COVID-19和乌克兰危机等极端事件，泛化性待验证。"], "reference_url": "http://arxiv.org/abs/2605.26890v1", "report_sections": ["deep_learning_quant"], "report_section_labels": ["深度学习量化未来"], "category_label": "阿尔法 / 因子研究", "priority_label": "中", "source_type_label": "论文"}, {"id": "e0417a662ffe8cc086cd7eee744c76f5b1220d8268ce573f1f7ea7fb07b6e5ac", "source": "Reddit algotrading", "source_type": "forum", "title": "What is your bot's target % gain every day?", "url": "https://www.reddit.com/r/algotrading/comments/1tomfov/what_is_your_bots_target_gain_every_day/", "authors": ["/u/NoMulberry868"], "published_at": "2026-05-26", "collected_at": "2026-05-28T00:15:05Z", "raw_text": "I made this bot that basically picks the top 200 movers from the S&P 500, uses an LLM to ingest all sorts of technical data, and then spits out one ticker for me to buy, just before the markets open. So far, I think it's doing pretty well since gains have been more than losses. This is a simple backtest script I made to show which days are winners and losers, but I've been winning and losing real money with it since the 14th. I'm wondering what % gain does everyone else's bots target every day? I set my profit target at 4% per day. Some days it hits, some days it doesn't, but it does seem to hit about half the days, which is great. I'm just going full port, one blue chip stock per day, one trade per day, and so far it's working. Is anyone else getting better returns than this? If so, what are you trading? If you're wondering, it's a fairly simple .py system paired with alpaca. Edit: For clarification, the open/close column shows the gain of you would have simply bought at whatever the opening price was and closed 10 minutes before the market closed. submitted by /u/NoMulberry868 [link] [comments]", "abstract": "I made this bot that basically picks the top 200 movers from the S&P 500, uses an LLM to ingest all sorts of technical data, and then spits out one ticker for me to buy, just before the markets open. So far, I think it's doing pretty well since gains have been more than losses. This is a simple backtest script I made to show which days are winners and losers, but I've been winning and losing real money with it since the 14th. I'm wondering what % gain does everyone else's bots target every day? I set my profit target at 4% per day. Some days it hits, some days it doesn't, but it does seem to hit about half the days, which is great. I'm just going full port, one blue chip stock per day, one trade per day, and so far it's working. Is anyone else getting better returns than this? If so, what are you trading? If you're wondering, it's a fairly simple .py system paired with alpaca. Edit: For clarification, the open/close column shows the gain of you would have simply bought at whatever the opening price was and closed 10 minutes before the market closed. submitted by /u/NoMulberry868 [link] [comments]", "content_hash": "ba7df89577d7b795f43e6aa45d6dae10ee0f4917a031f217c46d8c5bb11f831f", "category": "LLM / Agents for Quant", "tags": ["backtest", "llm"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "用LLM从S&P500前200波动股中选一只，全仓日频交易，目标日收益4%，约半数天数达成", "technical_summary": "该帖子讨论了一个简单日频交易策略：从S&P500前200大波动的股票中，利用LLM分析技术数据，每日开盘前选出一只股票全仓买入，收盘前10分钟卖出。用户设定日盈利目标4%，约一半交易日达成。用户认为策略有效并已实盘运行约两周。帖子旨在询问其他交易者的日收益目标。", "key_points": ["用户使用LLM从S&P500前200波动股中选股，全仓交易，目标日收益4%，约半数天数达成，实盘盈利。", "该策略可快速复现：Alpaca API + Python脚本，每日开盘前运行LLM分析技术数据。", "核心风险：全仓单只股票波动极大，4%日目标需看对方向，样本仅两周，过拟合可能高。"], "quant_relevance": "因子/alpha信号、执行/交易成本（该策略依赖LLM信号和全仓单次交易）", "possible_use_case": "可作为散户量化研究LLM信号入门的参考，但需增加风控如止损、分散化。", "limitations": "仅两周实盘数据，未考虑交易成本和滑点（高频交易成本可能在0.1-0.5%），全仓单只蓝筹股风险极高，缺乏样本外验证，LLM信号稳定性未知。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.565, "academic_score": 5.391, "discussion_score": 3.0, "actionable_score": 7.5, "final_score": 6.142, "display_title": "回测、大模型实践讨论", "tldr": "用LLM从S&P500前200波动股中选一只，全仓日频交易，目标日收益4%，约半数天数达成", "core_value": "对你的量化工作帮助：把它当作回测、大模型的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["用户使用LLM从S&P500前200波动股中选股，全仓交易，目标日收益4%，约半数天数达成，实盘盈利。", "该策略可快速复现：Alpaca 接口 + Python 脚本，每日开盘前运行LLM分析技术数据。", "核心风险：全仓单只股票波动极大，4%日目标需看对方向，样本仅两周，过拟合可能高。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1tomfov/what_is_your_bots_target_gain_every_day/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "量化大模型 / 智能体", "priority_label": "高", "source_type_label": "论坛"}, {"id": "ba78d101d9a41b513f4ae462b8050cf26c6ed245c74a63b75886eb61e072aa6a", "source": "Reddit quant", "source_type": "forum", "title": "what type of work are QRs doing with LLM research?", "url": "https://www.reddit.com/r/quant/comments/1toh48a/what_type_of_work_are_qrs_doing_with_llm_research/", "authors": ["/u/Smol_pp001"], "published_at": "2026-05-26", "collected_at": "2026-05-28T00:15:06Z", "raw_text": "given the rise of AI research, do QRs also work on applied LLM research a lot? especially at the stats-arb shops like two sigma, are they building something like using LLM outputs as trading signals or NLP based signal extraction pipelines or what exactly? also curious if QRs also work on areas like mechanistic interpretability (circuits, features activation etc): understand how's the model thinking internally rather than treating them as a black box is this type of research happening at quant funds or is it just purely academic stuff? submitted by /u/Smol_pp001 [link] [comments]", "abstract": "given the rise of AI research, do QRs also work on applied LLM research a lot? especially at the stats-arb shops like two sigma, are they building something like using LLM outputs as trading signals or NLP based signal extraction pipelines or what exactly? also curious if QRs also work on areas like mechanistic interpretability (circuits, features activation etc): understand how's the model thinking internally rather than treating them as a black box is this type of research happening at quant funds or is it just purely academic stuff? submitted by /u/Smol_pp001 [link] [comments]", "content_hash": "31feb2395b40c17655176acb35c921bc922c83d37e2b06cb753d9c6c200a2552", "category": "LLM / Agents for Quant", "tags": ["llm", "signal"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/quant/.rss"}, "one_line_summary": "社区讨论QRs如何应用LLM：信号提取、NLP管道与机械可解释性成焦点", "technical_summary": "该Reddit帖子提出三个核心问题：1) 量化研究员是否广泛从事应用LLM研究；2) 在Two Sigma等统计套利公司，是否使用LLM输出作为交易信号或构建NLP信号提取管道；3) 机械可解释性（如电路、特征激活）研究是否在量化基金发生，还是纯学术。帖子没有附带任何答案或社区回复，因此没有提供主流观点或实战经验。", "key_points": ["社区关注的三个LLM应用方向：LLM输出作为交易信号、NLP信号提取管道、机械可解释性研究。", "帖子未提供任何具体方法、工具或可操作建议，仅提出问题，缺乏实战内容。", "原文仅为提问，无数据支持或经验分享，无法直接用于量化研究或决策。"], "quant_relevance": "LLM在量化中的应用方向（信号生成、NLP管道）是当前热点，但本讨论未提供具体方法或结论，对实际工作影响有限。", "possible_use_case": "可作为选题方向参考，但无法直接落地。", "limitations": "原文缺乏量化证据和社区回复，摘要基于定性描述，无法提供可复现结论。", "read_priority": "低", "key_figures_md": "", "relevance_score": 5.6, "novelty_score": 9.565, "academic_score": 4.732, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 6.053, "display_title": "大模型、人工智能实践讨论", "tldr": "社区讨论QRs如何应用LLM：信号提取、NLP管道与机械可解释性成焦点", "core_value": "对你的量化工作帮助：把它当作大模型、人工智能的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["社区关注的三个LLM应用方向：LLM输出作为交易信号、NLP信号提取管道、机械可解释性研究。", "帖子未提供任何具体方法、工具或可操作建议，仅提出问题，缺乏实战内容。", "原文仅为提问，无数据支持或经验分享，无法直接用于量化研究或决策。"], "reference_url": "https://www.reddit.com/r/quant/comments/1toh48a/what_type_of_work_are_qrs_doing_with_llm_research/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "量化大模型 / 智能体", "priority_label": "低", "source_type_label": "论坛"}, {"id": "1ca85c5e371e505cb767ff1fcd39d32ebc46dc8fc91706b3efbf63d01f5c61b5", "source": "CoinDesk", "source_type": "crypto_news", "title": "Crypto IPOs could create massive $1 trillion market amid tokenization wave, Jefferies says", "url": "https://www.coindesk.com/markets/2026/05/27/crypto-ipos-could-create-massive-usd1-trillion-market-amid-tokenization-wave-jefferies-says", "authors": [], "published_at": "2026-05-27", "collected_at": "2026-05-28T00:15:06Z", "raw_text": "The Wall Street investment bank expects a wave of crypto and blockchain public listings over the next two years as institutional investors shift their focus from speculative trading to real-world financial infrastructure.", "abstract": "The Wall Street investment bank expects a wave of crypto and blockchain public listings over the next two years as institutional investors shift their focus from speculative trading to real-world financial infrastructure.", "content_hash": "00fe3fe9de6848ca00ddd12105e7fbbaebffab58e7b657ec584459215296bab6", "category": "Crypto Quant", "tags": ["blockchain", "crypto"], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "Jefferies预测加密IPO浪潮或创造1万亿美元市场，机构转向现实金融基础设施", "technical_summary": "华尔街投资银行Jefferies发布报告，预测未来两年将出现加密和区块链企业的公开上市（IPO）浪潮，这一趋势源于机构投资者兴趣从投机交易转向现实世界的金融基础设施。报告估计，代币化浪潮可能催生高达1万亿美元的市场规模。此前已有Coinbase、MicroStrategy等公司上市，但更多原生加密企业（如交易所、矿企、DeFi协议）尚未登陆传统公开市场。Jefferies认为，合规框架成熟、机构托管解决方案完善将加速这一进程。代币化资产（如房地产、私募股权）的IPO也将成为新增长点。", "key_points": ["Jefferies预测未来两年加密及区块链公司集中IPO，市场规模或达1万亿美元。", "新上市加密资产将增加可交易品种和流动性，量化交易者可提前研究IPO定价与套利机会。", "预测受监管不确定性和市场波动影响，实际上市节奏和规模可能不及预期。"], "quant_relevance": "市场微观结构 / 新资产上市带来的流动性机会与事件驱动策略", "possible_use_case": "交易者可跟踪即将IPO的加密公司名单，提前设计基于IPO首日表现的事件驱动策略（如统计套利），或部署做市商为相关代币提供流动性。", "limitations": "该预测基于投行报告，缺乏具体上市时间表和公司名单，需结合实际情况验证；加密货币监管不确定性可能延缓IPO进程。", "read_priority": "高", "key_figures_md": "", "relevance_score": 6.1, "novelty_score": 9.78, "academic_score": 5.776, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.852, "display_title": "加密资产加密市场新闻情报", "tldr": "Jefferies预测加密IPO浪潮或创造1万亿美元市场，机构转向现实金融基础设施", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["Jefferies预测未来两年加密及区块链公司集中IPO，市场规模或达1万亿美元。", "新上市加密资产将增加可交易品种和流动性，量化交易者可提前研究IPO定价与套利机会。", "预测受监管不确定性和市场波动影响，实际上市节奏和规模可能不及预期。"], "reference_url": "https://www.coindesk.com/markets/2026/05/27/crypto-ipos-could-create-massive-usd1-trillion-market-amid-tokenization-wave-jefferies-says", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "93f8b73250323b7277b666ff4e89874ac2dae46011a0ef6652488dfadf30d76d", "source": "Reddit algotrading", "source_type": "forum", "title": "First day testing out my breadth algo", "url": "https://www.reddit.com/r/algotrading/comments/1tpi8o3/first_day_testing_out_my_breadth_algo/", "authors": ["/u/jtm_ind"], "published_at": "2026-05-27", "collected_at": "2026-05-28T00:15:05Z", "raw_text": "ive been building out my breadth algo for SPY, tracking breadth accross the entire index + 5m EMA to time entries/exits. I'm currently calculating the pnl manually for now, but next step is to hook it up to an actual paper trading account to really get a feel for execution delays that I'm currently not accounting for. Here are the results: trades closed: 19 realized P&L: -7.65 unrealized P&L: +0.00 starting cash: 10000.00 ending equity: 9992.35 return: -0.08% win rate: 31.6% (6W / 13L) avg win: +1.50 avg loss: -1.28 Ran it for about 4 hours, strategy could use some refinement, but the biggest risk imo is accounting for how real-life execution would affect these numbers. Gong to add in some random impact hits on entries/exits tonight + trade commission. Beyond that is there any other thing i should look out for? submitted by /u/jtm_ind [link] [comments]", "abstract": "ive been building out my breadth algo for SPY, tracking breadth accross the entire index + 5m EMA to time entries/exits. I'm currently calculating the pnl manually for now, but next step is to hook it up to an actual paper trading account to really get a feel for execution delays that I'm currently not accounting for. Here are the results: trades closed: 19 realized P&L: -7.65 unrealized P&L: +0.00 starting cash: 10000.00 ending equity: 9992.35 return: -0.08% win rate: 31.6% (6W / 13L) avg win: +1.50 avg loss: -1.28 Ran it for about 4 hours, strategy could use some refinement, but the biggest risk imo is accounting for how real-life execution would affect these numbers. Gong to add in some random impact hits on entries/exits tonight + trade commission. Beyond that is there any other thing i should look out for? submitted by /u/jtm_ind [link] [comments]", "content_hash": "f4bc986ed43cace8acd6262560ac85d827943bd7efbc8539a5ca34c46220a268", "category": "Risk Management", "tags": ["execution", "risk"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "基于SPY广度+EMA的日内策略首日测试亏损0.08%，胜率31.6%，用户计划加入滑点与佣金优化", "technical_summary": "用户构建了一套跟踪标普500指数广度（上涨vs下跌股票数量）结合5分钟指数EMA进行入场退场择时的日内策略。在约4小时手动计算盈亏的测试中，19笔交易产生-7.65美元亏损，胜率仅31.6%。用户认为主要风险是未考虑实盘执行延迟、滑点和佣金，计划后续加入随机冲击模型并连接纸交易账户。社区讨论聚焦于小额样本下低胜率策略的可行性与执行模型对回测结果的影响。", "key_points": ["首日19笔交易亏损0.08%，胜率31.6%，平均盈利(+1.50)略高于平均亏损(-1.28)，但低胜率导致净亏损。", "建议主动加入随机滑点冲击、交易佣金模型，并连接到纸交易账户实测执行延迟，以获得更真实的盈亏估计。", "仅一天4小时、19笔交易的数据样本极小，手动平仓未考虑市场冲击与延迟，策略存在严重过拟合和实盘失效风险。"], "quant_relevance": "执行成本/交易成本、风险建模", "possible_use_case": "可作为量化新人测试日内策略执行模型的起点，用来对比不同滑点假设对低胜率策略盈亏的影响，或训练强化学习交易环境中的成本感知模块。", "limitations": "仅有单日小样本，且为用户手动计算结果；未考虑交易成本、滑点、市场冲击；策略本身是否具备统计显著性存疑，不能直接用于研究结论。", "read_priority": "高", "key_figures_md": "", "relevance_score": 5.6, "novelty_score": 9.78, "academic_score": 5.08, "discussion_score": 3.0, "actionable_score": 4.5, "final_score": 5.748, "display_title": "交易执行、风险、测试实践讨论", "tldr": "基于SPY广度+EMA的日内策略首日测试亏损0.08%，胜率31.6%，用户计划加入滑点与佣金优化", "core_value": "对你的量化工作帮助：把它当作交易执行、风险、测试的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["首日19笔交易亏损0.08%，胜率31.6%，平均盈利(+1.50)略高于平均亏损(-1.28)，但低胜率导致净亏损。", "建议主动加入随机滑点冲击、交易佣金模型，并连接到纸交易账户实测执行延迟，以获得更真实的盈亏估计。", "仅一天4小时、19笔交易的数据样本极小，手动平仓未考虑市场冲击与延迟，策略存在严重过拟合和实盘失效风险。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1tpi8o3/first_day_testing_out_my_breadth_algo/", "report_sections": ["deep_learning_quant"], "report_section_labels": ["深度学习量化未来"], "category_label": "风险管理", "priority_label": "高", "source_type_label": "论坛"}, {"id": "94c4993b83ff76975a060f44e4df0fc00582ca54925689da4fd7a0c93bccefd8", "source": "CoinDesk", "source_type": "crypto_news", "title": "A bipartisan bridge to the future: Why the Senate must finish the job on digital Assets", "url": "https://www.coindesk.com/opinion/2026/05/27/a-bipartisan-bridge-to-the-future-why-the-senate-must-finish-the-job-on-digital-assets", "authors": [], "published_at": "2026-05-27", "collected_at": "2026-05-28T00:15:06Z", "raw_text": "The Clarity Act’s recent markup proved that the momentum for regulation is there. It is imperative that Congress move the bill forward to establish rules this generation needs and a framework the next will inherit, urges Kim.", "abstract": "The Clarity Act’s recent markup proved that the momentum for regulation is there. It is imperative that Congress move the bill forward to establish rules this generation needs and a framework the next will inherit, urges Kim.", "content_hash": "408da790336b19b866ca39585961480a27a84c05560a6ba9c3c4e6f8e24d5485", "category": "Alpha / Factor Research", "tags": ["momentum"], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "美国参议院推进 Clarity Act 数字资产监管法案，为加密量化交易提供更稳定的政策环境", "technical_summary": "解决美国数字资产缺乏明确联邦监管框架的问题。Clarity Act 法案在众议院通过后，参议院银行委员会进行标记听证会并获得两党支持。市场预期该法案将在参议院通过并最终签署成法，为加密资产提供包括市场结构、消费者保护和稳定币规则的全面监管框架。", "key_points": ["Clarity Act 在参议院银行委员会标记听证会获两党支持，推进全面数字资产监管立法。", "监管明确可降低政策风险溢价，利于加密套利和趋势策略；需关注合规成本增加对中小交易者的影响。", "法案修改可能性、两党政治博弈及实施时间表不明，实际影响取决于最终文本和执行力度。"], "quant_relevance": "监管确定性增强，降低政策风险对量化策略的干扰，利于长期策略部署和机构资金入场。", "possible_use_case": "可作为加密市场政策风险因子，用于调整仓位和波动率预测模型中的政策不确定性权重。", "limitations": "新闻内容为社论观点，缺乏具体法律条文细节和投票时间表；政策实际影响取决于后续立法进展。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.2, "novelty_score": 9.78, "academic_score": 5.781, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.683, "display_title": "动量加密市场新闻情报", "tldr": "美国参议院推进 Clarity Act 数字资产监管法案，为加密量化交易提供更稳定的政策环境", "core_value": "对你的量化工作帮助：围绕动量补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["Clarity Act 在参议院银行委员会标记听证会获两党支持，推进全面数字资产监管立法。", "监管明确可降低政策风险溢价，利于加密套利和趋势策略；需关注合规成本增加对中小交易者的影响。", "法案修改可能性、两党政治博弈及实施时间表不明，实际影响取决于最终文本和执行力度。"], "reference_url": "https://www.coindesk.com/opinion/2026/05/27/a-bipartisan-bridge-to-the-future-why-the-senate-must-finish-the-job-on-digital-assets", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "40a1f7dd360f4415b49eaf7c2e3029c6803bd822c0b17147940a06d3570041f6", "source": "CoinDesk", "source_type": "crypto_news", "title": "Crypto Long & Short: How the GENIUS Act repriced bitcoin's monetary premium", "url": "https://www.coindesk.com/coindesk-indices/2026/05/27/crypto-long-and-short-how-the-genius-act-repriced-bitcoin-s-monetary-premium", "authors": [], "published_at": "2026-05-27", "collected_at": "2026-05-28T00:15:06Z", "raw_text": "In this week's Crypto Long & Short, Ravi Tanuku on why the GENIUS Act didn't just regulate stablecoins, it repriced Bitcoin's monetary premium. Then, Jesper Johansen on why looped ETH staking no longer needs a lending market.", "abstract": "In this week's Crypto Long & Short, Ravi Tanuku on why the GENIUS Act didn't just regulate stablecoins, it repriced Bitcoin's monetary premium. Then, Jesper Johansen on why looped ETH staking no longer needs a lending market.", "content_hash": "ac8c5be9572093ede80636fb66d1f293717c43cbc6be474b295bbf6905bd63ac", "category": "Crypto Quant", "tags": ["bitcoin", "crypto"], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "GENIUS 稳定币法案重新定价比特币的货币溢价，影响加密资产估值逻辑", "technical_summary": "1. 美国 GENIUS 法案（稳定币监管法案）的通过，不仅规范了稳定币发行，还通过明确法币支持的稳定币地位，改变了市场对比特币作为非主权货币的溢价定价逻辑。2. 比特币的货币溢价（相比稳定币的额外价值）因监管确定性而重塑，可能影响 BTC/稳定币的汇率及跨资产套利。3. 同时，环 ETH 质押（通过再质押协议）的新进展表明，其收益可不再依赖借贷市场，可能改变 ETH 的 DeFi 收益率曲线。", "key_points": ["GENIUS 法案通过重新定义稳定币监管，间接提升了比特币的货币溢价，但原文未给出溢价具体变化数值。", "量化交易者可关注 BTC 与稳定币（如 USDC）之间的价差变化，以及 ETH 质押收益率曲线的结构变化。", "法案细节尚未完全公开，市场反应可能已部分 price in，需警惕短期利好出尽风险。"], "quant_relevance": "风险建模、因子/alpha信号", "possible_use_case": "可作为 BTC/稳定币价差套利策略的信号源，以及 ETH 质押收益率的 delta 对冲参考。", "limitations": "原文为市场分析观点，缺乏具体数据支持（如溢价变动幅度、法案具体条款），需结合链上数据和法案原文验证。", "read_priority": "高", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.78, "academic_score": 5.781, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.643, "display_title": "加密资产、货币条件加密市场新闻情报", "tldr": "GENIUS 稳定币法案重新定价比特币的货币溢价，影响加密资产估值逻辑", "core_value": "对你的量化工作帮助：围绕加密资产、货币条件补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["GENIUS 法案通过重新定义稳定币监管，间接提升了比特币的货币溢价，但原文未给出溢价具体变化数值。", "量化交易者可关注 BTC 与稳定币（如 USDC）之间的价差变化，以及 ETH 质押收益率曲线的结构变化。", "法案细节尚未完全公开，市场反应可能已部分 price in，需警惕短期利好出尽风险。"], "reference_url": "https://www.coindesk.com/coindesk-indices/2026/05/27/crypto-long-and-short-how-the-genius-act-repriced-bitcoin-s-monetary-premium", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "668b9514150f2d3b243690289096802807dac21d3fd1c9589f1789e42710f67c", "source": "CoinTelegraph", "source_type": "crypto_news", "title": "Mastercard secures New York BitLicense for crypto operations", "url": "https://cointelegraph.com/news/mastercard-secures-new-york-bitlicense-for-crypto-operations?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "authors": [], "published_at": "2026-05-27", "collected_at": "2026-05-28T00:15:06Z", "raw_text": "The payments giant can now legally conduct digital asset business activity in New York as it deepens its focus on blockchain-based settlement systems.", "abstract": "The payments giant can now legally conduct digital asset business activity in New York as it deepens its focus on blockchain-based settlement systems.", "content_hash": "a45757c24ebca60c1f7cf34736f32d293507b0fc93e7198a0dada297611444b3", "category": "Crypto Quant", "tags": ["blockchain", "crypto"], "language": "en", "metadata": {"feed_url": "https://cointelegraph.com/rss"}, "one_line_summary": "The payments giant can now legally conduct digital asset business activity in New York as it deepens its focus on blockchain-based settlement systems.", "technical_summary": "The payments giant can now legally conduct digital asset business activity in New York as it deepens its focus on blockchain-based settlement systems.", "key_points": ["The payments giant can now legally conduct digital asset business activity in New York as it deepens its focus on blockchain-based settlement systems.", "来源类型：加密市场新闻。", "进入研究或生产前需要进一步人工复核。"], "quant_relevance": "和加密资产市场结构、链上信号、衍生品以及跨交易所交易相关。", "possible_use_case": "可以在高流动性交易所上验证，并纳入手续费、资金费率和滑点。", "limitations": "在成为研究或交易决策前，需要人工复核。", "read_priority": "中", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.78, "academic_score": 5.688, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.629, "display_title": "加密资产加密市场新闻情报", "tldr": "The payments giant can now legally conduct digital asset business activity in New York as it deepens its focus on blockchain-based settlement systems.", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["内容抓手：这条加密市场新闻围绕加密资产展开，归入加密资产量化。", "研究动作：先作为加密资产量化候选线索，判断是否值得进入研究待办。", "验证重点：检查数据可得性、可复现性、样本外稳定性和生产约束。"], "reference_url": "https://cointelegraph.com/news/mastercard-secures-new-york-bitlicense-for-crypto-operations?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "中", "source_type_label": "加密市场新闻"}, {"id": "58dfbdb19a84ff3c256164117676ecccbf1086bc60ce93140309fdec006f65ae", "source": "The Block", "source_type": "crypto_news", "title": "Cash App lets users send USDC stablecoins on chains like Solana and Ethereum", "url": "https://www.theblock.co/post/402784/cash-app-lets-users-send-usdc-stablecoins-on-chains-like-solana-and-ethereum?utm_source=rss&utm_medium=rss", "authors": [], "published_at": "2026-05-27", "collected_at": "2026-05-28T00:15:06Z", "raw_text": "Cash App users can now transfer on Solana, Ethereum, Polygon and Arbitrum, but executive Miles Suter says the firm is still bitcoin-focused.", "abstract": "Cash App users can now transfer on Solana, Ethereum, Polygon and Arbitrum, but executive Miles Suter says the firm is still bitcoin-focused.", "content_hash": "3fe09f8350da9bd9bae1c149eee0c09bfa6a42e167faaf41b4780662b44f3367", "category": "Crypto Quant", "tags": ["bitcoin", "ethereum"], "language": "en", "metadata": {"feed_url": "https://www.theblock.co/rss.xml"}, "one_line_summary": "Cash App users can now transfer on Solana, Ethereum, Polygon and Arbitrum, but executive Miles Suter says the firm is still bitcoin-focused.", "technical_summary": "Cash App users can now transfer on Solana, Ethereum, Polygon and Arbitrum, but executive Miles Suter says the firm is still bitcoin-focused.", "key_points": ["Cash App users can now transfer on Solana, Ethereum, Polygon and Arbitrum, but executive Miles Suter says the firm is still bitcoin-focused.", "来源类型：加密市场新闻。", "进入研究或生产前需要进一步人工复核。"], "quant_relevance": "和加密资产市场结构、链上信号、衍生品以及跨交易所交易相关。", "possible_use_case": "可以在高流动性交易所上验证，并纳入手续费、资金费率和滑点。", "limitations": "在成为研究或交易决策前，需要人工复核。", "read_priority": "中", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.78, "academic_score": 5.675, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.627, "display_title": "加密资产量化加密市场新闻情报", "tldr": "Cash App users can now transfer on Solana, Ethereum, Polygon and Arbitrum, but executive Miles Suter says the firm is still bitcoin-focused.", "core_value": "对你的量化工作帮助：围绕加密资产量化补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["内容抓手：这条加密市场新闻围绕加密资产量化展开，归入加密资产量化。", "研究动作：先作为加密资产量化候选线索，判断是否值得进入研究待办。", "验证重点：检查数据可得性、可复现性、样本外稳定性和生产约束。"], "reference_url": "https://www.theblock.co/post/402784/cash-app-lets-users-send-usdc-stablecoins-on-chains-like-solana-and-ethereum?utm_source=rss&utm_medium=rss", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "中", "source_type_label": "加密市场新闻"}], "source_stats": {"arXiv": 6, "Reddit algotrading": 3, "Reddit quant": 1, "CoinDesk": 3, "CoinTelegraph": 1, "The Block": 1}, "category_counts": {"LLM / Agents for Quant": 3, "Machine Learning for Finance": 2, "Portfolio Construction": 1, "Execution / Transaction Cost": 1, "Market Microstructure": 1, "Alpha / Factor Research": 2, "Crypto Quant": 4, "Risk Management": 1}, "section_counts": {"ai_quant_tools": 5, "deep_learning_quant": 5, "daily_news": 5}, "sections": [{"key": "deep_learning_quant", "label": "深度学习量化未来", "description": "技术主线：深度学习、强化学习、Transformer、图神经网络、表征学习、订单簿预测、金融时间序列大模型等在量化里的应用。"}, {"key": "ai_quant_tools", "label": "AI 量化工具", "description": "工具主线：能提升量化研究效率的 AI 工具、代码仓库、研究自动化、智能体、回测/数据工程工具和可接入团队工作流的基础设施。"}, {"key": "daily_news", "label": "Crypto 市场每日 Top 5", "description": "加密市场新闻主线：来自 CoinDesk、CoinTelegraph、The Block、Decrypt、Blockworks 等主流媒体当日最重要的 Crypto 市场报道。"}], "category_labels": {"Alpha / Factor Research": "阿尔法 / 因子研究", "Statistical Arbitrage": "统计套利", "Portfolio Construction": "组合构建", "Risk Management": "风险管理", "Options / Volatility": "期权 / 波动率", "Market Microstructure": "市场微观结构", "Execution / Transaction Cost": "交易执行 / 交易成本", "Machine Learning for Finance": "金融机器学习", "LLM / Agents for Quant": "量化大模型 / 智能体", "Crypto Quant": "加密资产量化", "Data Engineering": "数据工程", "Backtesting / Research Tools": "回测 / 研究工具", "Industry / Career": "行业 / 职业 / 合规", "Unclassified": "未分类"}, "priority_labels": {"High": "高", "Medium": "中", "Low": "低", "高": "高", "中": "中", "低": "低"}, "source_type_labels": {"paper": "论文", "forum": "论坛", "github": "代码仓库", "blog": "博客", "news": "新闻", "social": "社交媒体", "zhihu": "知乎", "x": "X", "quantml": "QuantML", "crypto_news": "加密市场新闻"}, "report_config": {"max_items_per_category": 5, "max_total_items": 60, "executive_brief_items": 5}}</script>
+  <script>
+    const payload = JSON.parse(document.getElementById('dashboard-data').textContent);
+    const items = payload.items || [];
+    const categoryLabels = payload.category_labels || {};
+    const priorityLabels = payload.priority_labels || {};
+    const sourceTypeLabels = payload.source_type_labels || {};
+    const state = {
+      query: '',
+      section: 'All',
+      category: 'All',
+      sort: 'score',
+      activeId: items[0]?.id || null,
+    };
+
+    const priorityRank = { High: 3, Medium: 2, Low: 1, '高': 3, '中': 2, '低': 1 };
+    const $ = (id) => document.getElementById(id);
+
+    // --- Feedback ---
+    const _feedbackStore = JSON.parse(localStorage.getItem('quant-feedback') || '{}');
+    function getFeedback(id) { return _feedbackStore[id] || 0; }
+    function setFeedback(id, signal) {
+      if (_feedbackStore[id] === signal) { delete _feedbackStore[id]; signal = 0; }
+      else { _feedbackStore[id] = signal; }
+      localStorage.setItem('quant-feedback', JSON.stringify(_feedbackStore));
+      fetch('http://localhost:8080/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, signal }),
+      }).catch(() => {});
+    }
+
+    function init() {
+      $('report-date').textContent = payload.report_date + ' - 主力源：arXiv / 知乎 / QuantML / 大型论坛 - 生成时间 ' + payload.generated_at;
+      $('metric-items').textContent = items.length;
+      $('metric-categories').textContent = new Set(items.map((item) => item.category)).size;
+      $('metric-high').textContent = items.filter((item) => priorityLabel(item.read_priority) === '高').length;
+      $('metric-avg').textContent = averageScore(items).toFixed(1);
+
+      buildSectionControls();
+      buildCategoryControls();
+      buildSourceList();
+      bindControls();
+      render();
+    }
+
+    function bindControls() {
+      $('search').addEventListener('input', (event) => {
+        state.query = event.target.value.trim().toLowerCase();
+        render();
+      });
+      $('category-select').addEventListener('change', (event) => {
+        state.category = event.target.value;
+        render();
+      });
+      $('section-select').addEventListener('change', (event) => {
+        state.section = event.target.value;
+        render();
+      });
+      $('sort-select').addEventListener('change', (event) => {
+        state.sort = event.target.value;
+        render();
+      });
+    }
+
+    function buildCategoryControls() {
+      const counts = countBy(items, 'category');
+      const categories = Object.keys(counts).sort();
+      const select = $('category-select');
+      select.innerHTML = option('All', `全部细分标签 (${items.length})`) +
+        categories.map((category) => option(category, `${categoryLabel(category)} (${counts[category]})`)).join('');
+
+      const list = $('category-list');
+      list.innerHTML = categoryButton('All', items.length) +
+        categories.map((category) => categoryButton(category, counts[category])).join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.category = button.dataset.category;
+          select.value = state.category;
+          if (state.category === 'All') {
+            state.section = 'All';
+            $('section-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSectionControls() {
+      const counts = payload.section_counts || {};
+      const sections = payload.sections || [];
+      const select = $('section-select');
+      select.innerHTML = option('All', `全部主线 (${items.length})`) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => option(section.key, `${section.label} (${counts[section.key]})`))
+          .join('');
+
+      const list = $('section-list');
+      list.innerHTML = sectionButton('All', '全部', items.length) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => sectionButton(section.key, section.label, counts[section.key]))
+          .join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.section = button.dataset.section;
+          select.value = state.section;
+          if (state.section === 'All') {
+            state.category = 'All';
+            $('category-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSourceList() {
+      const stats = payload.source_stats || {};
+      const entries = Object.entries(stats)
+        .filter(([source]) => !source.startsWith('fetched:'))
+        .sort((a, b) => b[1] - a[1]);
+      $('source-list').innerHTML = entries.length
+        ? entries.map(([source, count]) => `<li><span>${escapeHtml(source)}</span><b>${count}</b></li>`).join('')
+        : '<li><span>暂无来源统计</span><b>0</b></li>';
+    }
+
+    function render() {
+      let visible = items.filter(matchesFilters);
+      visible = sortItems(visible);
+      if (!visible.some((item) => item.id === state.activeId)) {
+        state.activeId = visible[0]?.id || null;
+      }
+
+      $('feed-title').textContent = feedTitle();
+      $('result-count').textContent = `展示 ${visible.length} 条 - 两条主线每条最多 ${payload.report_config.max_items_per_category} 条`;
+      renderSectionActive();
+      renderCategoryActive();
+      renderItems(visible);
+      renderDetail(visible.find((item) => item.id === state.activeId) || visible[0]);
+    }
+
+    function matchesFilters(item) {
+      const sectionMatch = state.section === 'All' || (item.report_sections || []).includes(state.section);
+      if (!sectionMatch) return false;
+      const categoryMatch = state.category === 'All' || item.category === state.category;
+      if (!categoryMatch) return false;
+      if (!state.query) return true;
+      const haystack = [
+        item.title,
+        item.display_title,
+        item.source,
+        item.source_type,
+        item.category,
+        categoryLabel(item.category),
+        sectionLabel(item.report_sections?.[0]),
+        sourceTypeLabel(item.source_type),
+        priorityLabel(item.read_priority),
+        item.one_line_summary,
+        item.technical_summary,
+        item.quant_relevance,
+        item.possible_use_case,
+        item.tldr,
+        item.core_value,
+        ...(item.key_points_list || []),
+        item.reference_url,
+      ].join(' ').toLowerCase();
+      return haystack.includes(state.query);
+    }
+
+    function sortItems(list) {
+      return [...list].sort((a, b) => {
+        if (state.sort === 'priority') {
+          return (priorityRank[b.read_priority] || 0) - (priorityRank[a.read_priority] || 0)
+            || b.final_score - a.final_score;
+        }
+        if (state.sort === 'source') {
+          return a.source.localeCompare(b.source) || b.final_score - a.final_score;
+        }
+        return b.final_score - a.final_score;
+      });
+    }
+
+    function renderCategoryActive() {
+      document.querySelectorAll('.category-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.category === state.category);
+      });
+    }
+
+    function renderSectionActive() {
+      document.querySelectorAll('.section-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.section === state.section);
+      });
+    }
+
+    function itemCard(item) {
+      const sec = item.report_sections?.[0] || 'other';
+      const sig = getFeedback(item.id);
+      return `
+        <article class="item ${item.id === state.activeId ? 'active' : ''}"
+                 data-id="${escapeAttr(item.id)}"
+                 data-section="${escapeAttr(sec)}">
+          <div class="item-top">
+            <h3>${escapeHtml(item.display_title || item.title)}</h3>
+            <div class="score">${Number(item.final_score).toFixed(1)}</div>
+          </div>
+          <div class="meta">
+            <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+            <span class="tag">${escapeHtml(item.source)}</span>
+            <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+          </div>
+          ${readerFormat(item, true)}
+          <div class="feedback-row">
+            <button class="feedback-btn ${sig === 1 ? 'active-up' : ''}" data-feedback="1" title="有用">👍</button>
+            <button class="feedback-btn ${sig === -1 ? 'active-down' : ''}" data-feedback="-1" title="跳过">👎</button>
+            <span class="feedback-hint">${sig === 1 ? '已标记有用' : sig === -1 ? '已标记跳过' : ''}</span>
+          </div>
+        </article>
+      `;
+    }
+
+    function sectionGroupHeader(section, count) {
+      return `
+        <div class="section-group-header" data-section="${escapeAttr(section.key)}">
+          <span class="section-group-title">${escapeHtml(section.label)}</span>
+          <span class="section-group-count">${count} 条</span>
+        </div>
+      `;
+    }
+
+    function renderItems(visible) {
+      const container = $('items');
+      if (!visible.length) {
+        container.innerHTML = '<div class="empty">当前筛选条件下没有匹配内容。</div>';
+        return;
+      }
+
+      let html = '';
+      if (state.section === 'All') {
+        // Group by section in defined order, with a header for each group
+        const grouped = {};
+        for (const item of visible) {
+          const sec = item.report_sections?.[0] || 'other';
+          if (!grouped[sec]) grouped[sec] = [];
+          grouped[sec].push(item);
+        }
+        for (const section of (payload.sections || [])) {
+          const group = grouped[section.key];
+          if (!group || !group.length) continue;
+          html += sectionGroupHeader(section, group.length);
+          html += group.map((item) => itemCard(item)).join('');
+        }
+        // Append any items that fell into 'other' (shouldn't normally happen)
+        if (grouped['other']?.length) {
+          html += grouped['other'].map((item) => itemCard(item)).join('');
+        }
+      } else {
+        html = visible.map((item) => itemCard(item)).join('');
+      }
+
+      container.innerHTML = html;
+      container.querySelectorAll('.item').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.activeId = node.dataset.id;
+          render();
+        });
+      });
+      container.querySelectorAll('.feedback-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const itemNode = btn.closest('.item');
+          setFeedback(itemNode.dataset.id, parseInt(btn.dataset.feedback, 10));
+          render();
+        });
+      });
+    }
+
+    function renderDetail(item) {
+      const detail = $('detail');
+      if (!item) {
+        detail.innerHTML = '<div class="empty">选择一条内容查看详情。</div>';
+        return;
+      }
+
+      detail.innerHTML = `
+        <h2>${escapeHtml(item.display_title || item.title)}</h2>
+        <div class="meta">
+          <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+          <span class="tag">${escapeHtml(sourceTypeLabel(item.source_type))}</span>
+          <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+        </div>
+
+        ${readerFormat(item, false)}
+
+        <div class="detail-block">
+          <h3>评分拆解</h3>
+          <div class="breakdown">
+            ${bar('相关性', item.relevance_score)}
+            ${bar('新颖度', item.novelty_score)}
+            ${bar('学术性', item.academic_score)}
+            ${bar('讨论度', item.discussion_score)}
+            ${bar('可行动性', item.actionable_score)}
+          </div>
+        </div>
+
+      `;
+    }
+
+    function readerFormat(item, compact) {
+      const points = itemKeyPoints(item);
+      return `
+        <div class="reader-format ${compact ? 'compact' : ''}">
+          <div class="reader-block">
+            <h4>1. 这篇文章的太长不读</h4>
+            <p>${escapeHtml(item.tldr || item.one_line_summary || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>2. 核心价值，对我量化的工作能够提供什么样的帮助</h4>
+            <p>${escapeHtml(item.core_value || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>3. 关键核心点 / 论文或帖子摘要</h4>
+            <ol>${points.map((point) => `<li>${escapeHtml(point)}</li>`).join('')}</ol>
+          </div>
+          <div class="reader-block">
+            <h4>4. 原文链接</h4>
+            ${referenceHtml(item)}
+          </div>
+        </div>
+      `;
+    }
+
+    function itemKeyPoints(item) {
+      const points = Array.isArray(item.key_points_list)
+        ? item.key_points_list
+        : (Array.isArray(item.key_points) ? item.key_points : []);
+      const clean = points.filter(Boolean).slice(0, 3);
+      return clean.length ? clean : ['需要打开原文进一步确认方法、数据和适用边界。'];
+    }
+
+    function referenceHtml(item) {
+      const url = item.reference_url || '';
+      if (!url) return '<p>暂无可打开链接</p>';
+      return `
+        <a class="reader-reference" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">打开原文</a>
+        <small class="reference-url">${escapeHtml(url)}</small>
+      `;
+    }
+
+    function bar(label, value) {
+      const score = Number(value || 0);
+      const width = Math.max(0, Math.min(100, score * 10));
+      return `
+        <div class="bar">
+          <span>${label}</span>
+          <div class="bar-track"><div class="bar-fill" style="width: ${width}%"></div></div>
+          <b>${score.toFixed(1)}</b>
+        </div>
+      `;
+    }
+
+    function countBy(list, key) {
+      return list.reduce((acc, item) => {
+        acc[item[key]] = (acc[item[key]] || 0) + 1;
+        return acc;
+      }, {});
+    }
+
+    function averageScore(list) {
+      if (!list.length) return 0;
+      return list.reduce((sum, item) => sum + Number(item.final_score || 0), 0) / list.length;
+    }
+
+    function option(value, label) {
+      return `<option value="${escapeAttr(value)}">${escapeHtml(label)}</option>`;
+    }
+
+    function sectionButton(section, label, count) {
+      return `
+        <button class="category-button section-button" type="button" data-section="${escapeAttr(section)}">
+          <span>${escapeHtml(label)}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryButton(category, count) {
+      return `
+        <button class="category-button" type="button" data-category="${escapeAttr(category)}">
+          <span>${escapeHtml(category === 'All' ? '全部' : categoryLabel(category))}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryLabel(category) {
+      return categoryLabels[category] || category;
+    }
+
+    function sectionLabel(sectionKey) {
+      const section = (payload.sections || []).find((item) => item.key === sectionKey);
+      return section ? section.label : '其他';
+    }
+
+    function feedTitle() {
+      const parts = [];
+      if (state.section !== 'All') parts.push(sectionLabel(state.section));
+      if (state.category !== 'All') parts.push(categoryLabel(state.category));
+      return parts.length ? parts.join(' / ') : '今日情报';
+    }
+
+    function priorityLabel(priority) {
+      return priorityLabels[priority] || priority;
+    }
+
+    function sourceTypeLabel(sourceType) {
+      return sourceTypeLabels[sourceType] || sourceType;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replaceAll('`', '&#096;');
+    }
+
+    init();
+  </script>
+</body>
+</html>
