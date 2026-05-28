@@ -280,6 +280,48 @@ def run(args: argparse.Namespace) -> int:
             # Default to today — never touch previous days unless explicitly overridden
             target_date = args.rescan_date or args.report_date
             rescan_summaries(db, summary_client, args.rescan_summaries, only_date=target_date)
+
+        # Rebuild HTML with updated summaries
+        today = date.fromisoformat(args.report_date)
+        today_rows = db.fetch_report_rows(args.report_date)
+        today_selected = select_report_rows(today_rows, report_config)
+        today_stats = dict(Counter(str(r.get("source", "Unknown")) for r in today_selected))
+        build_daily_report(
+            rows=today_rows,
+            report_date=args.report_date,
+            output_dir=args.output_dir,
+            report_config=report_config,
+            source_stats=today_stats,
+        )
+        build_html_dashboard(
+            rows=today_rows,
+            report_date=args.report_date,
+            output_dir=args.output_dir,
+            report_config=report_config,
+            source_stats=today_stats,
+        )
+        start_date = (today - timedelta(days=args.history_days - 1)).isoformat()
+        history_rows = db.fetch_rows_between(start_date, args.report_date)
+        history_rows = select_history_rows(history_rows, report_config)
+        history_stats = dict(Counter(str(r.get("source", "Unknown")) for r in history_rows))
+        alpha_history = load_alpha_history(args.output_dir)
+        notes = load_notes(Path("notes"))
+        weekly_reports = load_weekly_reports(
+            Path("/Users/samsonchew/Desktop/Quant/weekly_report")
+        )
+        home_path = build_home_dashboard(
+            rows=history_rows,
+            end_date=args.report_date,
+            history_days=args.history_days,
+            output_dir=args.output_dir,
+            report_config=report_config,
+            source_stats=history_stats,
+            alpha_history=alpha_history,
+            notes=notes,
+            weekly_reports=weekly_reports,
+        )
+        print(f"[rescan] HTML rebuilt → {home_path}")
+        db.close()
         return 0
 
     fetched_count = Counter()
