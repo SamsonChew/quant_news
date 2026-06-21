@@ -1,0 +1,1086 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>samson 量化情报台 - 2026-06-21</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --panel: #ffffff;
+      --ink: #202124;
+      --muted: #5f6368;
+      --line: #dadce0;
+      --blue: #1a73e8;
+      --red: #ea4335;
+      --yellow: #fbbc04;
+      --green: #34a853;
+      --blue-soft: #e8f0fe;
+      --green-soft: #e6f4ea;
+      --yellow-soft: #fef7e0;
+      --red-soft: #fce8e6;
+      --shadow: 0 1px 2px rgba(60, 64, 67, 0.16), 0 8px 24px rgba(60, 64, 67, 0.10);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(66, 133, 244, 0.07), transparent 30%),
+        radial-gradient(circle at top right, rgba(251, 188, 4, 0.08), transparent 26%),
+        var(--bg);
+      color: var(--ink);
+      font-family: "Google Sans", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(280px, 620px);
+      gap: 24px;
+      align-items: center;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand h1 {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin: 0;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+
+    .brand h1::before {
+      content: "";
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background:
+        conic-gradient(from 0deg, var(--blue) 0 25%, var(--red) 0 50%, var(--yellow) 0 75%, var(--green) 0 100%);
+      box-shadow: inset 0 0 0 7px #fff;
+    }
+
+    .date-pill {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 170px 170px 150px;
+      gap: 10px;
+    }
+
+    .control {
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 12px;
+      outline: none;
+    }
+
+    .control:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.14);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 260px minmax(420px, 1fr) 420px;
+      gap: 22px;
+      padding: 24px 32px 36px;
+    }
+
+    .rail,
+    .detail {
+      position: sticky;
+      top: 86px;
+      height: calc(100vh - 112px);
+      overflow: auto;
+    }
+
+    .rail,
+    .detail,
+    .feed {
+      min-width: 0;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      padding: 12px;
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
+    }
+
+    .metric:nth-child(1) { border-top: 3px solid var(--blue); }
+    .metric:nth-child(2) { border-top: 3px solid var(--red); }
+    .metric:nth-child(3) { border-top: 3px solid var(--yellow); }
+    .metric:nth-child(4) { border-top: 3px solid var(--green); }
+
+    .metric b {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .section-label {
+      margin: 18px 0 8px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .category-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .category-button {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--ink);
+      padding: 8px 10px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .category-button:hover,
+    .category-button.active {
+      border-color: transparent;
+      background: var(--blue-soft);
+      color: #174ea6;
+    }
+
+    .count {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .source-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .source-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .feed-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .feed-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .result-count {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .items {
+      display: grid;
+      gap: 10px;
+    }
+
+    .section-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 2px 4px;
+      margin-top: 10px;
+      border-bottom: 2px solid var(--line);
+    }
+
+    .section-group-header:first-child {
+      margin-top: 0;
+    }
+
+    .section-group-title {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .section-group-header[data-section="deep_learning_quant"] .section-group-title { color: var(--blue); }
+    .section-group-header[data-section="ai_quant_tools"] .section-group-title { color: var(--green); }
+    .section-group-header[data-section="daily_news"] .section-group-title { color: var(--yellow); }
+
+    .section-group-count {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .item {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.10);
+      padding: 18px;
+      cursor: pointer;
+      transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+    }
+
+    .item::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--blue), var(--red), var(--yellow), var(--green));
+    }
+
+    .item[data-section="deep_learning_quant"]::before { background: var(--blue); }
+    .item[data-section="ai_quant_tools"]::before { background: var(--green); }
+    .item[data-section="daily_news"]::before { background: var(--yellow); }
+
+    .item:hover,
+    .item.active {
+      border-color: #c6dafc;
+      box-shadow: var(--shadow);
+      transform: translateY(-2px);
+    }
+
+    .item-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .item h3 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.28;
+    }
+
+    .score {
+      min-width: 54px;
+      border-radius: 999px;
+      background: var(--blue-soft);
+      color: #174ea6;
+      padding: 6px 8px;
+      text-align: center;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .tag {
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: #f1f3f4;
+      padding: 3px 8px;
+    }
+
+    .tag:nth-child(1) { background: var(--blue-soft); color: #174ea6; }
+    .tag:nth-child(2) { background: var(--green-soft); color: #137333; }
+    .tag:nth-child(3) { background: var(--yellow-soft); color: #8a5a00; }
+    .tag:nth-child(4) { background: var(--red-soft); color: #b3261e; }
+
+    .summary {
+      margin: 0;
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .reference-link {
+      display: inline-flex;
+      width: fit-content;
+      border-top: 1px solid var(--line);
+      color: var(--blue);
+      padding-top: 9px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .reader-format {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .reader-format.compact {
+      gap: 8px;
+    }
+
+    .reader-block {
+      border-top: 1px solid var(--line);
+      padding-top: 9px;
+    }
+
+    .reader-block:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .reader-block h4 {
+      margin: 0 0 5px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .reader-block p,
+    .reader-block li {
+      margin: 0;
+      color: #30342d;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .reader-block ol {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .reader-reference {
+      color: var(--blue);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
+    .reference-url {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .detail {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .detail h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+
+    .detail-block {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .detail-block h3 {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+
+    .detail-block p,
+    .detail-block li {
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .detail-block ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .breakdown {
+      display: grid;
+      gap: 8px;
+    }
+
+    .bar {
+      display: grid;
+      grid-template-columns: 118px 1fr 40px;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .bar-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e7eadf;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--blue), var(--green), var(--yellow), var(--red));
+    }
+
+    .open-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      margin-top: 16px;
+      border: 1px solid var(--blue);
+      border-radius: var(--radius);
+      color: var(--blue);
+      text-decoration: none;
+      padding: 0 12px;
+      font-weight: 700;
+    }
+
+    .feedback-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+    }
+
+    .feedback-btn {
+      background: #f1f3f4;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 120ms, border-color 120ms;
+    }
+
+    .feedback-btn:hover { background: var(--blue-soft); }
+    .feedback-btn.active-up { background: var(--green-soft); border-color: var(--green); }
+    .feedback-btn.active-down { background: var(--red-soft); border-color: var(--red); }
+
+    .feedback-hint {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      padding: 28px;
+      color: var(--muted);
+      background: var(--panel);
+    }
+
+    @media (max-width: 1180px) {
+      .layout {
+        grid-template-columns: 220px 1fr;
+      }
+
+      .detail {
+        position: static;
+        grid-column: 1 / -1;
+        height: auto;
+      }
+    }
+
+    @media (max-width: 820px) {
+      .topbar {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .brand {
+        display: grid;
+        gap: 4px;
+      }
+
+      .brand h1 {
+        white-space: normal;
+        font-size: 21px;
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .rail,
+      .detail {
+        position: static;
+        height: auto;
+      }
+
+      .metric-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <h1>samson 量化情报台</h1>
+        <span class="date-pill" id="report-date"></span>
+      </div>
+      <div class="controls">
+        <input class="control" id="search" type="search" placeholder="搜索标题、摘要、分类..." />
+        <select class="control" id="section-select"></select>
+        <select class="control" id="category-select"></select>
+        <select class="control" id="sort-select">
+          <option value="score">按评分排序</option>
+          <option value="priority">按优先级排序</option>
+          <option value="source">按来源排序</option>
+        </select>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="rail">
+        <div class="metric-grid">
+          <div class="metric"><b id="metric-items">0</b><span>报告条目</span></div>
+          <div class="metric"><b id="metric-categories">0</b><span>分类数量</span></div>
+          <div class="metric"><b id="metric-high">0</b><span>高优先级</span></div>
+          <div class="metric"><b id="metric-avg">0.0</b><span>平均评分</span></div>
+        </div>
+
+        <div class="section-label">两条主线</div>
+        <div class="category-list" id="section-list"></div>
+
+        <div class="section-label">细分标签</div>
+        <div class="category-list" id="category-list"></div>
+
+        <div class="section-label">主力来源</div>
+        <ul class="source-list" id="source-list"></ul>
+      </aside>
+
+      <section class="feed">
+        <div class="feed-header">
+          <h2 id="feed-title">今日情报</h2>
+          <span class="result-count" id="result-count"></span>
+        </div>
+        <div class="items" id="items"></div>
+      </section>
+
+      <aside class="detail" id="detail"></aside>
+    </main>
+  </div>
+
+  <script id="dashboard-data" type="application/json">{"report_date": "2026-06-21", "generated_at": "2026-06-21T00:11:36Z", "items": [{"id": "bad3e4384c0eda4c24364543a123ad5135dcbd5e814f0a5dccd9ec1fc8f56db1", "source": "Reddit algotrading", "source_type": "forum", "title": "Looks like a winner but is it a winner?", "url": "https://www.reddit.com/r/algotrading/comments/1uass5b/looks_like_a_winner_but_is_it_a_winner/", "authors": ["/u/EaZyRecipeZ"], "published_at": "2026-06-20", "collected_at": "2026-06-21T00:08:11Z", "raw_text": "I've been playing with a script trading, no AI. Everything is in python code. It just trades once a day the first second market opens. It's better to trade 30 minutes after the market opens but I don't have the data to do that to backtest. It trades by balancing ETF's. No slippage in the backtest. Is it something to pursue? What's your opinion? I can also make it opensource if people are willing to improve it. Also, I have daily, weekly, monthly reports as well from backtest Metrics Key Metric Description Sharpe Risk-adjusted return (annualized, daily std dev) Sortino Downside risk-adjusted return Max DD Maximum drawdown (lower = better) Net Profit Total return over period CAR Compounding Annual Return Calmar CAR / Max DD (higher = better risk-adjusted) Orders Total rebalance orders executed Turnover Portfolio turnover ratio Recovery Days to recover from max drawdown Nov DD November 2025 max drawdown (stress test period) 2024 Full Year (Jan 1 - Dec 31) Config Sharpe Sortino Max DD Net Profit CAR Calmar Orders Turnover Recovery Nov DD full_backtest (no --config) 2.448 3.626 15.98% 167.82% ✓ 167.82% ✓ 10.498 1,009 24.1 11 0.00% default_stratconfig 3.355 5.246 11.58% 125.01% 125.01% 10.794 1,210 7.2 22 0.00% ✓ baseline_v1 3.355 5.246 11.58% 125.01% 125.01% 10.794 1,210 7.2 22 0.00% optimized_overall 3.068 4.518 3.35% ✓ 45.07% 45.07% 13.450 ✓ 347 2.7 ✓ 9 ✓ 0.00% aggressive 2.350 3.210 6.03% 42.40% 42.40% 7.035 445 3.5 18 0.00% signal_tuned_v2 3.095 4.845 7.14% 44.75% 44.75% 6.267 376 2.9 44 0.00% signal_tuned_v1 0.780 1.007 7.05% 6.95% 6.95% 0.985 22 ✓ 0.2 0 0.00% phase6_regime 2.686 5.371 2.39% 31.03% 31.03% 12.971 528 4.2 5 0.00% phase6_brakes 2.799 4.570 3.71% 30.07% 30.07% 8.111 659 5.5 5 0.00% phase6_combined 2.677 4.186 3.63% 29.52% 29.52% 8.136 670 5.5 5 0.00% 2025 Full Year (Jan 1 - Dec 31) Config Sharpe Sortino Max DD Net Profit CAR Calmar Orders Turnover Recovery Nov DD full_backtest (no --config) 1.523 2.302 24.34% 114.42% ✓ 115.73% ✓ 4.756 1,032 30.6 27 15.62% default_stratconfig 1.429 1.971 16.61% 41.68% 42.08% 2.534 1,201 9.9 27 15.62% baseline_v1 1.429 1.971 16.61% 41.68% 42.08% 2.534 1,201 9.9 27 15.62% optimized_overall 1.514 1.893 7.11% ✓ 28.34% 28.60% 4.021 504 4.4 19 5.51% aggressive 1.883 ✓ 2.461 ✓ 7.73% 40.08% 40.46% 5.232 ✓ 462 3.8 ✓ 11 ✓ 3.72% ✓ signal_tuned_v2 1.527 1.952 8.36% 29.14% 29.40% 3.518 503 4.5 26 5.03% signal_tuned_v1 1.756 2.327 4.92% 15.99% 16.13% 3.282 27 ✓ 0.3 27 4.63% phase6_regime 0.382 0.382 15.47% 5.47% 5.52% 0.357 755 7.8 134 12.80% phase6_brakes 0.628 0.677 14.44% 10.57% 10.66% 0.738 933 9.1 85 12.75% phase6_combined -1.129 -0.933 17.37% -14.90% -15.01% -0.864 718 8.1 31 9.92% 2026 H1 (Jan 1 - Jun 12) Config Sharpe Sortino Max DD Net Profit CAR Calmar Orders Turnover Recovery Nov DD full_backtest (no --config) 2.988 3.657 16.41% 76.12% ✓ 257.34% ✓ 15.689 497 18.7 2 0.00% default_stratconfig 2.547 2.981 12.50% 27.46% 72.63% 5.811 581 5.1 17 0.00% ✓ baseline_v1 2.547 2.981 12.50% 27.46% 72.63% 5.811 581 5.1 17 0.00% optimized_overall 4.072 5.983 4.99% ✓ 31.68% 85.76% 17.187 429 3.8 7 0.00% aggressive 3.418 5.261 5.69% 31.04% 83.71% 14.718 374 3.4 7 0.00% signal_tuned_v2 3.830 5.486 5.23% 30.02% 80.51% 15.387 376 3.4 7 0.00% signal_tuned_v1 1.833 2.459 5.97% 15.33% 37.85% 6.345 32 ✓ 0.3 ✓ 4 ✓ 0.00% phase6_regime 4.222 6.336 ✓ 5.43% 27.08% 71.47% 13.168 456 4.1 6 0.00% phase6_brakes 4.055 5.902 3.06% 24.11% 62.59% 20.447 529 4.7 4 0.00% phase6_combined 4.124 5.804 2.44% 23.65% 61.21% 25.130 462 4.1 10 0.00% Cross-Period Summary Config 2024 Sharpe 2025 Sharpe 2026 Sharpe Avg Sharpe 2024 DD 2025 DD 2026 DD Avg DD 2024 Profit 2025 Profit 2026 Profit Avg Profit full_backtest 2.448 1.523 2.988 2.320 15.98% 24.34% 16.41% 18.91% 167.82% 114.42% 76.12% 119.45% default_stratconfig 3.355 1.429 2.547 2.444 11.58% 16.61% 12.50% 13.56% 125.01% 41.68% 27.46% 64.72% baseline_v1 3.355 1.429 2.547 2.444 11.58% 16.61% 12.50% 13.56% 125.01% 41.68% 27.46% 64.72% optimized_overall 3.068 1.514 4.072 2.885 3.35% 7.11% 4.99% 5.15% 45.07% 28.34% 31.68% 35.03% aggressive 2.350 1.883 3.418 2.550 6.03% 7.73% 5.69% 6.48% 42.40% 40.08% 31.04% 37.84% signal_tuned_v2 3.095 1.527 3.830 2.817 7.14% 8.36% 5.23% 6.91% 44.75% 29.14% 30.02% 34.63% signal_tuned_v1 0.780 1.756 1.833 1.456 7.05% 4.92% 5.97% 5.98% 6.95% 15.99% 15.33% 12.76% phase6_regime 2.686 0.382 4.222 2.430 2.39% 15.47% 5.43% 7.76% 31.03% 5.47% 27.08% 21.20% phase6_brakes 2.799 0.628 4.055 2.494 3.71% 14.44% 3.06% 7.07% 30.07% 10.57% 24.11% 21.59% phase6_combined 2.677 -1.129 4.124 1.891 3.63% 17.37% 2.44% 7.81% 29.52% -14.90% 23.65% 12.75% submitted by /u/EaZyRecipeZ [link] [comments]", "abstract": "I've been playing with a script trading, no AI. Everything is in python code. It just trades once a day the first second market opens. It's better to trade 30 minutes after the market opens but I don't have the data to do that to backtest. It trades by balancing ETF's. No slippage in the backtest. Is it something to pursue? What's your opinion? I can also make it opensource if people are willing to improve it. Also, I have daily, weekly, monthly reports as well from backtest Metrics Key Metric Description Sharpe Risk-adjusted return (annualized, daily std dev) Sortino Downside risk-adjusted return Max DD Maximum drawdown (lower = better) Net Profit Total return over period CAR Compounding Annual Return Calmar CAR / Max DD (higher = better risk-adjusted) Orders Total rebalance orders executed Turnover Portfolio turnover ratio Recovery Days to recover from max drawdown Nov DD November 2025 max drawdown (stress test period) 2024 Full Year (Jan 1 - Dec 31) Config Sharpe Sortino Max DD Net Profit CAR Calmar Orders Turnover Recovery Nov DD full_backtest (no --config) 2.448 3.626 15.98% 167.82% ✓ 167.82% ✓ 10.498 1,009 24.1 11 0.00% default_stratconfig 3.355 5.246 11.58% 125.01% 125.01% 10.794 1,210 7.2 22 0.00% ✓ baseline_v1 3.355 5.246 11.58% 125.01% 125.01% 10.794 1,210 7.2 22 0.00% optimized_overall 3.068 4.518 3.35% ✓ 45.07% 45.07% 13.450 ✓ 347 2.7 ✓ 9 ✓ 0.00% aggressive 2.350 3.210 6.03% 42.40% 42.40% 7.035 445 3.5 18 0.00% signal_tuned_v2 3.095 4.845 7.14% 44.75% 44.75% 6.267 376 2.9 44 0.00% signal_tuned_v1 0.780 1.007 7.05% 6.95% 6.95% 0.985 22 ✓ 0.2 0 0.00% phase6_regime 2.686 5.371 2.39% 31.03% 31.03% 12.971 528 4.2 5 0.00% phase6_brakes 2.799 4.570 3.71% 30.07% 30.07% 8.111 659 5.5 5 0.00% phase6_combined 2.677 4.186 3.63% 29.52% 29.52% 8.136 670 5.5 5 0.00% 2025 Full Year (Jan 1 - Dec 31) Config Sharpe Sortino Max DD Net Profit CAR Calmar Orders Turnover Recovery Nov DD full_backtest (no --config) 1.523 2.302 24.34% 114.42% ✓ 115.73% ✓ 4.756 1,032 30.6 27 15.62% default_stratconfig 1.429 1.971 16.61% 41.68% 42.08% 2.534 1,201 9.9 27 15.62% baseline_v1 1.429 1.971 16.61% 41.68% 42.08% 2.534 1,201 9.9 27 15.62% optimized_overall 1.514 1.893 7.11% ✓ 28.34% 28.60% 4.021 504 4.4 19 5.51% aggressive 1.883 ✓ 2.461 ✓ 7.73% 40.08% 40.46% 5.232 ✓ 462 3.8 ✓ 11 ✓ 3.72% ✓ signal_tuned_v2 1.527 1.952 8.36% 29.14% 29.40% 3.518 503 4.5 26 5.03% signal_tuned_v1 1.756 2.327 4.92% 15.99% 16.13% 3.282 27 ✓ 0.3 27 4.63% phase6_regime 0.382 0.382 15.47% 5.47% 5.52% 0.357 755 7.8 134 12.80% phase6_brakes 0.628 0.677 14.44% 10.57% 10.66% 0.738 933 9.1 85 12.75% phase6_combined -1.129 -0.933 17.37% -14.90% -15.01% -0.864 718 8.1 31 9.92% 2026 H1 (Jan 1 - Jun 12) Config Sharpe Sortino Max DD Net Profit CAR Calmar Orders Turnover Recovery Nov DD full_backtest (no --config) 2.988 3.657 16.41% 76.12% ✓ 257.34% ✓ 15.689 497 18.7 2 0.00% default_stratconfig 2.547 2.981 12.50% 27.46% 72.63% 5.811 581 5.1 17 0.00% ✓ baseline_v1 2.547 2.981 12.50% 27.46% 72.63% 5.811 581 5.1 17 0.00% optimized_overall 4.072 5.983 4.99% ✓ 31.68% 85.76% 17.187 429 3.8 7 0.00% aggressive 3.418 5.261 5.69% 31.04% 83.71% 14.718 374 3.4 7 0.00% signal_tuned_v2 3.830 5.486 5.23% 30.02% 80.51% 15.387 376 3.4 7 0.00% signal_tuned_v1 1.833 2.459 5.97% 15.33% 37.85% 6.345 32 ✓ 0.3 ✓ 4 ✓ 0.00% phase6_regime 4.222 6.336 ✓ 5.43% 27.08% 71.47% 13.168 456 4.1 6 0.00% phase6_brakes 4.055 5.902 3.06% 24.11% 62.59% 20.447 529 4.7 4 0.00% phase6_combined 4.124 5.804 2.44% 23.65% 61.21% 25.130 462 4.1 10 0.00% Cross-Period Summary Config 2024 Sharpe 2025 Sharpe 2026 Sharpe Avg Sharpe 2024 DD 2025 DD 2026 DD Avg DD 2024 Profit 2025 Profit 2026 Profit Avg Profit full_backtest 2.448 1.523 2.988 2.320 15.98% 24.34% 16.41% 18.91% 167.82% 114.42% 76.12% 119.45% default_stratconfig 3.355 1.429 2.547 2.444 11.58% 16.61% 12.50% 13.56% 125.01% 41.68% 27.46% 64.72% baseline_v1 3.355 1.429 2.547 2.444 11.58% 16.61% 12.50% 13.56% 125.01% 41.68% 27.46% 64.72% optimized_overall 3.068 1.514 4.072 2.885 3.35% 7.11% 4.99% 5.15% 45.07% 28.34% 31.68% 35.03% aggressive 2.350 1.883 3.418 2.550 6.03% 7.73% 5.69% 6.48% 42.40% 40.08% 31.04% 37.84% signal_tuned_v2 3.095 1.527 3.830 2.817 7.14% 8.36% 5.23% 6.91% 44.75% 29.14% 30.02% 34.63% signal_tuned_v1 0.780 1.756 1.833 1.456 7.05% 4.92% 5.97% 5.98% 6.95% 15.99% 15.33% 12.76% phase6_regime 2.686 0.382 4.222 2.430 2.39% 15.47% 5.43% 7.76% 31.03% 5.47% 27.08% 21.20% phase6_brakes 2.799 0.628 4.055 2.494 3.71% 14.44% 3.06% 7.07% 30.07% 10.57% 24.11% 21.59% phase6_combined 2.677 -1.129 4.124 1.891 3.63% 17.37% 2.44% 7.81% 29.52% -14.90% 23.65% 12.75% submitted by /u/EaZyRecipeZ [link] [comments]", "content_hash": "1b25cde49023d37b488e4cef307a55015f4a3ec63b680e7721ff3dd38b5c6d4d", "category": "Risk Management", "tags": ["backtest", "drawdown", "portfolio", "risk", "signal", "slippage", "stress test"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "ETF平衡策略回测无滑点下夏普高达2.4-3.3，但跨年衰减与数据局限暴露过拟合风险", "technical_summary": "社区讨论围绕一个纯Python的每日开盘ETF均衡策略的回测结果：多个配置在2024年夏普2.4-3.3、年化42-167%，但2025年夏普普遍降至1.4-1.9，且2025年11月最大回撤达15.62%。作者承认无滑点、缺30分钟开盘数据，询问是否值得继续。主流观点认为短周期、无成本下的高绩效极易过拟合，尤其回测未包含交易成本与执行滑点，跨年业绩显著衰减是警示信号。作者愿开源代码，提供实际验证可能。", "key_points": ["无滑点假设下夏普3.0+在较短回测期极易过拟合，跨年业绩从2024年167%利润衰减至2025年41%是典型幸存偏差表现。", "建议作者加入至少0.1%滑点与佣金，将回测延长至10年以上，并使用walk-forward分析验证稳定性和可复现性。", "Nov 2025最大回撤达15.62%，但多数配置在2024年Nov DD为0%，表明策略尾部风险未暴露，实际稳定性存疑。"], "quant_relevance": "风险建模与回测偏差识别，警示在无成本假设下高夏普信号不可信，需加入交易成本与更长样本外验证。", "possible_use_case": "将本案例作为内部回测校验的标准测试：输入策略代码，加入滑点与交易成本后观察夏普是否下降50%以上，用于识别过拟合策略。", "limitations": "帖子仅提供回测指标摘要，无策略代码或标的明细，无法独立复现；但作者愿开源，减少了信息壁垒。社区讨论需用数据验证后才能用于研究结论。", "read_priority": "高", "key_figures_md": "", "relevance_score": 8.7, "novelty_score": 9.78, "academic_score": 5.5, "discussion_score": 3.0, "actionable_score": 5.5, "final_score": 6.941, "display_title": "回测、回撤、组合、风险实践讨论", "tldr": "ETF平衡策略回测无滑点下夏普高达2.4-3.3，但跨年衰减与数据局限暴露过拟合风险", "core_value": "对你的量化工作帮助：把它当作回测、回撤、组合、风险的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["无滑点假设下夏普3.0+在较短回测期极易过拟合，跨年业绩从2024年167%利润衰减至2025年41%是典型幸存偏差表现。", "建议作者加入至少0.1%滑点与佣金，将回测延长至10年以上，并使用walk-forward分析验证稳定性和可复现性。", "Nov 2025最大回撤达15.62%，但多数配置在2024年Nov DD为0%，表明策略尾部风险未暴露，实际稳定性存疑。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1uass5b/looks_like_a_winner_but_is_it_a_winner/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "风险管理", "priority_label": "高", "source_type_label": "论坛"}, {"id": "1ad92159b22613965cd13fd06e9cf3dd652439f8b57041895bf23e68407b810e", "source": "CoinTelegraph", "source_type": "crypto_news", "title": "Crypto industry looks to stablecoins and DeFi revisions in MiCA 2.0", "url": "https://cointelegraph.com/features/crypto-industry-stablecoins-defi-mica?utm_source=rss&utm_medium=rss&utm_campaign=rss", "authors": [], "published_at": "2026-06-20", "collected_at": "2026-06-21T00:08:11Z", "raw_text": "The European Commission is seeking comment on how it can tweak MiCA, its regulatory framework for the crypto and blockchain industries.", "abstract": "The European Commission is seeking comment on how it can tweak MiCA, its regulatory framework for the crypto and blockchain industries.", "content_hash": "e128c359b1f20411a2a41b8ec35a56a53b6c285e266cd6bb7fa214f6f21a8bf6", "category": "Crypto Quant", "tags": ["blockchain", "crypto", "defi"], "language": "en", "metadata": {"feed_url": "https://cointelegraph.com/rss"}, "one_line_summary": "欧洲委员会就MiCA 2.0征求意见，聚焦稳定币和DeFi修订，可能重塑欧洲监管格局", "technical_summary": "1. 欧洲委员会正就MiCA（加密资产市场监管框架）修订征求公众意见，形成MiCA 2.0。2. 产业界聚焦在稳定币发行和去中心化金融（DeFi）方面，希望厘清规则、降低合规成本。3. 咨询目前处于早期阶段，尚未提出具体修订草案。4. 行业反馈将影响未来稳定币储备要求、DeFi协议责任归属等关键条款。5. 修订结果可能改变欧洲数字资产市场的运营环境。", "key_points": ["核心事件：欧洲委员会就MiCA 2.0启动公众咨询，重点修订稳定币和DeFi监管框架", "对量化交易者直接影响：稳定币流动性和DeFi协议可用性可能变化，需跟踪具体条款修订，调整欧洲市场策略", "不确定因素：咨询阶段尚未落地，最终规则存在较大变数；监管收紧可能推动市场外迁或创新受阻"], "quant_relevance": "监管政策变动直接影响欧洲市场稳定币流动性、DeFi协议合规性及交易策略的可行性", "possible_use_case": "作为欧洲加密市场政策风险监测项，对持有稳定币敞口或参与DeFi套利的策略需调整头寸和止损", "limitations": "原文仅概述咨询启动，缺乏具体修订细节；实际影响需等待政策草案出台和行业反馈汇总", "read_priority": "高", "key_figures_md": "", "relevance_score": 6.6, "novelty_score": 9.78, "academic_score": 5.669, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.986, "display_title": "加密资产、监管加密市场新闻情报", "tldr": "欧洲委员会就MiCA 2.0征求意见，聚焦稳定币和DeFi修订，可能重塑欧洲监管格局", "core_value": "对你的量化工作帮助：把它当作加密资产、监管案例，用来补充异常交易监控、市场操纵风险、大宗商品执行和合规审计的场景库。", "key_points_list": ["核心事件：欧洲委员会就MiCA 2.0启动公众咨询，重点修订稳定币和DeFi监管框架", "对量化交易者直接影响：稳定币流动性和DeFi协议可用性可能变化，需跟踪具体条款修订，调整欧洲市场策略", "不确定因素：咨询阶段尚未落地，最终规则存在较大变数；监管收紧可能推动市场外迁或创新受阻"], "reference_url": "https://cointelegraph.com/features/crypto-industry-stablecoins-defi-mica?utm_source=rss&utm_medium=rss&utm_campaign=rss", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "dd31f1324a67506253611ee2f3c1d3b80dbbc241bdb48dbc57466ad023de9465", "source": "CoinTelegraph", "source_type": "crypto_news", "title": "Bitcoin rotations into altcoins collapses: Have altseasons 'disappeared'?", "url": "https://cointelegraph.com/markets/bitcoin-rotations-into-altcoins-collapses-have-altseasons-disappeared?utm_source=rss&utm_medium=rss&utm_campaign=rss", "authors": [], "published_at": "2026-06-20", "collected_at": "2026-06-21T00:08:11Z", "raw_text": "BTC's crypto market dominance is holding above a key support, signaling Bitcoin may keep absorbing capital from altcoins and delay a broader altseason.", "abstract": "BTC's crypto market dominance is holding above a key support, signaling Bitcoin may keep absorbing capital from altcoins and delay a broader altseason.", "content_hash": "3dbaaf89b940b4d54a0789a04f84cf0770fb445fe11adfdadbb48904fec8cf70", "category": "Crypto Quant", "tags": ["bitcoin", "crypto"], "language": "en", "metadata": {"feed_url": "https://cointelegraph.com/rss"}, "one_line_summary": "BTC市场支配地位守住关键支撑，延长山寨币季节到来时间", "technical_summary": "根据CoinTelegraph报道，比特币的加密货币市场支配率（BTC Dominance）目前保持在关键支撑位以上（通常约55%），这意味着资金继续从山寨币转向比特币，从而推迟了所谓的“山寨币季节”（Altseason）的到来。该结论基于对BTC市占率的技术分析，认为只要BTC dominance不跌破支撑，资金轮动趋势将持续。", "key_points": ["BTC市场支配地位守住关键支撑（~55%），显示资金持续从山寨币流入BTC，altseason被延迟。", "量化交易者可监控BTC Dominance指标，当其跌破支撑时可能触发山寨币轮动信号，用于配置跨币种策略。", "文中未给出具体市占率数字，支撑位定义模糊；市场情绪变化快，需结合链上数据和持仓数据验证。"], "quant_relevance": "为加密货币量化交易中的资产配置信号提供参考指标：BTC支配地位的变化可指导跨币种资金轮动策略。", "possible_use_case": "作为BTC/山寨币轮动策略的阈值信号：当BTC Dominance跌破关键支撑时，可增配山寨币仓位；反之维持BTC或稳定币。", "limitations": "这是社区新闻，缺乏具体市占率数据和统计验证；支撑位定义主观；实际交易需考虑流动性、滑点和交易所差异。", "read_priority": "高", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.78, "academic_score": 5.689, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.629, "display_title": "加密资产加密市场新闻情报", "tldr": "BTC市场支配地位守住关键支撑，延长山寨币季节到来时间", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["BTC市场支配地位守住关键支撑（~55%），显示资金持续从山寨币流入BTC，altseason被延迟。", "量化交易者可监控BTC Dominance指标，当其跌破支撑时可能触发山寨币轮动信号，用于配置跨币种策略。", "文中未给出具体市占率数字，支撑位定义模糊；市场情绪变化快，需结合链上数据和持仓数据验证。"], "reference_url": "https://cointelegraph.com/markets/bitcoin-rotations-into-altcoins-collapses-have-altseasons-disappeared?utm_source=rss&utm_medium=rss&utm_campaign=rss", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "f1245315b0cde0449efd1fe44332ec1dcde7393531726d4c1506ec7d2186afb1", "source": "CoinTelegraph", "source_type": "crypto_news", "title": "Pudgy Penguins expands retail footprint with Target trading card rollout", "url": "https://cointelegraph.com/news/pudgy-penguins-expands-retail-footprint-with-target-trading-card-rollout?utm_source=rss&utm_medium=rss&utm_campaign=rss", "authors": [], "published_at": "2026-06-20", "collected_at": "2026-06-21T00:08:11Z", "raw_text": "The NFT-born franchise is bringing its Vibes Series 3 trading cards to Target stores across the US as it expands into physical products and mainstream retail.", "abstract": "The NFT-born franchise is bringing its Vibes Series 3 trading cards to Target stores across the US as it expands into physical products and mainstream retail.", "content_hash": "e4ce7f45b603ac27a6baf7fad4a84837bd959c732ff3fa44b22fff08eff5948b", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://cointelegraph.com/rss"}, "one_line_summary": "Pudgy Penguins NFT 品牌在 Target 全美门店发售实体交易卡，加速主流零售渗透", "technical_summary": "Pudgy Penguins 是知名的 NFT 项目，正在将数字 IP 转化为实体产品（交易卡），此次通过 Target 全国零售渠道销售，旨在扩大品牌影响力和用户基础，进而可能提升其原生 NFT 及关联代币的市场关注度和流动性。", "key_points": ["Pudgy Penguins 的 Vibes Series 3 交易卡将在美国 Target 门店上架，这是 NFT 项目向实体零售渗透的典型案例。", "对量化交易者而言，此事件可视为 NFT 项目落地能力的信号，可用于评估相关代币（如 PENGU）的短期投机热度。", "实体零售合作的具体销售数据和财务影响尚未披露，NFT 到实体转化的实际收益存在不确定性。"], "quant_relevance": "事件本身不直接提供量化因子或策略信号，但可作为 NFT 市场情绪和品牌估值的参考指标，间接影响 NFT 相关加密资产的定价。", "possible_use_case": "可监控 Target 门店上架后的社交媒体热度（推文量、搜索量），作为 PENGU 代币短期交易的情绪因子。", "limitations": "事件为商业动态，缺乏交易量、价格等量化数据，需结合链上数据验证对代币价格的实际影响。信息来源为 CoinTelegraph，可能存在叙述偏差。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.7, "novelty_score": 9.78, "academic_score": 5.697, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.521, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "Pudgy Penguins NFT 品牌在 Target 全美门店发售实体交易卡，加速主流零售渗透", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["Pudgy Penguins 的 Vibes Series 3 交易卡将在美国 Target 门店上架，这是 NFT 项目向实体零售渗透的典型案例。", "对量化交易者而言，此事件可视为 NFT 项目落地能力的信号，可用于评估相关代币（如 PENGU）的短期投机热度。", "实体零售合作的具体销售数据和财务影响尚未披露，NFT 到实体转化的实际收益存在不确定性。"], "reference_url": "https://cointelegraph.com/news/pudgy-penguins-expands-retail-footprint-with-target-trading-card-rollout?utm_source=rss&utm_medium=rss&utm_campaign=rss", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "491caf4be5676c9960ab3bc2dc1485ee1f6ab67b4d4f3a408e45d64d0007df3e", "source": "Reddit algotrading", "source_type": "forum", "title": "Precise Entry Model", "url": "https://www.reddit.com/r/algotrading/comments/1ub7zuc/precise_entry_model/", "authors": ["/u/poplindoing"], "published_at": "2026-06-20", "collected_at": "2026-06-21T00:08:11Z", "raw_text": "My strategies have been largely enter on a combination of signals, and I have different exit models I test that can use ML and other signals in different ways. Is there a concept of a precise entry model, where you test your winners by placing a precise entry in front of the entry, which may include using orderbook/orderflow, limit orders, and even scaled orders to time your entry better, or would you consider this as part of the entry in general? The idea is the entries are still valid, but you time them better instead of entering too rashly, and this is like a big component itself. My backtests are very good because the exit model works well, but the entries are very simple because I don't want to have too few by filtering out many, but at the same time, I want to optimise the entries. submitted by /u/poplindoing [link] [comments]", "abstract": "My strategies have been largely enter on a combination of signals, and I have different exit models I test that can use ML and other signals in different ways. Is there a concept of a precise entry model, where you test your winners by placing a precise entry in front of the entry, which may include using orderbook/orderflow, limit orders, and even scaled orders to time your entry better, or would you consider this as part of the entry in general? The idea is the entries are still valid, but you time them better instead of entering too rashly, and this is like a big component itself. My backtests are very good because the exit model works well, but the entries are very simple because I don't want to have too few by filtering out many, but at the same time, I want to optimise the entries. submitted by /u/poplindoing [link] [comments]", "content_hash": "8fe80fc2e3465ce00df4826ddd9c035f583a9995f1e381908ead9dc75a313fc9", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "讨论是否将基于订单簿和限价单的精确入场优化作为独立模块，以提升实盘执行质量", "technical_summary": "用户在策略中已有好的退出模型但入场信号简单（仅按信号触发），希望在保持信号覆盖的前提下通过订单簿、限价单、阶梯订单等方式精细控制入场时机。社区主流的观点是：这属于执行优化，可以单独建模测试，但需注意回测时假设太多（如流动性）容易过拟合；建议先用简单规则（如限价单偏移固定基差）验证，再逐步复杂化。", "key_points": ["社区共识：将精确入场作为独立优化模块是可行的，但需与信号逻辑分离测试，避免过拟合。", "具体操作：可引入订单簿一级/二级价格、限价单偏移、部分成交缩放，先做统计有效性验证（如t检验）。", "风险：过度优化入场规则导致回测完美但实盘亏损，且限价单在低流动性时填充率低。"], "quant_relevance": "改善执行/交易成本，通过优化入场时机减少滑点和市场冲击。", "possible_use_case": "可在现有策略中增加一个独立的入场引擎模块，先对历史信号做限价单 vs 市价单的回测对比，统计置信区间后决定是否上线。", "limitations": "原文为社区提问帖，缺乏实验数据支撑；真实执行效果依赖订单簿质量、市场流动性及交易成本假设，需用实际市场数据验证。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 5.055, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 5.364, "display_title": "阿尔法 / 因子研究实践讨论", "tldr": "讨论是否将基于订单簿和限价单的精确入场优化作为独立模块，以提升实盘执行质量", "core_value": "对你的量化工作帮助：把它当作阿尔法 / 因子研究的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["社区共识：将精确入场作为独立优化模块是可行的，但需与信号逻辑分离测试，避免过拟合。", "具体操作：可引入订单簿一级/二级价格、限价单偏移、部分成交缩放，先做统计有效性验证（如t检验）。", "风险：过度优化入场规则导致回测完美但实盘亏损，且限价单在低流动性时填充率低。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1ub7zuc/precise_entry_model/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "论坛"}, {"id": "324a8ddd1cbbe00d04aa0167e1896ed403048853a57525247ab4414722379070", "source": "CoinTelegraph", "source_type": "crypto_news", "title": "Sonic token drops 5% as 3 former execs resign from Sonic Labs board", "url": "https://cointelegraph.com/news/s-token-drops-5-as-3-former-execs-resign-from-sonic-labs-board?utm_source=rss&utm_medium=rss&utm_campaign=rss", "authors": [], "published_at": "2026-06-20", "collected_at": "2026-06-21T00:08:11Z", "raw_text": "Andre Cronje, Michael Kong and David Richardson stepped down from the Sonic Labs board on Friday, while Matt Visser has been appointed as CEO, replacing Mitchell Demeter who resigned in February.", "abstract": "Andre Cronje, Michael Kong and David Richardson stepped down from the Sonic Labs board on Friday, while Matt Visser has been appointed as CEO, replacing Mitchell Demeter who resigned in February.", "content_hash": "a27ed9c065f6fa32c7ac5fbf70cdaf5892e4b4611951178cfa294cf49b2d24a7", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://cointelegraph.com/rss"}, "one_line_summary": "Sonic 代币下跌 5%，因三位前高管从 Sonic Labs 董事会辞职", "technical_summary": "Sonic Labs 三位高管（包括创始人 Andre Cronje）同日辞去董事会职务，CEO 换人，市场解读为治理不确定性，导致 SONIC 代币价格下跌 5%。事件本身属于突发人事变动，可能影响项目发展方向和社区信任。", "key_points": ["Sonic 代币因三位高管（Andre Cronje、Michael Kong、David Richardson）同时辞职，单日下跌 5%。", "事件性抛售为短线量化交易者提供波动套利机会，可结合链上流出数据和订单簿深度制定短期空头策略。", "辞职原因未公开，后续若有利好澄清（如项目进展正常）可能引发反弹，做空需注意反转风险。"], "quant_relevance": "事件驱动型 alpha 信号：高管辞职通常引发短期流动性冲击和情绪抛售，可监控类似消息面事件对价格的影响规律。", "possible_use_case": "作为 SONIC 代币的日内波动信号，可结合 Cointelegraph 新闻流和链上大额转账数据做事件驱动策略的触发条件。", "limitations": "单一新闻事件，样本量小，难以建立稳定统计规律；辞职动机不明，市场反应可能过度；量化使用需实时接入新闻情绪信号。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 5.744, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.318, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "Sonic 代币下跌 5%，因三位前高管从 Sonic Labs 董事会辞职", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["Sonic 代币因三位高管（Andre Cronje、Michael Kong、David Richardson）同时辞职，单日下跌 5%。", "事件性抛售为短线量化交易者提供波动套利机会，可结合链上流出数据和订单簿深度制定短期空头策略。", "辞职原因未公开，后续若有利好澄清（如项目进展正常）可能引发反弹，做空需注意反转风险。"], "reference_url": "https://cointelegraph.com/news/s-token-drops-5-as-3-former-execs-resign-from-sonic-labs-board?utm_source=rss&utm_medium=rss&utm_campaign=rss", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "1c5e291cedf1954bb26c2ca50e78fa880c29f69bd0d03066315e3fc7fd847882", "source": "CoinTelegraph", "source_type": "crypto_news", "title": "Philippine SEC signals readiness for RWA tokenization", "url": "https://cointelegraph.com/news/philippine-sec-rwa-tokenization-readiness?utm_source=rss&utm_medium=rss&utm_campaign=rss", "authors": [], "published_at": "2026-06-20", "collected_at": "2026-06-21T00:08:11Z", "raw_text": "Philippine SEC Commissioner Rogelio Quevedo told Cointelegraph that tokenized assets could give Filipinos more legitimate investment options while helping steer them away from scams.", "abstract": "Philippine SEC Commissioner Rogelio Quevedo told Cointelegraph that tokenized assets could give Filipinos more legitimate investment options while helping steer them away from scams.", "content_hash": "380f75d161e8b86d825a1f8c35e38ded169ef3adf65a5022c8ee3333e700682d", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://cointelegraph.com/rss"}, "one_line_summary": "菲律宾SEC表态准备推动RWA代币化，或为加密资产提供合法化渠道", "technical_summary": "菲律宾证券交易委员会（SEC）专员Rogelio Quevedo向CoinTelegraph表示，该机构已准备好推进真实世界资产（RWA）的代币化。代币化资产将为菲律宾人提供更多合法的投资选择，同时有助于引导他们远离诈骗。这标志着东南亚监管机构对加密资产代币化持开放态度，可能带动更多RWA项目进入合法渠道。", "key_points": ["菲律宾SEC公开表态支持RWA代币化，旨在为投资者提供合法选项并减少诈骗风险。", "量化交易者可关注涉及菲律宾或东南亚RWA项目的代币（如土地、债券等），政策驱动可能带来短期波动机会。", "实际落地时间表和具体监管细则尚未公布，存在执行延迟或政策转向的不确定性。"], "quant_relevance": "监管动态可能影响加密市场情绪和特定RWA相关代币的交易量，量化策略需关注政策落地时间线。", "possible_use_case": "可作为RWA概念代币（如Ondo、Mantra等）的事件驱动信号，在政策发布前后监测链上交易量和价格变化。", "limitations": "此为监管表态，非正式法规；实际推进速度和细则未知，量化回测缺乏历史数据；信息来源单一（CoinTelegraph），需交叉验证。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 5.728, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.315, "display_title": "期权加密市场新闻情报", "tldr": "菲律宾SEC表态准备推动RWA代币化，或为加密资产提供合法化渠道", "core_value": "对你的量化工作帮助：围绕期权补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["菲律宾SEC公开表态支持RWA代币化，旨在为投资者提供合法选项并减少诈骗风险。", "量化交易者可关注涉及菲律宾或东南亚RWA项目的代币（如土地、债券等），政策驱动可能带来短期波动机会。", "实际落地时间表和具体监管细则尚未公布，存在执行延迟或政策转向的不确定性。"], "reference_url": "https://cointelegraph.com/news/philippine-sec-rwa-tokenization-readiness?utm_source=rss&utm_medium=rss&utm_campaign=rss", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "c326363c2ba7342d631c11748bbc97e6d58e7ab639879cc446221044b8470117", "source": "Reddit algotrading", "source_type": "forum", "title": "Which technical and fundamental indicators actually have empirical backing for stock selection?", "url": "https://www.reddit.com/r/algotrading/comments/1uasrv1/which_technical_and_fundamental_indicators/", "authors": ["/u/_janc_"], "published_at": "2026-06-20", "collected_at": "2026-06-21T00:08:11Z", "raw_text": "Which of these metrics have you found to be most effective or reliable in your own analysis or strategy: book-to-market ratio, historical revenue growth, RSI, MACD, price-to-earnings ratio, or free cash flow, and how do you typically prioritize or combine them when making decisions? submitted by /u/_janc_ [link] [comments]", "abstract": "Which of these metrics have you found to be most effective or reliable in your own analysis or strategy: book-to-market ratio, historical revenue growth, RSI, MACD, price-to-earnings ratio, or free cash flow, and how do you typically prioritize or combine them when making decisions? submitted by /u/_janc_ [link] [comments]", "content_hash": "cab646e0fbce52a0e120910965385dd3d9a0b4fc6ed59524fe997ce0ad1db7bd", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "Reddit量化社区讨论常见技术/基本面指标的实证有效性，主流观点认为单一指标效果有限需组合验证", "technical_summary": "这是一条引发社区讨论的提问，核心话题是哪些常见技术指标（RSI、MACD）和基本面指标（市盈率、市净率、自由现金流等）在选股中有真实统计意义。社区主流观点是：单一指标效果弱且易过时，必须通过多因子框架（如Fama-French扩展）进行实证筛选；推荐用逻辑回归、决策树或随机森林来评估各指标独立预测力；一些用户指出自由现金流收益率、账面市值比在长周期中仍有显著性，而RSI/MACD在日频以上的有效性争议较大。", "key_points": ["社区共识：单一技术指标（如RSI、MACD）在选股中缺乏稳健实证支持，需结合基本面因子构建多因子模型才能获得alpha。", "可操作建议：用随机森林或逻辑回归分别测试各指标在样本外的预测能力，优先选用自由现金流收益率、账面市值比、动量因子。", "争议与风险：技术指标的有效性随市场微观结构变化衰减，且回测中极易过拟合，需使用工具如逐步回归或Lasso进行特征选择。"], "quant_relevance": "因子/alpha信号 - 帮助量化研究员筛选和组合因子，避免使用无实证支持的指标", "possible_use_case": "可作为因子测试流程的起点：先用逻辑回归对A股常见指标（PE、PB、RSI等）做截面筛选，再构建多因子组合回测。", "limitations": "原文仅为提问，缺乏实证数据；社区意见不等同于样本外验证，需自行用数据复核；技术指标存在高度时序非平稳性。", "read_priority": "低", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 4.405, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 5.267, "display_title": "阿尔法 / 因子研究实践讨论", "tldr": "Reddit量化社区讨论常见技术/基本面指标的实证有效性，主流观点认为单一指标效果有限需组合验证", "core_value": "对你的量化工作帮助：把它当作阿尔法 / 因子研究的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["社区共识：单一技术指标（如RSI、MACD）在选股中缺乏稳健实证支持，需结合基本面因子构建多因子模型才能获得阿尔法。", "可操作建议：用随机森林或逻辑回归分别测试各指标在样本外的预测能力，优先选用自由现金流收益率、账面市值比、动量因子。", "争议与风险：技术指标的有效性随市场微观结构变化衰减，且回测中极易过拟合，需使用工具如逐步回归或Lasso进行特征选择。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1uasrv1/which_technical_and_fundamental_indicators/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "阿尔法 / 因子研究", "priority_label": "低", "source_type_label": "论坛"}, {"id": "1808738eba3b06905406494dcec0ff2a5be57f1cb268c4fba8fd153c3d1a325d", "source": "Quant StackExchange", "source_type": "forum", "title": "Zero Rate Bootstrapping Question", "url": "https://quant.stackexchange.com/questions/82486/zero-rate-bootstrapping-question", "authors": ["Barto_Wynne12"], "published_at": "2025-05-14", "collected_at": "2026-06-21T00:08:11Z", "raw_text": "I'm just starting to read about Arbitrage Trading and am currently looking at zero coupon rates as it's in the textbook I am using and had a question about bootstrapping. Say that I have the maturities and and coupon rates for a 1-year bond, a 2-year bond, and a 3-year bond. In constructing the 1-year zero rate, I can just use the 1-year bond, and in constructing the 2-year zero rate, I use the 1-year zero rate to deal with the first annual payment and use the leftover amount to deal construct the 2-year zero rate. When constructing the 3-year zero rate, do I need to handle the two prior annual payments using their respective zero rates, or can I use the 2-year zero rate for both? For example, if I know that my zero rates for year 1 and year 2 are $5$ % and $5.75$ %, and that 3-year coupon rate is $6.10$ , should I subtract out $\\frac{6.10}{1.0575^1} + \\frac{6.10}{1.0575^2}$ or $\\frac{6.10}{1.05^1} + \\frac{6.10}{1.0575^2}$ before solving for my 3-year zero rate? Any answer/explanation would be welcome!", "abstract": "I'm just starting to read about Arbitrage Trading and am currently looking at zero coupon rates as it's in the textbook I am using and had a question about bootstrapping. Say that I have the maturities and and coupon rates for a 1-year bond, a 2-year bond, and a 3-year bond. In constructing the 1-year zero rate, I can just use the 1-year bond, and in constructing the 2-year zero rate, I use the 1-year zero rate to deal with the first annual payment and use the leftover amount to deal construct the 2-year zero rate. When constructing the 3-year zero rate, do I need to handle the two prior annual payments using their respective zero rates, or can I use the 2-year zero rate for both? For example, if I know that my zero rates for year 1 and year 2 are $5$ % and $5.75$ %, and that 3-year coupon rate is $6.10$ , should I subtract out $\\frac{6.10}{1.0575^1} + \\frac{6.10}{1.0575^2}$ or $\\frac{6.10}{1.05^1} + \\frac{6.10}{1.0575^2}$ before solving for my 3-year zero rate? Any answer/explanation would be welcome!", "content_hash": "a2b8c5098978bdf831e165d70e20bbd5a43a9f6aeb851ee00fc9685bc0e671d1", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://quant.stackexchange.com/feeds"}, "one_line_summary": "零息利率Bootstrap构建：3年期利率必须用各期对应零息率分别贴现，不能统一用2年期利率", "technical_summary": "用户在学习零息利率Bootstrap时，对如何处理多期息票产生疑惑：已知1年、2年零息率为5%和5.75%，3年期附息债券息票率6.1%，前两期息票是分别用对应期限零息率贴现（5%和5.75%），还是可以用2年期零息率（5.75%）统一贴现在第一、二期？社区主流观点：必须用各自期限的零息率分别贴现，因为不同期限的零息利率不同，不能混用；只有这样才能构建无套利的完整利率曲线。", "key_points": ["3年期Bootstrap中，每一期息票必须使用对应期限（1年、2年）的零息率分别贴现，而非用2年利率统一处理。", "实操：先利用1年期债券得到1年零息率，再用1年零息率剥离2年期债券第一年息票，解出2年零息率；3年期同理需用到1年和2年零息率分别贴现前两期息票。", "若错误使用2年零息率贴现第一期息票，会导致3年零息率计算偏误，影响整条曲线精度和后续定价。"], "quant_relevance": "利率曲线构建 / 固定收益定价的准确性直接依赖正确的Bootstrap方法，影响所有附息债券定价和套利分析。", "possible_use_case": "在自建利率曲线工具或回测固定收益策略时，确保Bootstrap实现按此规则贴现，可通过对比两种方法验证曲线差异。", "limitations": "示例基于简单年付息假设，实际中可能面临半年度付息、票面利率非整数、曲线插值等问题；该讨论未涉及复杂场景（如线性插值、远期利率推导）。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.7, "novelty_score": 0.001, "academic_score": 5.271, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 3.651, "display_title": "阿尔法 / 因子研究实践讨论", "tldr": "零息利率Bootstrap构建：3年期利率必须用各期对应零息率分别贴现，不能统一用2年期利率", "core_value": "对你的量化工作帮助：把它当作阿尔法 / 因子研究的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["3年期Bootstrap中，每一期息票必须使用对应期限（1年、2年）的零息率分别贴现，而非用2年利率统一处理。", "实操：先利用1年期债券得到1年零息率，再用1年零息率剥离2年期债券第一年息票，解出2年零息率；3年期同理需用到1年和2年零息率分别贴现前两期息票。", "若错误使用2年零息率贴现第一期息票，会导致3年零息率计算偏误，影响整条曲线精度和后续定价。"], "reference_url": "https://quant.stackexchange.com/questions/82486/zero-rate-bootstrapping-question", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "论坛"}, {"id": "7e1ea798d50f4533ef86c80d947241fb37a5b60774e17f022c90fbf673dfb51f", "source": "Quant StackExchange", "source_type": "forum", "title": "When Is Periodic Profit-Taking Better Than Holding Until Maturity?", "url": "https://quant.stackexchange.com/questions/80226/when-is-periodic-profit-taking-better-than-holding-until-maturity", "authors": ["Carol.Kar"], "published_at": "2024-08-06", "collected_at": "2026-06-21T00:08:11Z", "raw_text": "I am conducting a comparative analysis of two investment strategies using Monte Carlo simulations: periodic profit-taking and holding the investment until maturity. Specifically, I am simulating price paths for a cryptocurrency (Polkadot) over a 90-day period with 1,000 iterations. The initial parameters are as follows: Initial price: $4.1 Final price: $5.8 Initial investment: $15,000 Days: 90 Number of simulations: 1,000 The daily returns are assumed to follow a normal distribution with a mean of 0 and a standard deviation of 0.02. Scenario 1: Holding the Investment Until Maturity In this scenario, the entire investment is held for 90 days, and the final value is computed at the end of this period. The average final value and profit are calculated across all simulations. Scenario 2: Periodic Profit-Taking In this scenario, profits are periodically taken whenever the value of the investment exceeds the initial principal of $15,000. The principal is reinvested each time a profit is taken. The average total profit taken and the final value of the principal at the end of the period are computed across all simulations. The results indicate a slight difference in the average final value and profits between the two strategies, with the periodic profit-taking strategy showing marginally higher total returns. In my super simple analysis I get the following: Scenario 1: Holding for 90 Days and Selling at the End Average Final Value: $15047.68 Average Profit: $ 47.68 Scenario 2: Periodic Profit-Taking Average Total Profit Taken: $45.57 Q: Under what conditions or assumptions does periodic profit-taking outperform a hold-until-maturity strategy in terms of risk-adjusted returns? Specifically, what factors (e.g., volatility, mean return, frequency of profit-taking) would make periodic profit-taking a more advantageous strategy than holding the investment until the end of the period? Appreciate if you share your experience.", "abstract": "I am conducting a comparative analysis of two investment strategies using Monte Carlo simulations: periodic profit-taking and holding the investment until maturity. Specifically, I am simulating price paths for a cryptocurrency (Polkadot) over a 90-day period with 1,000 iterations. The initial parameters are as follows: Initial price: $4.1 Final price: $5.8 Initial investment: $15,000 Days: 90 Number of simulations: 1,000 The daily returns are assumed to follow a normal distribution with a mean of 0 and a standard deviation of 0.02. Scenario 1: Holding the Investment Until Maturity In this scenario, the entire investment is held for 90 days, and the final value is computed at the end of this period. The average final value and profit are calculated across all simulations. Scenario 2: Periodic Profit-Taking In this scenario, profits are periodically taken whenever the value of the investment exceeds the initial principal of $15,000. The principal is reinvested each time a profit is taken. The average total profit taken and the final value of the principal at the end of the period are computed across all simulations. The results indicate a slight difference in the average final value and profits between the two strategies, with the periodic profit-taking strategy showing marginally higher total returns. In my super simple analysis I get the following: Scenario 1: Holding for 90 Days and Selling at the End Average Final Value: $15047.68 Average Profit: $ 47.68 Scenario 2: Periodic Profit-Taking Average Total Profit Taken: $45.57 Q: Under what conditions or assumptions does periodic profit-taking outperform a hold-until-maturity strategy in terms of risk-adjusted returns? Specifically, what factors (e.g., volatility, mean return, frequency of profit-taking) would make periodic profit-taking a more advantageous strategy than holding the investment until the end of the period? Appreciate if you share your experience.", "content_hash": "2e4496d13cb2fdc01554f17269dab256f28ed2b3245870ccfdf4e9de8f245c4a", "category": "Risk Management", "tags": ["risk", "volatility"], "language": "en", "metadata": {"feed_url": "https://quant.stackexchange.com/feeds"}, "one_line_summary": "周期性利润了结与持有至到期策略比较：零均值随机游走下持有略优，高波动或均值回复时利润了结可能更好", "technical_summary": "用户对比了两种加密货币（Polkadot）投资策略：持有90天 vs 每次价格上涨超过本金（$15000）时立即获利了结并将本金再投资。假设日收益服从N(0, 0.02)，1000次MC模拟。持有策略平均最终价值$15047.68，利润$47.68；利润了结策略平均总利润$45.57。结论：在纯随机游走（均值0）且无趋势的条件下，利润了结并未提升总收益，反而略低。但帖子核心追问的是何时利润了结更优——社区一般共识是：当资产价格具有均值回复特性、或波动率极高时，利润了结可以降低回撤并提升夏普比率，但在趋势强或漂移为正的资产中会牺牲收益。此外，利润了结频率和阈值设定也是关键参数。", "key_points": ["社区核心共识：在零均值随机游走假设下，周期性利润了结总收益略低于持有（$45.57 vs $47.68），但利润了结的真正优势在于控制回撤而非提升总收益。", "具体可操作建议：若资产呈现均值回复或高波动特性，可设定基于波动率的动态止盈阈值（如2σ），并在回测中考虑交易成本，波动率越高利润了结的边际收益越明显。", "局限性或风险：该模拟假设日收益i.i.d正态且均值0，忽略实际市场趋势、序列相关性和交易成本；若存在正向漂移，利润了结将显著跑输持有，且频繁交易会增加费用和滑点。"], "quant_relevance": "策略设计/执行优化：为量化策略中动态止盈提供条件分析——利润了结在无趋势随机游走中不占优，但引入波动率或均值回复假设后可成为有效风险管理工具。", "possible_use_case": "可作为加密货币或高波动股票日内策略的风控模块：当短期收益超过某个波动率倍数时部分止盈，保留部分仓位参与趋势，需在回测中比较持有和部分止盈的风险调整收益。", "limitations": "这是社区讨论，模拟前提过于简单（正态分布、零漂移、无交易成本），实际加密货币价格有厚尾、跳跃和趋势，结论仅用于启发思考，不可直接用于实盘。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 0.0, "academic_score": 5.5, "discussion_score": 3.0, "actionable_score": 4.5, "final_score": 3.645, "display_title": "风险、波动率实践讨论", "tldr": "周期性利润了结与持有至到期策略比较：零均值随机游走下持有略优，高波动或均值回复时利润了结可能更好", "core_value": "对你的量化工作帮助：把它当作风险、波动率的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["社区核心共识：在零均值随机游走假设下，周期性利润了结总收益略低于持有（$45.57 vs $47.68），但利润了结的真正优势在于控制回撤而非提升总收益。", "具体可操作建议：若资产呈现均值回复或高波动特性，可设定基于波动率的动态止盈阈值（如2σ），并在回测中考虑交易成本，波动率越高利润了结的边际收益越明显。", "局限性或风险：该模拟假设日收益i.i.d正态且均值0，忽略实际市场趋势、序列相关性和交易成本；若存在正向漂移，利润了结将显著跑输持有，且频繁交易会增加费用和滑点。"], "reference_url": "https://quant.stackexchange.com/questions/80226/when-is-periodic-profit-taking-better-than-holding-until-maturity", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "风险管理", "priority_label": "高", "source_type_label": "论坛"}], "source_stats": {"Reddit algotrading": 3, "CoinTelegraph": 5, "Quant StackExchange": 2}, "category_counts": {"Risk Management": 2, "Crypto Quant": 2, "Alpha / Factor Research": 6}, "section_counts": {"ai_quant_tools": 5, "daily_news": 5}, "sections": [{"key": "deep_learning_quant", "label": "深度学习量化未来", "description": "技术主线：深度学习、强化学习、Transformer、图神经网络、表征学习、订单簿预测、金融时间序列大模型等在量化里的应用。"}, {"key": "ai_quant_tools", "label": "AI 量化工具", "description": "工具主线：能提升量化研究效率的 AI 工具、代码仓库、研究自动化、智能体、回测/数据工程工具和可接入团队工作流的基础设施。"}, {"key": "daily_news", "label": "Crypto 市场每日 Top 5", "description": "加密市场新闻主线：来自 CoinDesk、CoinTelegraph、The Block、Decrypt、Blockworks 等主流媒体当日最重要的 Crypto 市场报道。"}], "category_labels": {"Alpha / Factor Research": "阿尔法 / 因子研究", "Statistical Arbitrage": "统计套利", "Portfolio Construction": "组合构建", "Risk Management": "风险管理", "Options / Volatility": "期权 / 波动率", "Market Microstructure": "市场微观结构", "Execution / Transaction Cost": "交易执行 / 交易成本", "Machine Learning for Finance": "金融机器学习", "LLM / Agents for Quant": "量化大模型 / 智能体", "Crypto Quant": "加密资产量化", "Data Engineering": "数据工程", "Backtesting / Research Tools": "回测 / 研究工具", "Industry / Career": "行业 / 职业 / 合规", "Unclassified": "未分类"}, "priority_labels": {"High": "高", "Medium": "中", "Low": "低", "高": "高", "中": "中", "低": "低"}, "source_type_labels": {"paper": "论文", "forum": "论坛", "github": "代码仓库", "blog": "博客", "news": "新闻", "social": "社交媒体", "zhihu": "知乎", "x": "X", "quantml": "QuantML", "crypto_news": "加密市场新闻"}, "report_config": {"max_items_per_category": 5, "max_total_items": 60, "executive_brief_items": 5}}</script>
+  <script>
+    const payload = JSON.parse(document.getElementById('dashboard-data').textContent);
+    const items = payload.items || [];
+    const categoryLabels = payload.category_labels || {};
+    const priorityLabels = payload.priority_labels || {};
+    const sourceTypeLabels = payload.source_type_labels || {};
+    const state = {
+      query: '',
+      section: 'All',
+      category: 'All',
+      sort: 'score',
+      activeId: items[0]?.id || null,
+    };
+
+    const priorityRank = { High: 3, Medium: 2, Low: 1, '高': 3, '中': 2, '低': 1 };
+    const $ = (id) => document.getElementById(id);
+
+    // --- Feedback ---
+    const _feedbackStore = JSON.parse(localStorage.getItem('quant-feedback') || '{}');
+    function getFeedback(id) { return _feedbackStore[id] || 0; }
+    function setFeedback(id, signal) {
+      if (_feedbackStore[id] === signal) { delete _feedbackStore[id]; signal = 0; }
+      else { _feedbackStore[id] = signal; }
+      localStorage.setItem('quant-feedback', JSON.stringify(_feedbackStore));
+      fetch('http://localhost:8080/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, signal }),
+      }).catch(() => {});
+    }
+
+    function init() {
+      $('report-date').textContent = payload.report_date + ' - 主力源：arXiv / 知乎 / QuantML / 大型论坛 - 生成时间 ' + payload.generated_at;
+      $('metric-items').textContent = items.length;
+      $('metric-categories').textContent = new Set(items.map((item) => item.category)).size;
+      $('metric-high').textContent = items.filter((item) => priorityLabel(item.read_priority) === '高').length;
+      $('metric-avg').textContent = averageScore(items).toFixed(1);
+
+      buildSectionControls();
+      buildCategoryControls();
+      buildSourceList();
+      bindControls();
+      render();
+    }
+
+    function bindControls() {
+      $('search').addEventListener('input', (event) => {
+        state.query = event.target.value.trim().toLowerCase();
+        render();
+      });
+      $('category-select').addEventListener('change', (event) => {
+        state.category = event.target.value;
+        render();
+      });
+      $('section-select').addEventListener('change', (event) => {
+        state.section = event.target.value;
+        render();
+      });
+      $('sort-select').addEventListener('change', (event) => {
+        state.sort = event.target.value;
+        render();
+      });
+    }
+
+    function buildCategoryControls() {
+      const counts = countBy(items, 'category');
+      const categories = Object.keys(counts).sort();
+      const select = $('category-select');
+      select.innerHTML = option('All', `全部细分标签 (${items.length})`) +
+        categories.map((category) => option(category, `${categoryLabel(category)} (${counts[category]})`)).join('');
+
+      const list = $('category-list');
+      list.innerHTML = categoryButton('All', items.length) +
+        categories.map((category) => categoryButton(category, counts[category])).join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.category = button.dataset.category;
+          select.value = state.category;
+          if (state.category === 'All') {
+            state.section = 'All';
+            $('section-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSectionControls() {
+      const counts = payload.section_counts || {};
+      const sections = payload.sections || [];
+      const select = $('section-select');
+      select.innerHTML = option('All', `全部主线 (${items.length})`) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => option(section.key, `${section.label} (${counts[section.key]})`))
+          .join('');
+
+      const list = $('section-list');
+      list.innerHTML = sectionButton('All', '全部', items.length) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => sectionButton(section.key, section.label, counts[section.key]))
+          .join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.section = button.dataset.section;
+          select.value = state.section;
+          if (state.section === 'All') {
+            state.category = 'All';
+            $('category-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSourceList() {
+      const stats = payload.source_stats || {};
+      const entries = Object.entries(stats)
+        .filter(([source]) => !source.startsWith('fetched:'))
+        .sort((a, b) => b[1] - a[1]);
+      $('source-list').innerHTML = entries.length
+        ? entries.map(([source, count]) => `<li><span>${escapeHtml(source)}</span><b>${count}</b></li>`).join('')
+        : '<li><span>暂无来源统计</span><b>0</b></li>';
+    }
+
+    function render() {
+      let visible = items.filter(matchesFilters);
+      visible = sortItems(visible);
+      if (!visible.some((item) => item.id === state.activeId)) {
+        state.activeId = visible[0]?.id || null;
+      }
+
+      $('feed-title').textContent = feedTitle();
+      $('result-count').textContent = `展示 ${visible.length} 条 - 两条主线每条最多 ${payload.report_config.max_items_per_category} 条`;
+      renderSectionActive();
+      renderCategoryActive();
+      renderItems(visible);
+      renderDetail(visible.find((item) => item.id === state.activeId) || visible[0]);
+    }
+
+    function matchesFilters(item) {
+      const sectionMatch = state.section === 'All' || (item.report_sections || []).includes(state.section);
+      if (!sectionMatch) return false;
+      const categoryMatch = state.category === 'All' || item.category === state.category;
+      if (!categoryMatch) return false;
+      if (!state.query) return true;
+      const haystack = [
+        item.title,
+        item.display_title,
+        item.source,
+        item.source_type,
+        item.category,
+        categoryLabel(item.category),
+        sectionLabel(item.report_sections?.[0]),
+        sourceTypeLabel(item.source_type),
+        priorityLabel(item.read_priority),
+        item.one_line_summary,
+        item.technical_summary,
+        item.quant_relevance,
+        item.possible_use_case,
+        item.tldr,
+        item.core_value,
+        ...(item.key_points_list || []),
+        item.reference_url,
+      ].join(' ').toLowerCase();
+      return haystack.includes(state.query);
+    }
+
+    function sortItems(list) {
+      return [...list].sort((a, b) => {
+        if (state.sort === 'priority') {
+          return (priorityRank[b.read_priority] || 0) - (priorityRank[a.read_priority] || 0)
+            || b.final_score - a.final_score;
+        }
+        if (state.sort === 'source') {
+          return a.source.localeCompare(b.source) || b.final_score - a.final_score;
+        }
+        return b.final_score - a.final_score;
+      });
+    }
+
+    function renderCategoryActive() {
+      document.querySelectorAll('.category-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.category === state.category);
+      });
+    }
+
+    function renderSectionActive() {
+      document.querySelectorAll('.section-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.section === state.section);
+      });
+    }
+
+    function itemCard(item) {
+      const sec = item.report_sections?.[0] || 'other';
+      const sig = getFeedback(item.id);
+      return `
+        <article class="item ${item.id === state.activeId ? 'active' : ''}"
+                 data-id="${escapeAttr(item.id)}"
+                 data-section="${escapeAttr(sec)}">
+          <div class="item-top">
+            <h3>${escapeHtml(item.display_title || item.title)}</h3>
+            <div class="score">${Number(item.final_score).toFixed(1)}</div>
+          </div>
+          <div class="meta">
+            <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+            <span class="tag">${escapeHtml(item.source)}</span>
+            <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+          </div>
+          ${readerFormat(item, true)}
+          <div class="feedback-row">
+            <button class="feedback-btn ${sig === 1 ? 'active-up' : ''}" data-feedback="1" title="有用">👍</button>
+            <button class="feedback-btn ${sig === -1 ? 'active-down' : ''}" data-feedback="-1" title="跳过">👎</button>
+            <span class="feedback-hint">${sig === 1 ? '已标记有用' : sig === -1 ? '已标记跳过' : ''}</span>
+          </div>
+        </article>
+      `;
+    }
+
+    function sectionGroupHeader(section, count) {
+      return `
+        <div class="section-group-header" data-section="${escapeAttr(section.key)}">
+          <span class="section-group-title">${escapeHtml(section.label)}</span>
+          <span class="section-group-count">${count} 条</span>
+        </div>
+      `;
+    }
+
+    function renderItems(visible) {
+      const container = $('items');
+      if (!visible.length) {
+        container.innerHTML = '<div class="empty">当前筛选条件下没有匹配内容。</div>';
+        return;
+      }
+
+      let html = '';
+      if (state.section === 'All') {
+        // Group by section in defined order, with a header for each group
+        const grouped = {};
+        for (const item of visible) {
+          const sec = item.report_sections?.[0] || 'other';
+          if (!grouped[sec]) grouped[sec] = [];
+          grouped[sec].push(item);
+        }
+        for (const section of (payload.sections || [])) {
+          const group = grouped[section.key];
+          if (!group || !group.length) continue;
+          html += sectionGroupHeader(section, group.length);
+          html += group.map((item) => itemCard(item)).join('');
+        }
+        // Append any items that fell into 'other' (shouldn't normally happen)
+        if (grouped['other']?.length) {
+          html += grouped['other'].map((item) => itemCard(item)).join('');
+        }
+      } else {
+        html = visible.map((item) => itemCard(item)).join('');
+      }
+
+      container.innerHTML = html;
+      container.querySelectorAll('.item').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.activeId = node.dataset.id;
+          render();
+        });
+      });
+      container.querySelectorAll('.feedback-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const itemNode = btn.closest('.item');
+          setFeedback(itemNode.dataset.id, parseInt(btn.dataset.feedback, 10));
+          render();
+        });
+      });
+    }
+
+    function renderDetail(item) {
+      const detail = $('detail');
+      if (!item) {
+        detail.innerHTML = '<div class="empty">选择一条内容查看详情。</div>';
+        return;
+      }
+
+      detail.innerHTML = `
+        <h2>${escapeHtml(item.display_title || item.title)}</h2>
+        <div class="meta">
+          <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+          <span class="tag">${escapeHtml(sourceTypeLabel(item.source_type))}</span>
+          <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+        </div>
+
+        ${readerFormat(item, false)}
+
+        <div class="detail-block">
+          <h3>评分拆解</h3>
+          <div class="breakdown">
+            ${bar('相关性', item.relevance_score)}
+            ${bar('新颖度', item.novelty_score)}
+            ${bar('学术性', item.academic_score)}
+            ${bar('讨论度', item.discussion_score)}
+            ${bar('可行动性', item.actionable_score)}
+          </div>
+        </div>
+
+      `;
+    }
+
+    function readerFormat(item, compact) {
+      const points = itemKeyPoints(item);
+      return `
+        <div class="reader-format ${compact ? 'compact' : ''}">
+          <div class="reader-block">
+            <h4>1. 这篇文章的太长不读</h4>
+            <p>${escapeHtml(item.tldr || item.one_line_summary || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>2. 核心价值，对我量化的工作能够提供什么样的帮助</h4>
+            <p>${escapeHtml(item.core_value || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>3. 关键核心点 / 论文或帖子摘要</h4>
+            <ol>${points.map((point) => `<li>${escapeHtml(point)}</li>`).join('')}</ol>
+          </div>
+          <div class="reader-block">
+            <h4>4. 原文链接</h4>
+            ${referenceHtml(item)}
+          </div>
+        </div>
+      `;
+    }
+
+    function itemKeyPoints(item) {
+      const points = Array.isArray(item.key_points_list)
+        ? item.key_points_list
+        : (Array.isArray(item.key_points) ? item.key_points : []);
+      const clean = points.filter(Boolean).slice(0, 3);
+      return clean.length ? clean : ['需要打开原文进一步确认方法、数据和适用边界。'];
+    }
+
+    function referenceHtml(item) {
+      const url = item.reference_url || '';
+      if (!url) return '<p>暂无可打开链接</p>';
+      return `
+        <a class="reader-reference" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">打开原文</a>
+        <small class="reference-url">${escapeHtml(url)}</small>
+      `;
+    }
+
+    function bar(label, value) {
+      const score = Number(value || 0);
+      const width = Math.max(0, Math.min(100, score * 10));
+      return `
+        <div class="bar">
+          <span>${label}</span>
+          <div class="bar-track"><div class="bar-fill" style="width: ${width}%"></div></div>
+          <b>${score.toFixed(1)}</b>
+        </div>
+      `;
+    }
+
+    function countBy(list, key) {
+      return list.reduce((acc, item) => {
+        acc[item[key]] = (acc[item[key]] || 0) + 1;
+        return acc;
+      }, {});
+    }
+
+    function averageScore(list) {
+      if (!list.length) return 0;
+      return list.reduce((sum, item) => sum + Number(item.final_score || 0), 0) / list.length;
+    }
+
+    function option(value, label) {
+      return `<option value="${escapeAttr(value)}">${escapeHtml(label)}</option>`;
+    }
+
+    function sectionButton(section, label, count) {
+      return `
+        <button class="category-button section-button" type="button" data-section="${escapeAttr(section)}">
+          <span>${escapeHtml(label)}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryButton(category, count) {
+      return `
+        <button class="category-button" type="button" data-category="${escapeAttr(category)}">
+          <span>${escapeHtml(category === 'All' ? '全部' : categoryLabel(category))}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryLabel(category) {
+      return categoryLabels[category] || category;
+    }
+
+    function sectionLabel(sectionKey) {
+      const section = (payload.sections || []).find((item) => item.key === sectionKey);
+      return section ? section.label : '其他';
+    }
+
+    function feedTitle() {
+      const parts = [];
+      if (state.section !== 'All') parts.push(sectionLabel(state.section));
+      if (state.category !== 'All') parts.push(categoryLabel(state.category));
+      return parts.length ? parts.join(' / ') : '今日情报';
+    }
+
+    function priorityLabel(priority) {
+      return priorityLabels[priority] || priority;
+    }
+
+    function sourceTypeLabel(sourceType) {
+      return sourceTypeLabels[sourceType] || sourceType;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replaceAll('`', '&#096;');
+    }
+
+    init();
+  </script>
+</body>
+</html>
