@@ -1,0 +1,1086 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>samson 量化情报台 - 2026-06-22</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --panel: #ffffff;
+      --ink: #202124;
+      --muted: #5f6368;
+      --line: #dadce0;
+      --blue: #1a73e8;
+      --red: #ea4335;
+      --yellow: #fbbc04;
+      --green: #34a853;
+      --blue-soft: #e8f0fe;
+      --green-soft: #e6f4ea;
+      --yellow-soft: #fef7e0;
+      --red-soft: #fce8e6;
+      --shadow: 0 1px 2px rgba(60, 64, 67, 0.16), 0 8px 24px rgba(60, 64, 67, 0.10);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(66, 133, 244, 0.07), transparent 30%),
+        radial-gradient(circle at top right, rgba(251, 188, 4, 0.08), transparent 26%),
+        var(--bg);
+      color: var(--ink);
+      font-family: "Google Sans", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(280px, 620px);
+      gap: 24px;
+      align-items: center;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand h1 {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin: 0;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+
+    .brand h1::before {
+      content: "";
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background:
+        conic-gradient(from 0deg, var(--blue) 0 25%, var(--red) 0 50%, var(--yellow) 0 75%, var(--green) 0 100%);
+      box-shadow: inset 0 0 0 7px #fff;
+    }
+
+    .date-pill {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 170px 170px 150px;
+      gap: 10px;
+    }
+
+    .control {
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 12px;
+      outline: none;
+    }
+
+    .control:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.14);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 260px minmax(420px, 1fr) 420px;
+      gap: 22px;
+      padding: 24px 32px 36px;
+    }
+
+    .rail,
+    .detail {
+      position: sticky;
+      top: 86px;
+      height: calc(100vh - 112px);
+      overflow: auto;
+    }
+
+    .rail,
+    .detail,
+    .feed {
+      min-width: 0;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      padding: 12px;
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
+    }
+
+    .metric:nth-child(1) { border-top: 3px solid var(--blue); }
+    .metric:nth-child(2) { border-top: 3px solid var(--red); }
+    .metric:nth-child(3) { border-top: 3px solid var(--yellow); }
+    .metric:nth-child(4) { border-top: 3px solid var(--green); }
+
+    .metric b {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .section-label {
+      margin: 18px 0 8px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .category-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .category-button {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--ink);
+      padding: 8px 10px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .category-button:hover,
+    .category-button.active {
+      border-color: transparent;
+      background: var(--blue-soft);
+      color: #174ea6;
+    }
+
+    .count {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .source-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .source-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .feed-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .feed-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .result-count {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .items {
+      display: grid;
+      gap: 10px;
+    }
+
+    .section-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 2px 4px;
+      margin-top: 10px;
+      border-bottom: 2px solid var(--line);
+    }
+
+    .section-group-header:first-child {
+      margin-top: 0;
+    }
+
+    .section-group-title {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .section-group-header[data-section="deep_learning_quant"] .section-group-title { color: var(--blue); }
+    .section-group-header[data-section="ai_quant_tools"] .section-group-title { color: var(--green); }
+    .section-group-header[data-section="daily_news"] .section-group-title { color: var(--yellow); }
+
+    .section-group-count {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .item {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.10);
+      padding: 18px;
+      cursor: pointer;
+      transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+    }
+
+    .item::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--blue), var(--red), var(--yellow), var(--green));
+    }
+
+    .item[data-section="deep_learning_quant"]::before { background: var(--blue); }
+    .item[data-section="ai_quant_tools"]::before { background: var(--green); }
+    .item[data-section="daily_news"]::before { background: var(--yellow); }
+
+    .item:hover,
+    .item.active {
+      border-color: #c6dafc;
+      box-shadow: var(--shadow);
+      transform: translateY(-2px);
+    }
+
+    .item-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .item h3 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.28;
+    }
+
+    .score {
+      min-width: 54px;
+      border-radius: 999px;
+      background: var(--blue-soft);
+      color: #174ea6;
+      padding: 6px 8px;
+      text-align: center;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .tag {
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: #f1f3f4;
+      padding: 3px 8px;
+    }
+
+    .tag:nth-child(1) { background: var(--blue-soft); color: #174ea6; }
+    .tag:nth-child(2) { background: var(--green-soft); color: #137333; }
+    .tag:nth-child(3) { background: var(--yellow-soft); color: #8a5a00; }
+    .tag:nth-child(4) { background: var(--red-soft); color: #b3261e; }
+
+    .summary {
+      margin: 0;
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .reference-link {
+      display: inline-flex;
+      width: fit-content;
+      border-top: 1px solid var(--line);
+      color: var(--blue);
+      padding-top: 9px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .reader-format {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .reader-format.compact {
+      gap: 8px;
+    }
+
+    .reader-block {
+      border-top: 1px solid var(--line);
+      padding-top: 9px;
+    }
+
+    .reader-block:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .reader-block h4 {
+      margin: 0 0 5px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .reader-block p,
+    .reader-block li {
+      margin: 0;
+      color: #30342d;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .reader-block ol {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .reader-reference {
+      color: var(--blue);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
+    .reference-url {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .detail {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .detail h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+
+    .detail-block {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .detail-block h3 {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+
+    .detail-block p,
+    .detail-block li {
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .detail-block ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .breakdown {
+      display: grid;
+      gap: 8px;
+    }
+
+    .bar {
+      display: grid;
+      grid-template-columns: 118px 1fr 40px;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .bar-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e7eadf;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--blue), var(--green), var(--yellow), var(--red));
+    }
+
+    .open-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      margin-top: 16px;
+      border: 1px solid var(--blue);
+      border-radius: var(--radius);
+      color: var(--blue);
+      text-decoration: none;
+      padding: 0 12px;
+      font-weight: 700;
+    }
+
+    .feedback-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+    }
+
+    .feedback-btn {
+      background: #f1f3f4;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 120ms, border-color 120ms;
+    }
+
+    .feedback-btn:hover { background: var(--blue-soft); }
+    .feedback-btn.active-up { background: var(--green-soft); border-color: var(--green); }
+    .feedback-btn.active-down { background: var(--red-soft); border-color: var(--red); }
+
+    .feedback-hint {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      padding: 28px;
+      color: var(--muted);
+      background: var(--panel);
+    }
+
+    @media (max-width: 1180px) {
+      .layout {
+        grid-template-columns: 220px 1fr;
+      }
+
+      .detail {
+        position: static;
+        grid-column: 1 / -1;
+        height: auto;
+      }
+    }
+
+    @media (max-width: 820px) {
+      .topbar {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .brand {
+        display: grid;
+        gap: 4px;
+      }
+
+      .brand h1 {
+        white-space: normal;
+        font-size: 21px;
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .rail,
+      .detail {
+        position: static;
+        height: auto;
+      }
+
+      .metric-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <h1>samson 量化情报台</h1>
+        <span class="date-pill" id="report-date"></span>
+      </div>
+      <div class="controls">
+        <input class="control" id="search" type="search" placeholder="搜索标题、摘要、分类..." />
+        <select class="control" id="section-select"></select>
+        <select class="control" id="category-select"></select>
+        <select class="control" id="sort-select">
+          <option value="score">按评分排序</option>
+          <option value="priority">按优先级排序</option>
+          <option value="source">按来源排序</option>
+        </select>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="rail">
+        <div class="metric-grid">
+          <div class="metric"><b id="metric-items">0</b><span>报告条目</span></div>
+          <div class="metric"><b id="metric-categories">0</b><span>分类数量</span></div>
+          <div class="metric"><b id="metric-high">0</b><span>高优先级</span></div>
+          <div class="metric"><b id="metric-avg">0.0</b><span>平均评分</span></div>
+        </div>
+
+        <div class="section-label">两条主线</div>
+        <div class="category-list" id="section-list"></div>
+
+        <div class="section-label">细分标签</div>
+        <div class="category-list" id="category-list"></div>
+
+        <div class="section-label">主力来源</div>
+        <ul class="source-list" id="source-list"></ul>
+      </aside>
+
+      <section class="feed">
+        <div class="feed-header">
+          <h2 id="feed-title">今日情报</h2>
+          <span class="result-count" id="result-count"></span>
+        </div>
+        <div class="items" id="items"></div>
+      </section>
+
+      <aside class="detail" id="detail"></aside>
+    </main>
+  </div>
+
+  <script id="dashboard-data" type="application/json">{"report_date": "2026-06-22", "generated_at": "2026-06-22T00:18:20Z", "items": [{"id": "287fd01ed7184259abdeb5f19a5bea8a34e68b49911acdbd76b166f84196439d", "source": "Reddit algotrading", "source_type": "forum", "title": "My 7 news-sentiment strategies are all losing to a plain XBI benchmark. Here is the methodology, tell me what is broken.", "url": "https://www.reddit.com/r/algotrading/comments/1ublsph/my_7_newssentiment_strategies_are_all_losing_to_a/", "authors": ["/u/Metathetical_Chemist"], "published_at": "2026-06-21", "collected_at": "2026-06-22T00:14:11Z", "raw_text": "I have been running a paper-trading experiment for about a month and it is getting beaten by a dumb benchmark, so I want to crowdsource what is wrong with it. The setup. Universe is ~350 biotech names. News is pulled per-ticker from a fundamentals API, then each day an LLM (DeepSeek/Gemini, temperature 0 for reproducibility) scores each company's latest news as a sentiment score 0 to 10 split into three sub-scores: Financial, Technological, Regulatory. From those scores I run 7 long-only paper books, each starting at $100k: Composite (trades the average score) Financial / Technological / Regulatory (trade the matching sub-score) Market Divergence (top 20 by score, equal weight) US Only / EU Only (composite, region filtered) Shared rules: Entry: score >= 7.0, skip if the name already moved more than 1.5% intraday (do not chase), sentiment must be under 72h old. Sizing by conviction: 7.0 -> $1k, 7.5 -> $2k, 8.5 -> $4k. Exits: +20% take profit, -7% hard stop, -8% trailing stop, 14 day time stop if not up at least 1%, and exit if the score falls below 6 (broken thesis). Benchmark: XBI total return. Result after ~4 weeks: every strategy is flat to negative (roughly +0.9% to -3.3%) while XBI is up around 6%. The \"smartest\" books (Composite and Market Divergence) are the worst. The composite runs ~60 to 65 concurrent positions. What I think is going wrong (confirm or correct me): Long-only sentiment chasing in a sector that just ripped means I am making 60+ small bets that each have to beat beta, instead of just owning the beta. Entering at score >= 7 is probably buying after the good news is already priced in. The -7% hard stop plus 14 day time stop looks like death by whipsaw in a high-vol sector while the index just compounds. Public news sentiment may simply not be alpha. Questions: Is LLM news-sentiment salvageable as a signal, or priced-in by construction? Anyone gotten edge from rate-of-change rather than level, or used it as a short signal? Would you make this benchmark-relative (long top decile, short bottom decile vs XBI) instead of long-only? Better exit logic than fixed stops for something this volatile? Genuinely here for the criticism. If anyone wants to dig into the data together, say so in the comments and I will follow up. submitted by /u/Metathetical_Chemist [link] [comments]", "abstract": "I have been running a paper-trading experiment for about a month and it is getting beaten by a dumb benchmark, so I want to crowdsource what is wrong with it. The setup. Universe is ~350 biotech names. News is pulled per-ticker from a fundamentals API, then each day an LLM (DeepSeek/Gemini, temperature 0 for reproducibility) scores each company's latest news as a sentiment score 0 to 10 split into three sub-scores: Financial, Technological, Regulatory. From those scores I run 7 long-only paper books, each starting at $100k: Composite (trades the average score) Financial / Technological / Regulatory (trade the matching sub-score) Market Divergence (top 20 by score, equal weight) US Only / EU Only (composite, region filtered) Shared rules: Entry: score >= 7.0, skip if the name already moved more than 1.5% intraday (do not chase), sentiment must be under 72h old. Sizing by conviction: 7.0 -> $1k, 7.5 -> $2k, 8.5 -> $4k. Exits: +20% take profit, -7% hard stop, -8% trailing stop, 14 day time stop if not up at least 1%, and exit if the score falls below 6 (broken thesis). Benchmark: XBI total return. Result after ~4 weeks: every strategy is flat to negative (roughly +0.9% to -3.3%) while XBI is up around 6%. The \"smartest\" books (Composite and Market Divergence) are the worst. The composite runs ~60 to 65 concurrent positions. What I think is going wrong (confirm or correct me): Long-only sentiment chasing in a sector that just ripped means I am making 60+ small bets that each have to beat beta, instead of just owning the beta. Entering at score >= 7 is probably buying after the good news is already priced in. The -7% hard stop plus 14 day time stop looks like death by whipsaw in a high-vol sector while the index just compounds. Public news sentiment may simply not be alpha. Questions: Is LLM news-sentiment salvageable as a signal, or priced-in by construction? Anyone gotten edge from rate-of-change rather than level, or used it as a short signal? Would you make this benchmark-relative (long top decile, short bottom decile vs XBI) instead of long-only? Better exit logic than fixed stops for something this volatile? Genuinely here for the criticism. If anyone wants to dig into the data together, say so in the comments and I will follow up. submitted by /u/Metathetical_Chemist [link] [comments]", "content_hash": "9dbe77002d14029abd54d63ef10b5f57f1acccae6c6b96c6f5c7ff32c9e08e5d", "category": "Alpha / Factor Research", "tags": ["alpha", "llm", "signal"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "7个LLM新闻情绪策略在生物科技板块跑输XBI基准，社区分析认为信号已定价、止损过窄、多头追涨是主因", "technical_summary": "帖子作者在Reddit r/algotrading分享一个纸交易实验：使用LLM对生物科技股每日新闻生成三个子维度分数（财务、技术、监管），然后基于分数≥7入场，按分数分档计算头寸，设置+20%止盈、-7%硬止损、-8%移动止损、14天时间止损、跌破6分退出。7个策略（综合、子维度、市场分歧、地域过滤）运行约4周，全部表现不佳（-3.3%~+0.9%），而同期基准XBI涨约6%。社区主要观点：（1）公开新闻情绪在生物科技这种信息传播极快的板块可能已提前反映在价格中，入场时已是定价后；（2）高波动板块用固定硬止损+时间止损导致频繁被震荡出局，而指数持续上涨；（3）多头追涨在板块刚大涨后做多，每个小头寸都需要战胜市场贝塔；（4）LLM情绪信号可能本身没有alpha，需要改用情绪变化率（delta）或配合空头。", "key_points": ["社区核心共识：公开新闻情绪在生物科技等高波动板块是滞后信号，入场时利好已price-in；7个策略全输给XBI说明纯做多+止损在高beta环境下效果极差。", "具体建议：改做多/做空对比组合（long top decile, short bottom decile）而非纯做多；使用情绪变化率（rate-of-change）作为信号；替换固定止损为波动率自适应止损或取消止损，用对冲贝塔代替。", "争议与风险：公开新闻是否真的无alpha？实验仅4周，样本量小，可能只是运气不好；且全用LLM打分可能忽略新闻情感中细微的多空区别，需用更多回测验证。"], "quant_relevance": "因子/alpha信号（新闻情绪有效性检验）、执行/交易成本（止损逻辑对收益的影响）", "possible_use_case": "可作为新闻情绪策略的“坑”案例，用于教学或检查自身类似策略时重点检查入场时机（是否滞后）、止损逻辑是否与波动率匹配，以及考虑使用多空组合。", "limitations": "社区讨论，缺乏严格的多品种多周期回测；仅4周数据，可能存在过拟合或偶然；未控制交易成本、滑点（纸交易）。需独立验证后才能用于实际策略改进。", "read_priority": "高", "key_figures_md": "", "relevance_score": 6.8, "novelty_score": 9.78, "academic_score": 5.5, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 6.571, "display_title": "阿尔法、大模型、监管实践讨论", "tldr": "7个LLM新闻情绪策略在生物科技板块跑输XBI基准，社区分析认为信号已定价、止损过窄、多头追涨是主因", "core_value": "对你的量化工作帮助：把它当作阿尔法、大模型、监管案例，用来补充异常交易监控、市场操纵风险、大宗商品执行和合规审计的场景库。", "key_points_list": ["社区核心共识：公开新闻情绪在生物科技等高波动板块是滞后信号，入场时利好已price-in；7个策略全输给XBI说明纯做多+止损在高beta环境下效果极差。", "具体建议：改做多/做空对比组合（long top decile, short bottom decile）而非纯做多；使用情绪变化率（rate-of-change）作为信号；替换固定止损为波动率自适应止损或取消止损，用对冲贝塔代替。", "争议与风险：公开新闻是否真的无阿尔法？实验仅4周，样本量小，可能只是运气不好；且全用LLM打分可能忽略新闻情感中细微的多空区别，需用更多回测验证。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1ublsph/my_7_newssentiment_strategies_are_all_losing_to_a/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "论坛"}, {"id": "004fcedae088c113a83baaf91a607ffe5f78581b4cbc66acdc2a275c40b94999", "source": "Reddit algotrading", "source_type": "forum", "title": "Like a miracle!", "url": "https://www.reddit.com/r/algotrading/comments/1ubr9qd/like_a_miracle/", "authors": ["/u/Kindly_Preference_54"], "published_at": "2026-06-21", "collected_at": "2026-06-22T00:14:11Z", "raw_text": "Hey everyone, Had to share this with you because I am insanely excited! I had 3 old indicators that I coded several years ago and I wanted to include them in my EA, but I lost the code (.mq5). I only have the .ex5 files. The indicators are not simple ones. They are custom-made and I don't even remember their exact action. I have never used/tested them as part of an EA. ChatGPT 5.5 (High) has reverse-engineered them for me and the results perfectly match! It's crazy how capable this LLM is. The \"Instant\" couldn't do it, but the \"high\" is another world. I usually code with Claude, but this time I decided to give GPT a chance. Now I don't even know whether Claude Opus 4.8 can do this task. It probably can. The last time I tried it was Claude Sonnet 3.7 and it couldn't do it. submitted by /u/Kindly_Preference_54 [link] [comments]", "abstract": "Hey everyone, Had to share this with you because I am insanely excited! I had 3 old indicators that I coded several years ago and I wanted to include them in my EA, but I lost the code (.mq5). I only have the .ex5 files. The indicators are not simple ones. They are custom-made and I don't even remember their exact action. I have never used/tested them as part of an EA. ChatGPT 5.5 (High) has reverse-engineered them for me and the results perfectly match! It's crazy how capable this LLM is. The \"Instant\" couldn't do it, but the \"high\" is another world. I usually code with Claude, but this time I decided to give GPT a chance. Now I don't even know whether Claude Opus 4.8 can do this task. It probably can. The last time I tried it was Claude Sonnet 3.7 and it couldn't do it. submitted by /u/Kindly_Preference_54 [link] [comments]", "content_hash": "267766aa8747df450dfdce21326d3f1477a75322a371f6a66a4eb66c62d8d3aa", "category": "LLM / Agents for Quant", "tags": ["llm"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "用ChatGPT High模式逆向工程量化指标，完美恢复丢失代码", "technical_summary": "社区用户分享经验：用ChatGPT 5.5 High模式成功逆向工程了3个多年前编写的自定义MQ5指标（仅剩ex5编译文件）。这些指标是定制化的，用户甚至不记得具体逻辑。此前尝试过ChatGPT Instant模式和Claude Sonnet 3.7均失败。这次用High模式得到完美匹配的结果，证明了高级LLM在代码逆向工程中的强大能力。社区认为这对量化开发者恢复遗失的指标代码非常有用，但需要注意仅适用于非混淆的ex5文件，且需验证结果。", "key_points": ["社区核心共识：ChatGPT High模式（高级推理）可以逆向工程复杂的量化指标代码，成功恢复遗失的MQ5源码。", "具体建议：当需要恢复旧指标代码时，优先使用ChatGPT 5.5 High模式或同等高级AI模型；对于简单文件可能Instant模式不够，需用High。", "风险与局限：仅适用于非混淆、非加密的ex5文件；逆向工程结果需要仔细验证逻辑正确性；模型可能误解某些自定义函数；存在代码版权和法律风险。"], "quant_relevance": "研究工具/工作流提效——LLM可帮助量化研究员恢复丢失的指标代码，加速策略开发。", "possible_use_case": "量化研究员或交易者可以使用ChatGPT High模式逆向工程已编译的指标文件（如ex5），从而恢复源码进行修改或集成到自动化交易系统。", "limitations": "这是社区单一用户的经验分享，需用更多案例验证；ex5文件如果经过混淆处理可能无法逆向；结果依赖模型能力，不同模型版本差异大；逆向工程可能违反软件许可协议。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.2, "novelty_score": 9.78, "academic_score": 5.046, "discussion_score": 3.0, "actionable_score": 7.5, "final_score": 5.923, "display_title": "大模型实践讨论", "tldr": "用ChatGPT High模式逆向工程量化指标，完美恢复丢失代码", "core_value": "对你的量化工作帮助：把它当作大模型的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["社区核心共识：ChatGPT High模式（高级推理）可以逆向工程复杂的量化指标代码，成功恢复遗失的MQ5源码。", "具体建议：当需要恢复旧指标代码时，优先使用ChatGPT 5.5 High模式或同等高级AI模型；对于简单文件可能Instant模式不够，需用High。", "风险与局限：仅适用于非混淆、非加密的ex5文件；逆向工程结果需要仔细验证逻辑正确性；模型可能误解某些自定义函数；存在代码版权和法律风险。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1ubr9qd/like_a_miracle/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "量化大模型 / 智能体", "priority_label": "高", "source_type_label": "论坛"}, {"id": "9a7e28b1f521c17ac04e71ea1d02660665437dca8e069bc86c4ab3e805f31308", "source": "Reddit algotrading", "source_type": "forum", "title": "It is a funny world", "url": "https://www.reddit.com/r/algotrading/comments/1uc2l97/it_is_a_funny_world/", "authors": ["/u/Renegade_Trader"], "published_at": "2026-06-21", "collected_at": "2026-06-22T00:14:11Z", "raw_text": "I had all those ideas - HMM classification of trends, SVM based order flow analysis, NN supported decision making. Never really manged to implement them due to time constraints. Now with AI it is basically a 3 line prompt: Write heuristic based order flow analysis that uses SVM for the final classification and an AI based superivision. Connect via the TWS API to my depot, read L2 strreaming data from IQfeed. Voila - there you go. Done in 20 min. Not kidding you, it is all working fine. Turns out the real problem never was the implementation, but the ideas. They are not making any money. 🥳 submitted by /u/Renegade_Trader [link] [comments]", "abstract": "I had all those ideas - HMM classification of trends, SVM based order flow analysis, NN supported decision making. Never really manged to implement them due to time constraints. Now with AI it is basically a 3 line prompt: Write heuristic based order flow analysis that uses SVM for the final classification and an AI based superivision. Connect via the TWS API to my depot, read L2 strreaming data from IQfeed. Voila - there you go. Done in 20 min. Not kidding you, it is all working fine. Turns out the real problem never was the implementation, but the ideas. They are not making any money. 🥳 submitted by /u/Renegade_Trader [link] [comments]", "content_hash": "10eef55d5222f0e5a274d71565026234c832f2a546b99e7b18c174cd50146724", "category": "LLM / Agents for Quant", "tags": ["prompt"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "用AI prompt 3行实现L2订单流SVM/HMM策略，20分钟搞定但策略不赚钱", "technical_summary": "交易员用AI（如ChatGPT）通过自然语言提示，20分钟内将HMM趋势分类、SVM订单流分析、NN决策支持等复杂想法整合成可以连接TWS和IQfeed实时L2数据的可运行系统。以前因时间限制无法实现，现在轻松做到，但发现策略实际并不赚钱。社区主流观点是：技术进步暴露了真正稀缺的是盈利策略想法，而非实现能力。", "key_points": ["社区核心共识：AI大幅降低量化策略实现门槛，使交易员从编码瓶颈中解放，但策略盈利能力仍是核心问题。", "具体建议：利用AI快速原型化策略想法，用低成本和短时间验证思想，避免花大量时间手动编码。", "局限性：帖子未提供任何收益数据或回测证据，仅代表个人经验；AI生成的代码可能存在错误或逻辑缺陷。"], "quant_relevance": "研究工具/工作流提效：AI大幅缩短策略原型开发时间，但需更多精力用于想法验证和回测。", "possible_use_case": "可用此工作流快速搭建策略原型（如L2订单流分析系统），在模拟环境中测试想法，减少编码投入。", "limitations": "这是社区讨论，缺乏量化证据和回测结果；AI生成的代码可靠性需人工复核；策略不赚钱的根本原因可能是策略本身，而非实现方式。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.2, "novelty_score": 9.78, "academic_score": 4.806, "discussion_score": 3.0, "actionable_score": 7.5, "final_score": 5.887, "display_title": "人工智能实践讨论", "tldr": "用AI prompt 3行实现L2订单流SVM/HMM策略，20分钟搞定但策略不赚钱", "core_value": "对你的量化工作帮助：把它当作人工智能的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["社区核心共识：AI大幅降低量化策略实现门槛，使交易员从编码瓶颈中解放，但策略盈利能力仍是核心问题。", "具体建议：利用AI快速原型化策略想法，用低成本和短时间验证思想，避免花大量时间手动编码。", "局限性：帖子未提供任何收益数据或回测证据，仅代表个人经验；AI生成的代码可能存在错误或逻辑缺陷。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1uc2l97/it_is_a_funny_world/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "量化大模型 / 智能体", "priority_label": "高", "source_type_label": "论坛"}, {"id": "0e17a778c28894bfa28caf1f2cd0a598318df8beee6a53559820a6435bee6939", "source": "CoinDesk", "source_type": "crypto_news", "title": "Bitcoin holds near $64,000 as a renewed Hormuz threat clouds US-Iran ceasefire talks", "url": "https://www.coindesk.com/markets/2026/06/21/bitcoin-holds-near-usd64-000-as-a-renewed-hormuz-threat-clouds-us-iran-ceasefire-talks", "authors": [], "published_at": "2026-06-21", "collected_at": "2026-06-22T00:14:12Z", "raw_text": "Crypto firmed over the weekend after Friday's sell-off, with bitcoin recovering toward $64,000. Permanent ceasefire talks open in Switzerland, but Iran's order to close the Strait of Hormuz again revives the risk the deal was meant to settle.", "abstract": "Crypto firmed over the weekend after Friday's sell-off, with bitcoin recovering toward $64,000. Permanent ceasefire talks open in Switzerland, but Iran's order to close the Strait of Hormuz again revives the risk the deal was meant to settle.", "content_hash": "85ea5f4b6f025d86eb9197e49d27de0ab78ecdc9a327b3eeb437270442336f23", "category": "Crypto Quant", "tags": ["bitcoin", "crypto", "risk"], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "比特币在64,000美元附近震荡，霍尔木兹海峡威胁重启引发避险情绪", "technical_summary": "1. 比特币价格在周五抛售后反弹至64,000美元附近，周末持稳。2. 美国-伊朗停火谈判在瑞士开启，但伊朗再次下令关闭霍尔木兹海峡，增加了地缘政治不确定性。3. 地缘风险事件推动市场情绪转向避险，可能强化比特币作为避险资产的需求，进而影响短期价格波动。", "key_points": ["比特币价格周末回升至64,000美元附近，较周五低点反弹约2-3%。", "地缘政治风险升温（霍尔木兹海峡威胁）可能短期内支撑比特币避险需求，量化交易者可关注波动率上升带来的套利机会。", "停火谈判结果不确定，若谈判破裂或海峡封锁持续，可能引发更大幅度的避险买盘或市场恐慌，需警惕流动性风险。"], "quant_relevance": "风险建模", "possible_use_case": "可作为BTC日内波动率信号参考，例如在霍尔木兹威胁升级时做多波动率或使用期权对冲尾部风险。", "limitations": "这是新闻事件，缺乏量化证据；价格反应可能已部分定价，需结合链上数据和衍生品市场实时监控；信息来源为单一媒体，需交叉验证。", "read_priority": "高", "key_figures_md": "", "relevance_score": 6.1, "novelty_score": 9.78, "academic_score": 5.803, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.856, "display_title": "加密资产、风险加密市场新闻情报", "tldr": "比特币在64,000美元附近震荡，霍尔木兹海峡威胁重启引发避险情绪", "core_value": "对你的量化工作帮助：围绕加密资产、风险补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["比特币价格周末回升至64,000美元附近，较周五低点反弹约2-3%。", "地缘政治风险升温（霍尔木兹海峡威胁）可能短期内支撑比特币避险需求，量化交易者可关注波动率上升带来的套利机会。", "停火谈判结果不确定，若谈判破裂或海峡封锁持续，可能引发更大幅度的避险买盘或市场恐慌，需警惕流动性风险。"], "reference_url": "https://www.coindesk.com/markets/2026/06/21/bitcoin-holds-near-usd64-000-as-a-renewed-hormuz-threat-clouds-us-iran-ceasefire-talks", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "d6bc662367840ac7056fe8b3bf9af3134116986f3ee76d9f6059c9e4fb09915b", "source": "CoinDesk", "source_type": "crypto_news", "title": "Are perps swaps? A quick look at that CME suit: State of Crypto", "url": "https://www.coindesk.com/policy/2026/06/21/are-perps-swaps-a-quick-look-at-that-cme-suit-state-of-crypto", "authors": [], "published_at": "2026-06-21", "collected_at": "2026-06-22T00:14:12Z", "raw_text": "CME Group sued the CFTC on Thursday, alleging that the agency was wrong in how it approved Kalshi's first U.S. perpetual futures product.", "abstract": "CME Group sued the CFTC on Thursday, alleging that the agency was wrong in how it approved Kalshi's first U.S. perpetual futures product.", "content_hash": "6d44695224b796f7130972e0978529bd33a79efaa340439a1d89b2dbbe5c8f52", "category": "Crypto Quant", "tags": ["crypto", "perpetual"], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "CME 起诉 CFTC 质疑 Kalshi 永续期货产品批准，加密衍生品监管格局面临变数", "technical_summary": "CME 于 2026 年 6 月 21 日起诉 CFTC，认为 CFTC 在批准 Kalshi 的首个美国永续期货产品时程序或法律依据有误。此诉讼结果可能决定永续合约是否属于「掉期」从而受更严格监管，或视为「期货」从而允许在传统交易所交易。若永续合约被重新定性，当前大量加密永续合约的交易平台（如 Binance、Bybit）可能面临合规挑战，或倒逼产品迁移至受监管框架，进而改变流动性分布、保证金规则和定价机制。", "key_points": ["CME 起诉 CFTC，指控其错误批准 Kalshi 首个美国永续期货产品，核心争议点在于永续合约的法律定性。", "若诉讼结果导致永续合约被重新归类为掉期，加密量化多头寸的交易所合约可能面临强制平仓或流动性迁移，做市商需提前调整跨交易所套利策略。", "诉讼进程不确定，结果可能需要数月甚至数年，期间监管不确定性可能抑制新资金入场，且信息来源仅限 CoinDesk 单方面报道，需关注 CFTC 回应和法院文件。"], "quant_relevance": "监管变化直接改变加密衍生品交易品种的可获得性与合规成本，影响量化策略的标的池和执行环境。", "possible_use_case": "作为加密衍生品市场结构变化的信号，量化交易者可降低永续合约敞口，转向现货或期货对冲，或在诉讼进展明朗后根据结果调整跨品种价差策略。", "limitations": "诉讼结果高度不确定，仅根据单篇报道分析；缺乏 CFTC 和 Kalshi 的官方回应；市场实际反应可能滞后或过度反应，需结合后续信息更新。", "read_priority": "高", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.78, "academic_score": 5.671, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.627, "display_title": "加密资产、监管调查加密市场新闻情报", "tldr": "CME 起诉 CFTC 质疑 Kalshi 永续期货产品批准，加密衍生品监管格局面临变数", "core_value": "对你的量化工作帮助：把它当作加密资产、监管调查案例，用来补充异常交易监控、市场操纵风险、大宗商品执行和合规审计的场景库。", "key_points_list": ["CME 起诉 CFTC，指控其错误批准 Kalshi 首个美国永续期货产品，核心争议点在于永续合约的法律定性。", "若诉讼结果导致永续合约被重新归类为掉期，加密量化多头寸的交易所合约可能面临强制平仓或流动性迁移，做市商需提前调整跨交易所套利策略。", "诉讼进程不确定，结果可能需要数月甚至数年，期间监管不确定性可能抑制新资金入场，且信息来源仅限 CoinDesk 单方面报道，需关注 CFTC 回应和法院文件。"], "reference_url": "https://www.coindesk.com/policy/2026/06/21/are-perps-swaps-a-quick-look-at-that-cme-suit-state-of-crypto", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "d64a13980ae982c32268f055cbe656f12a559020e66f83cc6a12f7c23ed5887d", "source": "CoinDesk", "source_type": "crypto_news", "title": "Ethereum's biggest 'sandwich' bot drained of $7.5 million in ironic exploit", "url": "https://www.coindesk.com/tech/2026/06/21/ethereum-s-biggest-sandwich-bot-drained-of-usd7-5-million-in-ironic-exploit", "authors": [], "published_at": "2026-06-21", "collected_at": "2026-06-22T00:14:12Z", "raw_text": "Blockaid said an attacker tricked Jaredfromsubway.eth into approving fake trading routes, then used those approvals to drain WETH, USDC and USDT.", "abstract": "Blockaid said an attacker tricked Jaredfromsubway.eth into approving fake trading routes, then used those approvals to drain WETH, USDC and USDT.", "content_hash": "5b761a583d222dfdd511211c0db0bd92625c53a1457168bdeb3026107088b6d5", "category": "Crypto Quant", "tags": ["ethereum"], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "以太坊最大MEV三明治机器人遭反向利用，被套走750万美元WETH/USDC/USDT", "technical_summary": "以太坊上最大的三明治攻击机器人（Jaredfromsubway.eth）被攻击者利用许可漏洞，诱导机器人批准虚假交易路由，随后通过已获授权提取WETH、USDC和USDT，总计750万美元。安全公司Blockaid披露了该事件。这暴露了即使是成熟的MEV机器人也可能因授权管理不严而被反向攻击。", "key_points": ["以太坊最大三明治机器人Jaredfromsubway.eth被攻击，损失750万美元资产（WETH、USDC、USDT）。", "量化交易者应加强自动化策略的代币授权审批和撤销机制，防止类似钓鱼授权。", "目前仅Blockaid单方面报告，攻击技术细节和资金流向尚未完全公开，机器人所有者可能通过链上溯源追回部分资产。"], "quant_relevance": "直接冲击MEV策略的安全性，量化交易者需重新评估自动化机器人的授权管理风险。", "possible_use_case": "作为策略安全审计的案例：在部署自动交易机器人时，应限制单笔授权额度、设置白名单路由，并实时监控异常授权交易。", "limitations": "新闻来源单一，缺乏独立验证；损失数字可能因市场价格波动变化；未提供攻击的具体代码细节或漏洞函数。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.78, "academic_score": 5.681, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.478, "display_title": "加密资产量化加密市场新闻情报", "tldr": "以太坊最大MEV三明治机器人遭反向利用，被套走750万美元WETH/USDC/USDT", "core_value": "对你的量化工作帮助：围绕加密资产量化补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["以太坊最大三明治机器人Jaredfromsubway.eth被攻击，损失750万美元资产（WETH、USDC、USDT）。", "量化交易者应加强自动化策略的代币授权审批和撤销机制，防止类似钓鱼授权。", "目前仅Blockaid单方面报告，攻击技术细节和资金流向尚未完全公开，机器人所有者可能通过链上溯源追回部分资产。"], "reference_url": "https://www.coindesk.com/tech/2026/06/21/ethereum-s-biggest-sandwich-bot-drained-of-usd7-5-million-in-ironic-exploit", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "7b7373726fad4c8c7853a3b4a869fcbeb9dcc3f7faed45077f63b0f729deb74b", "source": "Reddit algotrading", "source_type": "forum", "title": "I'll generate a trade analysis report for anyone who sends their trade log. Let's start a thread to compare strategy results", "url": "https://www.reddit.com/r/algotrading/comments/1ubzrie/ill_generate_a_trade_analysis_report_for_anyone/", "authors": ["/u/JayCreator7"], "published_at": "2026-06-21", "collected_at": "2026-06-22T00:14:11Z", "raw_text": "Send me a csv file of your trade journal/log in the below format and I'll generate a trade analysis report for you with the below information. Required format: date,r 2024-01-03,-1 2024-01-05,1.5 https://preview.redd.it/lsgz712pzo8h1.png?width=647&format=png&auto=webp&s=d01a5cb97719b1890de73a38a6275749d6646ad7 https://preview.redd.it/d8dfd4qpzo8h1.png?width=630&format=png&auto=webp&s=14c29ccf49b36eaae7c17d36a85879ef252e8e90 https://preview.redd.it/egz1mm9qzo8h1.png?width=640&format=png&auto=webp&s=70eb18293754b5987b8a477adad3d49e1005d393 https://preview.redd.it/1030kvvqzo8h1.png?width=640&format=png&auto=webp&s=4dad2133f6712a4b7bd78790d3012f3ce7debedd submitted by /u/JayCreator7 [link] [comments]", "abstract": "Send me a csv file of your trade journal/log in the below format and I'll generate a trade analysis report for you with the below information. Required format: date,r 2024-01-03,-1 2024-01-05,1.5 https://preview.redd.it/lsgz712pzo8h1.png?width=647&format=png&auto=webp&s=d01a5cb97719b1890de73a38a6275749d6646ad7 https://preview.redd.it/d8dfd4qpzo8h1.png?width=630&format=png&auto=webp&s=14c29ccf49b36eaae7c17d36a85879ef252e8e90 https://preview.redd.it/egz1mm9qzo8h1.png?width=640&format=png&auto=webp&s=70eb18293754b5987b8a477adad3d49e1005d393 https://preview.redd.it/1030kvvqzo8h1.png?width=640&format=png&auto=webp&s=4dad2133f6712a4b7bd78790d3012f3ce7debedd submitted by /u/JayCreator7 [link] [comments]", "content_hash": "d0927d4b9c4741e8d42d53004c8873c69edc39b828a029043960bd5cbf7ad0c3", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "Reddit用户提供免费交易日志分析服务，社区可上传CSV比较策略结果", "technical_summary": "一位Reddit用户个人提供免费交易分析服务，要求交易者按指定格式（日期，单笔收益率）提交CSV文件，然后生成包含多项绩效指标的报告。帖子附带了报告样例图片（未直接展示）。社区主流观点认为这是快速评估策略优劣、参与社区比较的实用机会。服务门槛低，无需安装软件，仅需一个CSV文件。但报告的具体指标范围和计算方式依赖服务提供者，可能存在不一致。", "key_points": ["用户提供免费交易日志分析服务，仅需日期和收益率CSV即可获得包括夏普、回撤、胜率等指标的报告，降低个人分析成本。", "量化交易者可利用此服务快速诊断自己的策略，并参与社区结果比较，了解自身策略在同类中的水平。", "风险：提交完整交易日志存在隐私泄露风险；报告质量和计算标准未公开验证，仅适合作为初步参考，不应替代专业评估。"], "quant_relevance": "研究工具/工作流提效：提供低门槛的交易绩效诊断入口，可快速获得夏普、回撤等指标，节省自建分析脚本的时间。", "possible_use_case": "在策略回测或实盘后，导出CSV提交至该服务，获取夏普比率、最大回撤、胜率等指标，用于快速评估和与其他交易者结果进行横向比较。", "limitations": "这是社区个人提供的免费服务，报告质量和指标计算细节未经严格验证；提交原始交易日志可能泄露策略和持仓细节；分析缺乏样本外检验，仅反映历史表现。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 4.881, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 5.338, "display_title": "阿尔法 / 因子研究实践讨论", "tldr": "Reddit用户提供免费交易日志分析服务，社区可上传CSV比较策略结果", "core_value": "对你的量化工作帮助：把它当作阿尔法 / 因子研究的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["用户提供免费交易日志分析服务，仅需日期和收益率CSV即可获得包括夏普、回撤、胜率等指标的报告，降低个人分析成本。", "量化交易者可利用此服务快速诊断自己的策略，并参与社区结果比较，了解自身策略在同类中的水平。", "风险：提交完整交易日志存在隐私泄露风险；报告质量和计算标准未公开验证，仅适合作为初步参考，不应替代专业评估。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1ubzrie/ill_generate_a_trade_analysis_report_for_anyone/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "论坛"}, {"id": "68fd95efb87c506c875dc19bc944ea3a557e12cc796aee48f9483884b100fcdb", "source": "Reddit algotrading", "source_type": "forum", "title": "TVAlertsManager Is Back — TradingView Alert Manager Relaunch", "url": "https://www.reddit.com/r/algotrading/comments/1uby4pt/tvalertsmanager_is_back_tradingview_alert_manager/", "authors": ["/u/BeingCreepy6061"], "published_at": "2026-06-21", "collected_at": "2026-06-22T00:14:11Z", "raw_text": "TVAlertsManager has officially relaunched with version v2.42 . This is a handy tool, used to automate creation of TradingView alerts. What has been improved: Save and load alerts now work properly Alert handling is stable again TradingView alert workflows are more reliable Extension behavior has been cleaned up Past bugs that caused users to stop using it have been addressed As part of the relaunch: Past users get 3 free months New users get 1 free month Regular pricing is now $19.97/month after the promo period TVAlertsManager is built for traders who use TradingView alerts and want better control over saving, loading, organizing, and managing alert setups. The goal with this relaunch is simple: make the tool stable, useful, and worth relying on again. submitted by /u/BeingCreepy6061 [link] [comments]", "abstract": "TVAlertsManager has officially relaunched with version v2.42 . This is a handy tool, used to automate creation of TradingView alerts. What has been improved: Save and load alerts now work properly Alert handling is stable again TradingView alert workflows are more reliable Extension behavior has been cleaned up Past bugs that caused users to stop using it have been addressed As part of the relaunch: Past users get 3 free months New users get 1 free month Regular pricing is now $19.97/month after the promo period TVAlertsManager is built for traders who use TradingView alerts and want better control over saving, loading, organizing, and managing alert setups. The goal with this relaunch is simple: make the tool stable, useful, and worth relying on again. submitted by /u/BeingCreepy6061 [link] [comments]", "content_hash": "b669a36c7ef6ffc18695f649edda90d5652a681333175e916c6b9230eb2d1b4d", "category": "Options / Volatility", "tags": ["pricing"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "TVAlertsManager v2.42 重新发布：改进警报保存/加载稳定性，支持批量管理TradingView策略警报", "technical_summary": "TVAlertsManager是一个浏览器扩展，专为使用TradingView警报的量化交易者设计，用于自动化创建、保存、加载、组织和批量管理警报设置。v2.42版本修复了早期导致用户停止使用的关键bug（保存/加载无效、警报处理不稳定、扩展行为混乱），使工作流更可靠。提供付费订阅，老用户3个月免费，新用户1个月免费，之后每月19.97美元。社区讨论焦点是该工具回归后的稳定性和实用性。", "key_points": ["TVAlertsManager v2.42 修复了保存/加载和警报处理的关键bug，使TradingView警报管理更稳定可靠。", "可自动化批量创建/组织TradingView警报，适合多策略、多品种量化交易者，新用户有1个月免费试用。", "依赖第三方浏览器扩展，可能存在TradingView API变动或隐私风险，需在实际工作流中验证稳定性后再长期订阅。"], "quant_relevance": "研究工具/工作流提效：自动化管理TradingView警报，减少手动维护时间，提高策略部署效率。", "possible_use_case": "可用来自动化注册和管理多个TradingView策略的入场/出场警报，避免手动逐个创建，尤其适合管理10个以上策略的量化团队或个人。", "limitations": "这是社区讨论，非官方评测；工具稳定性和长期服务质量需用户自行验证；依赖TradingView平台，若TV API或警报机制变更可能失效；定价19.97美元/月对轻型用户可能偏高。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.2, "novelty_score": 9.78, "academic_score": 5.016, "discussion_score": 3.0, "actionable_score": 4.5, "final_score": 5.318, "display_title": "定价实践讨论", "tldr": "TVAlertsManager v2.42 重新发布：改进警报保存/加载稳定性，支持批量管理TradingView策略警报", "core_value": "对你的量化工作帮助：把它当作定价的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["TVAlertsManager v2.42 修复了保存/加载和警报处理的关键bug，使TradingView警报管理更稳定可靠。", "可自动化批量创建/组织TradingView警报，适合多策略、多品种量化交易者，新用户有1个月免费试用。", "依赖第三方浏览器扩展，可能存在TradingView 接口变动或隐私风险，需在实际工作流中验证稳定性后再长期订阅。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1uby4pt/tvalertsmanager_is_back_tradingview_alert_manager/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "期权 / 波动率", "priority_label": "高", "source_type_label": "论坛"}, {"id": "6e18ead5f3be1010c1fe447405ff66e9117da44c8c28740a8a452bb1ccd88f47", "source": "The Block", "source_type": "crypto_news", "title": "Polymarket paid creators to stage fake winning bets on dummy sites: WSJ", "url": "https://www.theblock.co/post/405471/polymarket-paid-creators-to-stage-fake-winning-bets-on-dummy-sites-wsj?utm_source=rss&utm_medium=rss", "authors": [], "published_at": "2026-06-21", "collected_at": "2026-06-22T00:14:37Z", "raw_text": "The Journal reviewed more than 1,100 videos and found none of the roughly $1.9 million in bets shown in influencer-produced hype videos were real.", "abstract": "The Journal reviewed more than 1,100 videos and found none of the roughly $1.9 million in bets shown in influencer-produced hype videos were real.", "content_hash": "f14ab46949f422d1026ae64ec6cd46f5b8e51ec150ba22f10c2ca9854e8b76aa", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://www.theblock.co/rss.xml"}, "one_line_summary": "Polymarket被曝支付创作者制作价值190万美元的虚假中奖赌注视频", "technical_summary": "华尔街日报审查1100余个由Polymarket付费创作者制作的推广视频，发现其中展示的约190万美元赌注无一真实。这些视频旨在炒作平台赢家，但实际赌注并未发生。该事件可能引发监管审查，并削弱市场对Polymarket数据真实性的信任。", "key_points": ["WSJ审查1100+视频，发现Polymarket付费创作者的约190万美元虚假赌注视频全部为假，无一真实。", "对量化交易者而言，Polymarket的事件概率数据可能受营销污染，需引入数据质量校验或暂时规避该数据源。", "调查基于WSJ单方报道，Polymarket可能反驳；虚假视频对实际订单簿数据的直接影响尚不明确。"], "quant_relevance": "预测市场数据源可靠性受损，依赖Polymarket概率信号的量化策略可能面临模型偏差风险。", "possible_use_case": "量化交易者可暂时将Polymarket数据从信号池中移除，或增加交叉验证（如与Chainlink预言机数据比对）以降低风险。", "limitations": "信息来源为WSJ，可能存偏见；平台实际交易订单的真实性未受影响，但用户信任度恢复需时间。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 5.683, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.308, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "Polymarket被曝支付创作者制作价值190万美元的虚假中奖赌注视频", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["WSJ审查1100+视频，发现Polymarket付费创作者的约190万美元虚假赌注视频全部为假，无一真实。", "对量化交易者而言，Polymarket的事件概率数据可能受营销污染，需引入数据质量校验或暂时规避该数据源。", "调查基于WSJ单方报道，Polymarket可能反驳；虚假视频对实际订单簿数据的直接影响尚不明确。"], "reference_url": "https://www.theblock.co/post/405471/polymarket-paid-creators-to-stage-fake-winning-bets-on-dummy-sites-wsj?utm_source=rss&utm_medium=rss", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "5c4dedfa8296fe63c7e5e64f75e4f750557b4256ab690ef3b2baf3f31ea83077", "source": "The Block", "source_type": "crypto_news", "title": "Notorious ‘jaredfromsubway’ MEV bot drained for roughly $7.5 million in counter-MEV honeypot", "url": "https://www.theblock.co/post/405464/notorious-jaredfromsubway-mev-bot-drained-for-roughly-7-5-million-in-counter-mev-honeypot?utm_source=rss&utm_medium=rss", "authors": [], "published_at": "2026-06-21", "collected_at": "2026-06-22T00:14:37Z", "raw_text": "An X account using the bot's name claimed a $15 million loss and offered a $1 million bounty, but evidence shows it is a likely impersonator.", "abstract": "An X account using the bot's name claimed a $15 million loss and offered a $1 million bounty, but evidence shows it is a likely impersonator.", "content_hash": "7ef07858a0758bab7c21eded0e6432fbb2eca7d597070fd99540edeb9ac6b86b", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://www.theblock.co/rss.xml"}, "one_line_summary": "知名MEV机器人‘jaredfromsubway’被反MEV蜜罐盗取约750万美元，暴露链上套利策略风险", "technical_summary": "1. 事件：知名MEV机器人jaredfromsubway（以三明治攻击闻名）遭遇反MEV蜜罐，被提取约750万美元资产。2. 方法：攻击者部署伪装成有利可图的交易机会的蜜罐合约，诱使机器人执行预期外的操作，最终导致资金被反向提取。3. 核心结论：该事件显示即使是成熟的MEV机器人也可能在反制策略下遭受重大损失；另有一个冒充原账号的X账户声称损失1500万美元并提供100万美元悬赏，但链上证据表明该账户为模仿者，实际损失为约750万美元。", "key_points": ["核心事件：MEV机器人jaredfromsubway在反MEV蜜罐中被盗约750万美元，链上可查实。", "对量化交易者：直接警示链上套利策略需额外验证交易机会真实性，警惕蜜罐合约和模仿账号信息干扰。", "不确定性：冒充者声称损失1500万美元并悬赏，但证据存疑，实际损失和机器人运营者身份仍需确认。"], "quant_relevance": "对链上MEV套利策略的风险建模有直接影响，提示量化交易者需防范反MEV蜜罐、虚假信号及模仿账号带来的决策干扰。", "possible_use_case": "可作为链上套利策略的风险案例，在策略中增加对可疑合约的静态分析检查，以及交叉验证社交媒体声明的可信度。", "limitations": "信息来源仅基于链上数据和一家媒体（The Block），冒充者说法未完全核实，实际机器人运营收益和策略细节不公开，难以复现攻击条件。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 5.676, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.307, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "知名MEV机器人‘jaredfromsubway’被反MEV蜜罐盗取约750万美元，暴露链上套利策略风险", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["核心事件：MEV机器人jaredfromsubway在反MEV蜜罐中被盗约750万美元，链上可查实。", "对量化交易者：直接警示链上套利策略需额外验证交易机会真实性，警惕蜜罐合约和模仿账号信息干扰。", "不确定性：冒充者声称损失1500万美元并悬赏，但证据存疑，实际损失和机器人运营者身份仍需确认。"], "reference_url": "https://www.theblock.co/post/405464/notorious-jaredfromsubway-mev-bot-drained-for-roughly-7-5-million-in-counter-mev-honeypot?utm_source=rss&utm_medium=rss", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "加密市场新闻"}], "source_stats": {"Reddit algotrading": 5, "CoinDesk": 3, "The Block": 2}, "category_counts": {"Alpha / Factor Research": 4, "LLM / Agents for Quant": 2, "Crypto Quant": 3, "Options / Volatility": 1}, "section_counts": {"ai_quant_tools": 5, "daily_news": 5}, "sections": [{"key": "deep_learning_quant", "label": "深度学习量化未来", "description": "技术主线：深度学习、强化学习、Transformer、图神经网络、表征学习、订单簿预测、金融时间序列大模型等在量化里的应用。"}, {"key": "ai_quant_tools", "label": "AI 量化工具", "description": "工具主线：能提升量化研究效率的 AI 工具、代码仓库、研究自动化、智能体、回测/数据工程工具和可接入团队工作流的基础设施。"}, {"key": "daily_news", "label": "Crypto 市场每日 Top 5", "description": "加密市场新闻主线：来自 CoinDesk、CoinTelegraph、The Block、Decrypt、Blockworks 等主流媒体当日最重要的 Crypto 市场报道。"}], "category_labels": {"Alpha / Factor Research": "阿尔法 / 因子研究", "Statistical Arbitrage": "统计套利", "Portfolio Construction": "组合构建", "Risk Management": "风险管理", "Options / Volatility": "期权 / 波动率", "Market Microstructure": "市场微观结构", "Execution / Transaction Cost": "交易执行 / 交易成本", "Machine Learning for Finance": "金融机器学习", "LLM / Agents for Quant": "量化大模型 / 智能体", "Crypto Quant": "加密资产量化", "Data Engineering": "数据工程", "Backtesting / Research Tools": "回测 / 研究工具", "Industry / Career": "行业 / 职业 / 合规", "Unclassified": "未分类"}, "priority_labels": {"High": "高", "Medium": "中", "Low": "低", "高": "高", "中": "中", "低": "低"}, "source_type_labels": {"paper": "论文", "forum": "论坛", "github": "代码仓库", "blog": "博客", "news": "新闻", "social": "社交媒体", "zhihu": "知乎", "x": "X", "quantml": "QuantML", "crypto_news": "加密市场新闻"}, "report_config": {"max_items_per_category": 5, "max_total_items": 60, "executive_brief_items": 5}}</script>
+  <script>
+    const payload = JSON.parse(document.getElementById('dashboard-data').textContent);
+    const items = payload.items || [];
+    const categoryLabels = payload.category_labels || {};
+    const priorityLabels = payload.priority_labels || {};
+    const sourceTypeLabels = payload.source_type_labels || {};
+    const state = {
+      query: '',
+      section: 'All',
+      category: 'All',
+      sort: 'score',
+      activeId: items[0]?.id || null,
+    };
+
+    const priorityRank = { High: 3, Medium: 2, Low: 1, '高': 3, '中': 2, '低': 1 };
+    const $ = (id) => document.getElementById(id);
+
+    // --- Feedback ---
+    const _feedbackStore = JSON.parse(localStorage.getItem('quant-feedback') || '{}');
+    function getFeedback(id) { return _feedbackStore[id] || 0; }
+    function setFeedback(id, signal) {
+      if (_feedbackStore[id] === signal) { delete _feedbackStore[id]; signal = 0; }
+      else { _feedbackStore[id] = signal; }
+      localStorage.setItem('quant-feedback', JSON.stringify(_feedbackStore));
+      fetch('http://localhost:8080/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, signal }),
+      }).catch(() => {});
+    }
+
+    function init() {
+      $('report-date').textContent = payload.report_date + ' - 主力源：arXiv / 知乎 / QuantML / 大型论坛 - 生成时间 ' + payload.generated_at;
+      $('metric-items').textContent = items.length;
+      $('metric-categories').textContent = new Set(items.map((item) => item.category)).size;
+      $('metric-high').textContent = items.filter((item) => priorityLabel(item.read_priority) === '高').length;
+      $('metric-avg').textContent = averageScore(items).toFixed(1);
+
+      buildSectionControls();
+      buildCategoryControls();
+      buildSourceList();
+      bindControls();
+      render();
+    }
+
+    function bindControls() {
+      $('search').addEventListener('input', (event) => {
+        state.query = event.target.value.trim().toLowerCase();
+        render();
+      });
+      $('category-select').addEventListener('change', (event) => {
+        state.category = event.target.value;
+        render();
+      });
+      $('section-select').addEventListener('change', (event) => {
+        state.section = event.target.value;
+        render();
+      });
+      $('sort-select').addEventListener('change', (event) => {
+        state.sort = event.target.value;
+        render();
+      });
+    }
+
+    function buildCategoryControls() {
+      const counts = countBy(items, 'category');
+      const categories = Object.keys(counts).sort();
+      const select = $('category-select');
+      select.innerHTML = option('All', `全部细分标签 (${items.length})`) +
+        categories.map((category) => option(category, `${categoryLabel(category)} (${counts[category]})`)).join('');
+
+      const list = $('category-list');
+      list.innerHTML = categoryButton('All', items.length) +
+        categories.map((category) => categoryButton(category, counts[category])).join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.category = button.dataset.category;
+          select.value = state.category;
+          if (state.category === 'All') {
+            state.section = 'All';
+            $('section-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSectionControls() {
+      const counts = payload.section_counts || {};
+      const sections = payload.sections || [];
+      const select = $('section-select');
+      select.innerHTML = option('All', `全部主线 (${items.length})`) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => option(section.key, `${section.label} (${counts[section.key]})`))
+          .join('');
+
+      const list = $('section-list');
+      list.innerHTML = sectionButton('All', '全部', items.length) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => sectionButton(section.key, section.label, counts[section.key]))
+          .join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.section = button.dataset.section;
+          select.value = state.section;
+          if (state.section === 'All') {
+            state.category = 'All';
+            $('category-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSourceList() {
+      const stats = payload.source_stats || {};
+      const entries = Object.entries(stats)
+        .filter(([source]) => !source.startsWith('fetched:'))
+        .sort((a, b) => b[1] - a[1]);
+      $('source-list').innerHTML = entries.length
+        ? entries.map(([source, count]) => `<li><span>${escapeHtml(source)}</span><b>${count}</b></li>`).join('')
+        : '<li><span>暂无来源统计</span><b>0</b></li>';
+    }
+
+    function render() {
+      let visible = items.filter(matchesFilters);
+      visible = sortItems(visible);
+      if (!visible.some((item) => item.id === state.activeId)) {
+        state.activeId = visible[0]?.id || null;
+      }
+
+      $('feed-title').textContent = feedTitle();
+      $('result-count').textContent = `展示 ${visible.length} 条 - 两条主线每条最多 ${payload.report_config.max_items_per_category} 条`;
+      renderSectionActive();
+      renderCategoryActive();
+      renderItems(visible);
+      renderDetail(visible.find((item) => item.id === state.activeId) || visible[0]);
+    }
+
+    function matchesFilters(item) {
+      const sectionMatch = state.section === 'All' || (item.report_sections || []).includes(state.section);
+      if (!sectionMatch) return false;
+      const categoryMatch = state.category === 'All' || item.category === state.category;
+      if (!categoryMatch) return false;
+      if (!state.query) return true;
+      const haystack = [
+        item.title,
+        item.display_title,
+        item.source,
+        item.source_type,
+        item.category,
+        categoryLabel(item.category),
+        sectionLabel(item.report_sections?.[0]),
+        sourceTypeLabel(item.source_type),
+        priorityLabel(item.read_priority),
+        item.one_line_summary,
+        item.technical_summary,
+        item.quant_relevance,
+        item.possible_use_case,
+        item.tldr,
+        item.core_value,
+        ...(item.key_points_list || []),
+        item.reference_url,
+      ].join(' ').toLowerCase();
+      return haystack.includes(state.query);
+    }
+
+    function sortItems(list) {
+      return [...list].sort((a, b) => {
+        if (state.sort === 'priority') {
+          return (priorityRank[b.read_priority] || 0) - (priorityRank[a.read_priority] || 0)
+            || b.final_score - a.final_score;
+        }
+        if (state.sort === 'source') {
+          return a.source.localeCompare(b.source) || b.final_score - a.final_score;
+        }
+        return b.final_score - a.final_score;
+      });
+    }
+
+    function renderCategoryActive() {
+      document.querySelectorAll('.category-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.category === state.category);
+      });
+    }
+
+    function renderSectionActive() {
+      document.querySelectorAll('.section-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.section === state.section);
+      });
+    }
+
+    function itemCard(item) {
+      const sec = item.report_sections?.[0] || 'other';
+      const sig = getFeedback(item.id);
+      return `
+        <article class="item ${item.id === state.activeId ? 'active' : ''}"
+                 data-id="${escapeAttr(item.id)}"
+                 data-section="${escapeAttr(sec)}">
+          <div class="item-top">
+            <h3>${escapeHtml(item.display_title || item.title)}</h3>
+            <div class="score">${Number(item.final_score).toFixed(1)}</div>
+          </div>
+          <div class="meta">
+            <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+            <span class="tag">${escapeHtml(item.source)}</span>
+            <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+          </div>
+          ${readerFormat(item, true)}
+          <div class="feedback-row">
+            <button class="feedback-btn ${sig === 1 ? 'active-up' : ''}" data-feedback="1" title="有用">👍</button>
+            <button class="feedback-btn ${sig === -1 ? 'active-down' : ''}" data-feedback="-1" title="跳过">👎</button>
+            <span class="feedback-hint">${sig === 1 ? '已标记有用' : sig === -1 ? '已标记跳过' : ''}</span>
+          </div>
+        </article>
+      `;
+    }
+
+    function sectionGroupHeader(section, count) {
+      return `
+        <div class="section-group-header" data-section="${escapeAttr(section.key)}">
+          <span class="section-group-title">${escapeHtml(section.label)}</span>
+          <span class="section-group-count">${count} 条</span>
+        </div>
+      `;
+    }
+
+    function renderItems(visible) {
+      const container = $('items');
+      if (!visible.length) {
+        container.innerHTML = '<div class="empty">当前筛选条件下没有匹配内容。</div>';
+        return;
+      }
+
+      let html = '';
+      if (state.section === 'All') {
+        // Group by section in defined order, with a header for each group
+        const grouped = {};
+        for (const item of visible) {
+          const sec = item.report_sections?.[0] || 'other';
+          if (!grouped[sec]) grouped[sec] = [];
+          grouped[sec].push(item);
+        }
+        for (const section of (payload.sections || [])) {
+          const group = grouped[section.key];
+          if (!group || !group.length) continue;
+          html += sectionGroupHeader(section, group.length);
+          html += group.map((item) => itemCard(item)).join('');
+        }
+        // Append any items that fell into 'other' (shouldn't normally happen)
+        if (grouped['other']?.length) {
+          html += grouped['other'].map((item) => itemCard(item)).join('');
+        }
+      } else {
+        html = visible.map((item) => itemCard(item)).join('');
+      }
+
+      container.innerHTML = html;
+      container.querySelectorAll('.item').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.activeId = node.dataset.id;
+          render();
+        });
+      });
+      container.querySelectorAll('.feedback-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const itemNode = btn.closest('.item');
+          setFeedback(itemNode.dataset.id, parseInt(btn.dataset.feedback, 10));
+          render();
+        });
+      });
+    }
+
+    function renderDetail(item) {
+      const detail = $('detail');
+      if (!item) {
+        detail.innerHTML = '<div class="empty">选择一条内容查看详情。</div>';
+        return;
+      }
+
+      detail.innerHTML = `
+        <h2>${escapeHtml(item.display_title || item.title)}</h2>
+        <div class="meta">
+          <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+          <span class="tag">${escapeHtml(sourceTypeLabel(item.source_type))}</span>
+          <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+        </div>
+
+        ${readerFormat(item, false)}
+
+        <div class="detail-block">
+          <h3>评分拆解</h3>
+          <div class="breakdown">
+            ${bar('相关性', item.relevance_score)}
+            ${bar('新颖度', item.novelty_score)}
+            ${bar('学术性', item.academic_score)}
+            ${bar('讨论度', item.discussion_score)}
+            ${bar('可行动性', item.actionable_score)}
+          </div>
+        </div>
+
+      `;
+    }
+
+    function readerFormat(item, compact) {
+      const points = itemKeyPoints(item);
+      return `
+        <div class="reader-format ${compact ? 'compact' : ''}">
+          <div class="reader-block">
+            <h4>1. 这篇文章的太长不读</h4>
+            <p>${escapeHtml(item.tldr || item.one_line_summary || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>2. 核心价值，对我量化的工作能够提供什么样的帮助</h4>
+            <p>${escapeHtml(item.core_value || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>3. 关键核心点 / 论文或帖子摘要</h4>
+            <ol>${points.map((point) => `<li>${escapeHtml(point)}</li>`).join('')}</ol>
+          </div>
+          <div class="reader-block">
+            <h4>4. 原文链接</h4>
+            ${referenceHtml(item)}
+          </div>
+        </div>
+      `;
+    }
+
+    function itemKeyPoints(item) {
+      const points = Array.isArray(item.key_points_list)
+        ? item.key_points_list
+        : (Array.isArray(item.key_points) ? item.key_points : []);
+      const clean = points.filter(Boolean).slice(0, 3);
+      return clean.length ? clean : ['需要打开原文进一步确认方法、数据和适用边界。'];
+    }
+
+    function referenceHtml(item) {
+      const url = item.reference_url || '';
+      if (!url) return '<p>暂无可打开链接</p>';
+      return `
+        <a class="reader-reference" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">打开原文</a>
+        <small class="reference-url">${escapeHtml(url)}</small>
+      `;
+    }
+
+    function bar(label, value) {
+      const score = Number(value || 0);
+      const width = Math.max(0, Math.min(100, score * 10));
+      return `
+        <div class="bar">
+          <span>${label}</span>
+          <div class="bar-track"><div class="bar-fill" style="width: ${width}%"></div></div>
+          <b>${score.toFixed(1)}</b>
+        </div>
+      `;
+    }
+
+    function countBy(list, key) {
+      return list.reduce((acc, item) => {
+        acc[item[key]] = (acc[item[key]] || 0) + 1;
+        return acc;
+      }, {});
+    }
+
+    function averageScore(list) {
+      if (!list.length) return 0;
+      return list.reduce((sum, item) => sum + Number(item.final_score || 0), 0) / list.length;
+    }
+
+    function option(value, label) {
+      return `<option value="${escapeAttr(value)}">${escapeHtml(label)}</option>`;
+    }
+
+    function sectionButton(section, label, count) {
+      return `
+        <button class="category-button section-button" type="button" data-section="${escapeAttr(section)}">
+          <span>${escapeHtml(label)}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryButton(category, count) {
+      return `
+        <button class="category-button" type="button" data-category="${escapeAttr(category)}">
+          <span>${escapeHtml(category === 'All' ? '全部' : categoryLabel(category))}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryLabel(category) {
+      return categoryLabels[category] || category;
+    }
+
+    function sectionLabel(sectionKey) {
+      const section = (payload.sections || []).find((item) => item.key === sectionKey);
+      return section ? section.label : '其他';
+    }
+
+    function feedTitle() {
+      const parts = [];
+      if (state.section !== 'All') parts.push(sectionLabel(state.section));
+      if (state.category !== 'All') parts.push(categoryLabel(state.category));
+      return parts.length ? parts.join(' / ') : '今日情报';
+    }
+
+    function priorityLabel(priority) {
+      return priorityLabels[priority] || priority;
+    }
+
+    function sourceTypeLabel(sourceType) {
+      return sourceTypeLabels[sourceType] || sourceType;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replaceAll('`', '&#096;');
+    }
+
+    init();
+  </script>
+</body>
+</html>
