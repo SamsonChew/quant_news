@@ -1,0 +1,1086 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>samson 量化情报台 - 2026-06-25</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --panel: #ffffff;
+      --ink: #202124;
+      --muted: #5f6368;
+      --line: #dadce0;
+      --blue: #1a73e8;
+      --red: #ea4335;
+      --yellow: #fbbc04;
+      --green: #34a853;
+      --blue-soft: #e8f0fe;
+      --green-soft: #e6f4ea;
+      --yellow-soft: #fef7e0;
+      --red-soft: #fce8e6;
+      --shadow: 0 1px 2px rgba(60, 64, 67, 0.16), 0 8px 24px rgba(60, 64, 67, 0.10);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(66, 133, 244, 0.07), transparent 30%),
+        radial-gradient(circle at top right, rgba(251, 188, 4, 0.08), transparent 26%),
+        var(--bg);
+      color: var(--ink);
+      font-family: "Google Sans", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(280px, 620px);
+      gap: 24px;
+      align-items: center;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand h1 {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin: 0;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+
+    .brand h1::before {
+      content: "";
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background:
+        conic-gradient(from 0deg, var(--blue) 0 25%, var(--red) 0 50%, var(--yellow) 0 75%, var(--green) 0 100%);
+      box-shadow: inset 0 0 0 7px #fff;
+    }
+
+    .date-pill {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 170px 170px 150px;
+      gap: 10px;
+    }
+
+    .control {
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 12px;
+      outline: none;
+    }
+
+    .control:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.14);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 260px minmax(420px, 1fr) 420px;
+      gap: 22px;
+      padding: 24px 32px 36px;
+    }
+
+    .rail,
+    .detail {
+      position: sticky;
+      top: 86px;
+      height: calc(100vh - 112px);
+      overflow: auto;
+    }
+
+    .rail,
+    .detail,
+    .feed {
+      min-width: 0;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      padding: 12px;
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
+    }
+
+    .metric:nth-child(1) { border-top: 3px solid var(--blue); }
+    .metric:nth-child(2) { border-top: 3px solid var(--red); }
+    .metric:nth-child(3) { border-top: 3px solid var(--yellow); }
+    .metric:nth-child(4) { border-top: 3px solid var(--green); }
+
+    .metric b {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .section-label {
+      margin: 18px 0 8px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .category-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .category-button {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--ink);
+      padding: 8px 10px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .category-button:hover,
+    .category-button.active {
+      border-color: transparent;
+      background: var(--blue-soft);
+      color: #174ea6;
+    }
+
+    .count {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .source-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .source-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .feed-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .feed-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .result-count {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .items {
+      display: grid;
+      gap: 10px;
+    }
+
+    .section-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 2px 4px;
+      margin-top: 10px;
+      border-bottom: 2px solid var(--line);
+    }
+
+    .section-group-header:first-child {
+      margin-top: 0;
+    }
+
+    .section-group-title {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .section-group-header[data-section="deep_learning_quant"] .section-group-title { color: var(--blue); }
+    .section-group-header[data-section="ai_quant_tools"] .section-group-title { color: var(--green); }
+    .section-group-header[data-section="daily_news"] .section-group-title { color: var(--yellow); }
+
+    .section-group-count {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .item {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.10);
+      padding: 18px;
+      cursor: pointer;
+      transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+    }
+
+    .item::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--blue), var(--red), var(--yellow), var(--green));
+    }
+
+    .item[data-section="deep_learning_quant"]::before { background: var(--blue); }
+    .item[data-section="ai_quant_tools"]::before { background: var(--green); }
+    .item[data-section="daily_news"]::before { background: var(--yellow); }
+
+    .item:hover,
+    .item.active {
+      border-color: #c6dafc;
+      box-shadow: var(--shadow);
+      transform: translateY(-2px);
+    }
+
+    .item-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .item h3 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.28;
+    }
+
+    .score {
+      min-width: 54px;
+      border-radius: 999px;
+      background: var(--blue-soft);
+      color: #174ea6;
+      padding: 6px 8px;
+      text-align: center;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .tag {
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: #f1f3f4;
+      padding: 3px 8px;
+    }
+
+    .tag:nth-child(1) { background: var(--blue-soft); color: #174ea6; }
+    .tag:nth-child(2) { background: var(--green-soft); color: #137333; }
+    .tag:nth-child(3) { background: var(--yellow-soft); color: #8a5a00; }
+    .tag:nth-child(4) { background: var(--red-soft); color: #b3261e; }
+
+    .summary {
+      margin: 0;
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .reference-link {
+      display: inline-flex;
+      width: fit-content;
+      border-top: 1px solid var(--line);
+      color: var(--blue);
+      padding-top: 9px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .reader-format {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .reader-format.compact {
+      gap: 8px;
+    }
+
+    .reader-block {
+      border-top: 1px solid var(--line);
+      padding-top: 9px;
+    }
+
+    .reader-block:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .reader-block h4 {
+      margin: 0 0 5px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .reader-block p,
+    .reader-block li {
+      margin: 0;
+      color: #30342d;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .reader-block ol {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .reader-reference {
+      color: var(--blue);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
+    .reference-url {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .detail {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .detail h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+
+    .detail-block {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .detail-block h3 {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+
+    .detail-block p,
+    .detail-block li {
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .detail-block ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .breakdown {
+      display: grid;
+      gap: 8px;
+    }
+
+    .bar {
+      display: grid;
+      grid-template-columns: 118px 1fr 40px;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .bar-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e7eadf;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--blue), var(--green), var(--yellow), var(--red));
+    }
+
+    .open-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      margin-top: 16px;
+      border: 1px solid var(--blue);
+      border-radius: var(--radius);
+      color: var(--blue);
+      text-decoration: none;
+      padding: 0 12px;
+      font-weight: 700;
+    }
+
+    .feedback-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+    }
+
+    .feedback-btn {
+      background: #f1f3f4;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 120ms, border-color 120ms;
+    }
+
+    .feedback-btn:hover { background: var(--blue-soft); }
+    .feedback-btn.active-up { background: var(--green-soft); border-color: var(--green); }
+    .feedback-btn.active-down { background: var(--red-soft); border-color: var(--red); }
+
+    .feedback-hint {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      padding: 28px;
+      color: var(--muted);
+      background: var(--panel);
+    }
+
+    @media (max-width: 1180px) {
+      .layout {
+        grid-template-columns: 220px 1fr;
+      }
+
+      .detail {
+        position: static;
+        grid-column: 1 / -1;
+        height: auto;
+      }
+    }
+
+    @media (max-width: 820px) {
+      .topbar {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .brand {
+        display: grid;
+        gap: 4px;
+      }
+
+      .brand h1 {
+        white-space: normal;
+        font-size: 21px;
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .rail,
+      .detail {
+        position: static;
+        height: auto;
+      }
+
+      .metric-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <h1>samson 量化情报台</h1>
+        <span class="date-pill" id="report-date"></span>
+      </div>
+      <div class="controls">
+        <input class="control" id="search" type="search" placeholder="搜索标题、摘要、分类..." />
+        <select class="control" id="section-select"></select>
+        <select class="control" id="category-select"></select>
+        <select class="control" id="sort-select">
+          <option value="score">按评分排序</option>
+          <option value="priority">按优先级排序</option>
+          <option value="source">按来源排序</option>
+        </select>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="rail">
+        <div class="metric-grid">
+          <div class="metric"><b id="metric-items">0</b><span>报告条目</span></div>
+          <div class="metric"><b id="metric-categories">0</b><span>分类数量</span></div>
+          <div class="metric"><b id="metric-high">0</b><span>高优先级</span></div>
+          <div class="metric"><b id="metric-avg">0.0</b><span>平均评分</span></div>
+        </div>
+
+        <div class="section-label">两条主线</div>
+        <div class="category-list" id="section-list"></div>
+
+        <div class="section-label">细分标签</div>
+        <div class="category-list" id="category-list"></div>
+
+        <div class="section-label">主力来源</div>
+        <ul class="source-list" id="source-list"></ul>
+      </aside>
+
+      <section class="feed">
+        <div class="feed-header">
+          <h2 id="feed-title">今日情报</h2>
+          <span class="result-count" id="result-count"></span>
+        </div>
+        <div class="items" id="items"></div>
+      </section>
+
+      <aside class="detail" id="detail"></aside>
+    </main>
+  </div>
+
+  <script id="dashboard-data" type="application/json">{"report_date": "2026-06-25", "generated_at": "2026-06-25T00:25:29Z", "items": [{"id": "73196fc4497b04c93c517655688a3a402f20424c97e7badd1466ca01e6f00c00", "source": "arXiv", "source_type": "paper", "title": "Scaling Laws for Task-Specific LLM Distillation", "url": "http://arxiv.org/abs/2606.24747v1", "authors": ["Lavinia Ghita", "Dhruv Desai", "Ioana Boier"], "published_at": "2026-06-23", "collected_at": "2026-06-25T00:13:18Z", "raw_text": "Large Language Models (LLMs) achieve strong performance across a growing range of domains, yet their scale poses deployment challenges in applications where latency and cost constraints are critical. This paper derives empirical scaling laws for domain-specific LLM compression, quantifying how in-domain and general knowledge performance scale with dataset size, compression ratio, supervision format, and iterative pruning schedule. Using quantitative finance as our application domain, we compare logit-based and LoRA-based distillation under iterative structural pruning, introducing a blended chain-of-thought supervision loss that stabilizes KL-divergence distillation over reasoning traces. In-domain task quality degrades predictably under compression while general-knowledge benchmarks collapse well before the same point; supervision format is the key driver of this tradeoff, with chain-of-thought supervision actively recovering general knowledge that pruning erases. We release the headline dataset FinHeadlineMix, scaling law results, and practical recommendations to provide a reusable framework for domain-specific compression decisions.", "abstract": "Large Language Models (LLMs) achieve strong performance across a growing range of domains, yet their scale poses deployment challenges in applications where latency and cost constraints are critical. This paper derives empirical scaling laws for domain-specific LLM compression, quantifying how in-domain and general knowledge performance scale with dataset size, compression ratio, supervision format, and iterative pruning schedule. Using quantitative finance as our application domain, we compare logit-based and LoRA-based distillation under iterative structural pruning, introducing a blended chain-of-thought supervision loss that stabilizes KL-divergence distillation over reasoning traces. In-domain task quality degrades predictably under compression while general-knowledge benchmarks collapse well before the same point; supervision format is the key driver of this tradeoff, with chain-of-thought supervision actively recovering general knowledge that pruning erases. We release the headline dataset FinHeadlineMix, scaling law results, and practical recommendations to provide a reusable framework for domain-specific compression decisions.", "content_hash": "b6a9887c5f82b152e900d21dda3997f4449b68cd3024e70ecd2adb44a9a6ae19", "category": "LLM / Agents for Quant", "tags": ["chain-of-thought", "dataset", "llm", "reasoning"], "language": "en", "metadata": {"arxiv_categories": ["cs.AI", "cs.CE"]}, "one_line_summary": "LLM 蒸馏缩放定律：链式思维监督在量化金融任务中恢复被剪枝删除的通用知识", "technical_summary": "针对 LLM 在量化金融等延迟敏感场景部署的规模难题，论文在量化金融领域进行蒸馏实验，推导领域特定压缩缩放定律。使用了基于 logit 和 LoRA 的蒸馏方法，并引入混合链式思维监督损失稳定 KL 散度蒸馏。核心结论：领域任务质量随压缩比可预测地下降，而通用知识基准在达到相同压缩比前已崩溃；监督格式是关键因素，链式思维监督可主动恢复被剪枝删除的通用知识。论文发布了 FinHeadlineMix 数据集，但摘要未提供具体缩放系数或性能数值。", "key_points": ["原文缺乏量化指标，结论待复核：未给出领域任务准确率或通用知识基准的具体数字。", "量化可用性：依赖 FinHeadlineMix 数据集（已发布）和蒸馏工具，实现难度中等，可复现性取决于公开代码。", "局限性：仅在量化金融一个领域测试，缩放定律系数未公开；未讨论实际延迟节省和过拟合风险。"], "quant_relevance": "研究工具/工作流提效：提供 LLM 压缩缩放定律，指导量化机构在部署时平衡领域性能与推理成本。", "possible_use_case": "量化团队可根据缩放定律预测不同压缩比下领域任务性能，选择合适的蒸馏方法和剪枝比例，在保持因子生成或报告质量的前提下降低模型部署成本。", "limitations": "摘要未提供具体量化结果（如准确率、压缩比与性能曲线系数），仅定性描述；仅在量化金融领域测试，其他领域适用性未知；未讨论实际延迟和成本节省的具体数字；可能过拟合于特定数据集。", "read_priority": "低", "key_figures_md": "", "relevance_score": 7.3, "novelty_score": 9.565, "academic_score": 9.941, "discussion_score": 2.0, "actionable_score": 7.5, "final_score": 7.394, "display_title": "大模型研究论文", "tldr": "LLM 蒸馏缩放定律：链式思维监督在量化金融任务中恢复被剪枝删除的通用知识", "core_value": "对你的量化工作帮助：把它拆成一个量化大模型 / 智能体复现任务，先验证大模型是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["原文缺乏量化指标，结论待复核：未给出领域任务准确率或通用知识基准的具体数字。", "量化可用性：依赖 FinHeadlineMix 数据集（已发布）和蒸馏工具，实现难度中等，可复现性取决于公开代码。", "局限性：仅在量化金融一个领域测试，缩放定律系数未公开；未讨论实际延迟节省和过拟合风险。"], "reference_url": "http://arxiv.org/abs/2606.24747v1", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "量化大模型 / 智能体", "priority_label": "低", "source_type_label": "论文"}, {"id": "b39e5628b4ae35afc3f83b34f970b187617c7a3c35cc178ac4724903a43b36fe", "source": "arXiv", "source_type": "paper", "title": "Quant Convergence: Bridging Classical Value Investing and Modern Factor Models for Systematic Equity Selection", "url": "http://arxiv.org/abs/2606.24575v1", "authors": ["Augusto Eiji Yamazaki", "Hugo Garrido-Lestache Belinchon"], "published_at": "2026-06-23", "collected_at": "2026-06-25T00:12:53Z", "raw_text": "Modern finance relies heavily on complex machine learning models to find patterns in the stock market. However, as these AI models get more complicated, they often memorize short-term market noise instead of finding companies with real, lasting value. We designed this research to test if Benjamin Graham's classic value investing rules could act as a mathematical \"low-pass filter\" to keep these modern models in check. We built three different sets of features - pure Graham rules, modern market factors, and a mix of both - and tested them against highly complex models (XGBoost and AutoGluon) using 20 years of S&P 500 data. By applying a strict buy-and-hold strategy over a four-year test period (March 2022 to March 2026), the results showed that more complex algorithms do not always win. While the AutoGluon model captured high returns (222.68%), it suffered a substantial 39.78% drop because it bought volatile tech stocks right before the market crashed. On the other hand, the pure Graham Random Forest achieved the highest overall return (232.13%) with much less risk (1.38 Calmar Ratio). Furthermore, the Combined Random Forest successfully mixed momentum with Graham's rules, making a 202.91% return while keeping the lowest maximum drop (34.53%) of any model tested. Ultimately, this research proves that Graham's \"margin of safety\" isn't outdated; it is actually a highly effective way to prevent modern AI from taking on too much risk.", "abstract": "Modern finance relies heavily on complex machine learning models to find patterns in the stock market. However, as these AI models get more complicated, they often memorize short-term market noise instead of finding companies with real, lasting value. We designed this research to test if Benjamin Graham's classic value investing rules could act as a mathematical \"low-pass filter\" to keep these modern models in check. We built three different sets of features - pure Graham rules, modern market factors, and a mix of both - and tested them against highly complex models (XGBoost and AutoGluon) using 20 years of S&P 500 data. By applying a strict buy-and-hold strategy over a four-year test period (March 2022 to March 2026), the results showed that more complex algorithms do not always win. While the AutoGluon model captured high returns (222.68%), it suffered a substantial 39.78% drop because it bought volatile tech stocks right before the market crashed. On the other hand, the pure Graham Random Forest achieved the highest overall return (232.13%) with much less risk (1.38 Calmar Ratio). Furthermore, the Combined Random Forest successfully mixed momentum with Graham's rules, making a 202.91% return while keeping the lowest maximum drop (34.53%) of any model tested. Ultimately, this research proves that Graham's \"margin of safety\" isn't outdated; it is actually a highly effective way to prevent modern AI from taking on too much risk.", "content_hash": "dde6cbe59565c9426ac8c539e1765ee06f625480e253bbc1cd5feebfad7a5faa", "category": "Alpha / Factor Research", "tags": ["factor", "machine learning", "momentum", "risk"], "language": "en", "metadata": {"arxiv_categories": ["cs.AI"]}, "one_line_summary": "格雷厄姆价值规则作为低通滤波约束机器学习模型，纯价值随机森林在标普500上实现232.13%回报（Calmar 1.38），优于AutoGluon的222.68%（回撤39.78%）", "technical_summary": "针对现代ML模型在选股中容易捕捉市场噪音的问题，将本杰明·格雷厄姆的价值投资规则（如低市盈率、低市净率、安全边际等）作为数学上的低通滤波约束。利用20年标普500数据，构建三组特征：纯格雷厄姆指标、现代市场因子（动量、波动率等）、两者混合。模型测试包括XGBoost、AutoGluon（自动集成）和随机森林，采用买入持有策略在2022年3月至2026年3月回测。结果：纯格雷厄姆随机森林以232.13%总回报、1.38 Calmar比率胜出；AutoGluon虽有222.68%回报但承受39.78%回撤；混合随机森林回报202.91%，回撤最低（34.53%）。结论：价值规则能有效降低模型风险，并非过时。", "key_points": ["纯格雷厄姆随机森林四年回报232.13%，Calmar比率1.38，显著优于AutoGluon（回报222.68%、回撤39.78%），证明价值约束可提升风险调整收益。", "方法依赖标普500成分股及常用财务因子数据，实现简单（随机森林、XGBoost等公开库），可在美股日频数据上复现，无需复杂基础设施。", "仅测试单一市场（美国大盘股）和特定持有期（2022-2026，含2022年崩盘），未考虑交易成本、滑点及多空组合；超参数调优可能过拟合该回测区间。"], "quant_relevance": "因子/alpha信号：格雷厄姆价值规则可作为稳健的约束条件或特征，防范机器学习模型过度拟合短期噪声，提升组合的夏普-回撤效率。", "possible_use_case": "可作为A股日频价值因子约束，先在全市场股票池上测试纯价值因子+随机森林的截面多空组合，对比传统多因子模型。", "limitations": "回测期仅四年且包含特殊市场环境（2022年科技股大跌），样本外泛化性存疑；未扣除交易成本与印花税，纯价值策略换手率可能较低；随机森林超参数未公开，复现需谨慎；仅使用标普500大盘股，对小盘股效果未知。", "read_priority": "高", "key_figures_md": "", "relevance_score": 7.5, "novelty_score": 9.565, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 7.263, "display_title": "因子、机器学习、动量、风险研究论文", "tldr": "格雷厄姆价值规则作为低通滤波约束机器学习模型，纯价值随机森林在标普500上实现232.13%回报（Calmar 1.38），优于AutoGluon的222.68%（回撤39.78%）", "core_value": "对你的量化工作帮助：把它拆成一个阿尔法 / 因子研究复现任务，先验证因子、机器学习、动量、风险是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["纯格雷厄姆随机森林四年回报232.13%，Calmar比率1.38，显著优于AutoGluon（回报222.68%、回撤39.78%），证明价值约束可提升风险调整收益。", "方法依赖标普500成分股及常用财务因子数据，实现简单（随机森林、XGBoost等公开库），可在美股日频数据上复现，无需复杂基础设施。", "仅测试单一市场（美国大盘股）和特定持有期（2022-2026，含2022年崩盘），未考虑交易成本、滑点及多空组合；超参数调优可能过拟合该回测区间。"], "reference_url": "http://arxiv.org/abs/2606.24575v1", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "论文"}, {"id": "3f1e0838255db80301e4aa209db532a3c4bfc2a0405b68a1463fab00fad392bf", "source": "Decrypt", "source_type": "crypto_news", "title": "'Painful' Bitcoin Sell-Off Drags Ethereum, XRP and Dogecoin Lower as Crypto Stocks Dive", "url": "https://decrypt.co/372025/painful-bitcoin-sell-off-ethereum-xrp-dogecoin-lower-crypto-firms-dive", "authors": [], "published_at": "2026-06-24", "collected_at": "2026-06-25T00:18:48Z", "raw_text": "Bitcoin's slide to its lowest point in 21 months slammed the price of leading altcoins, while pressuring crypto stocks on Wall Street.", "abstract": "Bitcoin's slide to its lowest point in 21 months slammed the price of leading altcoins, while pressuring crypto stocks on Wall Street.", "content_hash": "710e7b5457643f3e403a439530d11e20a4149197f92ad3efca0e186c0a142b9e", "category": "Crypto Quant", "tags": ["bitcoin", "crypto", "ethereum"], "language": "en", "metadata": {"feed_url": "https://decrypt.co/feed"}, "one_line_summary": "比特币暴跌至21个月低点，以太坊XRP跟跌，加密市场恐慌情绪蔓延", "technical_summary": "比特币经历持续抛售，价格跌至21个月最低水平（具体跌幅未披露），拖累以太坊、XRP、狗狗币等主要山寨币全线走低。同时，加密相关股票（如矿企、交易所）也遭受压力，反映了市场系统性恐慌。这次下跌被媒体形容为'痛苦'，表明短期内缺乏明显支撑，成交量可能放大，做市商和趋势跟踪策略需警惕风险。", "key_points": ["比特币价格暴跌至21个月低点，带动以太坊、XRP、狗狗币等主要山寨币显著下跌，加密股票同步下行。", "对量化交易者而言，短期波动率放大，可关注趋势跟踪或做空波动率机会，但需注意流动性恶化和滑点风险。", "原文未提供具体跌幅百分比或链上数据（如清算量、资金费率），报道情绪色彩较重，需结合技术面与衍生品数据独立验证。"], "quant_relevance": "风险建模：波动率预期飙升，需动态调整VaR及杠杆敞口；执行：流动性可能萎缩，买卖价差扩大，增加交易成本。", "possible_use_case": "可作为短期做空或波动率交易信号参考，但需等待更精确的价格位置与衍生品数据确认后执行，或用于压力测试场景。", "limitations": "原文缺乏具体跌幅数字、交易量变化及链上数据，结论基于定性描述；需获取实时行情与衍生品持仓数据才能用于策略决策。", "read_priority": "高", "key_figures_md": "", "relevance_score": 6.6, "novelty_score": 9.78, "academic_score": 5.668, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.986, "display_title": "加密资产加密市场新闻情报", "tldr": "比特币暴跌至21个月低点，以太坊XRP跟跌，加密市场恐慌情绪蔓延", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["比特币价格暴跌至21个月低点，带动以太坊、XRP、狗狗币等主要山寨币显著下跌，加密股票同步下行。", "对量化交易者而言，短期波动率放大，可关注趋势跟踪或做空波动率机会，但需注意流动性恶化和滑点风险。", "原文未提供具体跌幅百分比或链上数据（如清算量、资金费率），报道情绪色彩较重，需结合技术面与衍生品数据独立验证。"], "reference_url": "https://decrypt.co/372025/painful-bitcoin-sell-off-ethereum-xrp-dogecoin-lower-crypto-firms-dive", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "c27f2020f3f0b410d0614a50180f3aa07a7e4dbc1f58566d50d68e4c6892e4fa", "source": "CoinDesk", "source_type": "crypto_news", "title": "Crypto Long & Short: Infrastructure is the prevailing currency in digital assets", "url": "https://www.coindesk.com/coindesk-indices/2026/06/24/crypto-long-and-short-infrastructure-is-the-prevailing-currency-in-digital-assets", "authors": [], "published_at": "2026-06-24", "collected_at": "2026-06-25T00:18:48Z", "raw_text": "In this week's Crypto Long & Short, Nonco’s Caue Teixeira makes the case that regardless of which coin ultimately wins, infrastructure is the prevailing currency in digital assets. Then, using CoinDesk's liquidation feed, Liquibit Capital's Alen Pavlović finds that June's forced selling peaked near $68,000, days before bitcoin actually bottomed.", "abstract": "In this week's Crypto Long & Short, Nonco’s Caue Teixeira makes the case that regardless of which coin ultimately wins, infrastructure is the prevailing currency in digital assets. Then, using CoinDesk's liquidation feed, Liquibit Capital's Alen Pavlović finds that June's forced selling peaked near $68,000, days before bitcoin actually bottomed.", "content_hash": "64765e2ba4d617be4c858c15eca59703629f9eb1a3ed2ad3935d244da3428daa", "category": "Crypto Quant", "tags": ["bitcoin", "crypto"], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "CoinDesk 六月清算数据揭示强制抛售峰值在 68,000 美元，早于比特币实际触底数天", "technical_summary": "1. 问题：是否能通过交易所清算数据提前识别比特币价格拐点？2. 方法：用 CoinDesk 清算信息时间序列，观察强制抛售量的峰值与价格底部的时序关系。3. 结论：六月强制抛售量在 68,000 美元附近达到高峰，而比特币实际底部分后几天才出现，表明清算激增可用来预判短期底部。具体峰值价位为 68,000 美元。", "key_points": ["六月强制抛售在 68,000 美元附近达到峰值，数天后比特币价格才真正触底，显示清算峰值领先底部约几天。", "量化交易者可将该清算数据作为恐慌指标，结合其他技术信号，在高频或短线策略中辅助判断买入时机。", "信息来源依赖 CoinDesk 单一清算 feed，可能不包含所有交易所数据；历史样本仅一个月，普适性需更多数据验证。"], "quant_relevance": "信号发现：清算数据峰值可作为市场恐慌顶点代理指标，辅助判断短期底部。", "possible_use_case": "作为比特币日内或短线策略的准入信号：当清算量激增且价格接近近期支撑时，可考虑建立多头仓位，并设置止损。", "limitations": "仅覆盖6月数据，样本量小；清算数据来自 CoinDesk 单一来源，可能遗漏部分平台；未考虑市场结构变化（如ETF资金流）。", "read_priority": "高", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.78, "academic_score": 5.934, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.666, "display_title": "加密资产加密市场新闻情报", "tldr": "CoinDesk 六月清算数据揭示强制抛售峰值在 68,000 美元，早于比特币实际触底数天", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["六月强制抛售在 68,000 美元附近达到峰值，数天后比特币价格才真正触底，显示清算峰值领先底部约几天。", "量化交易者可将该清算数据作为恐慌指标，结合其他技术信号，在高频或短线策略中辅助判断买入时机。", "信息来源依赖 CoinDesk 单一清算 feed，可能不包含所有交易所数据；历史样本仅一个月，普适性需更多数据验证。"], "reference_url": "https://www.coindesk.com/coindesk-indices/2026/06/24/crypto-long-and-short-infrastructure-is-the-prevailing-currency-in-digital-assets", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "7656fd35186feef2aa542b25653cdbb803bfa1a03d7733096043ef4eb19c7df6", "source": "CoinDesk", "source_type": "crypto_news", "title": "Upheaval at the Ethereum Foundation has some of crypto’s biggest names feeling bullish", "url": "https://www.coindesk.com/tech/2026/06/24/upheaval-at-the-ethereum-foundation-has-some-of-crypto-s-biggest-names-feeling-bullish", "authors": [], "published_at": "2026-06-24", "collected_at": "2026-06-25T00:18:48Z", "raw_text": "In this week's edition of The Protocol Newsletter, we're looking at Ethereum's eventful week that started off with the launch of EthLabs, plus the layoffs at the Ethereum Foundation, and what this all means for the network.", "abstract": "In this week's edition of The Protocol Newsletter, we're looking at Ethereum's eventful week that started off with the launch of EthLabs, plus the layoffs at the Ethereum Foundation, and what this all means for the network.", "content_hash": "3654f65904bfb908beb5ef90785503f99f26f3728420b30fd505f728e158425b", "category": "Crypto Quant", "tags": ["crypto", "ethereum"], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "以太坊基金会裁员+成立EthLabs，部分大佬看涨ETH后市", "technical_summary": "以太坊基金会进行重大重组，包括裁员和成立新实验室EthLabs，这一内部变动被部分行业领袖解读为积极信号，认为将提高运营效率并推动技术进展。市场对该消息反应尚待数据验证，但可能为ETH带来短期波动机会。", "key_points": ["以太坊基金会裁员并启动EthLabs，Arthur Hayes等加密大佬公开表示看涨ETH。", "该事件可能引发ETH短期情绪驱动交易机会，量化策略可关注波动率上升和资金流向变化。", "重组具体细节和长期影响不明确，市场反应可能过度，需警惕假突破和反向波动。"], "quant_relevance": "市场情绪信号 / 波动率事件驱动", "possible_use_case": "作为ETH短期事件驱动信号，可结合链上大额转账和期权隐含波动率变化设计短线交易策略。", "limitations": "此消息来自媒体报道，缺乏量化证据支撑，情绪具体影响需通过行情数据验证。", "read_priority": "高", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.78, "academic_score": 5.779, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.643, "display_title": "加密资产加密市场新闻情报", "tldr": "以太坊基金会裁员+成立EthLabs，部分大佬看涨ETH后市", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["以太坊基金会裁员并启动EthLabs，Arthur Hayes等加密大佬公开表示看涨ETH。", "该事件可能引发ETH短期情绪驱动交易机会，量化策略可关注波动率上升和资金流向变化。", "重组具体细节和长期影响不明确，市场反应可能过度，需警惕假突破和反向波动。"], "reference_url": "https://www.coindesk.com/tech/2026/06/24/upheaval-at-the-ethereum-foundation-has-some-of-crypto-s-biggest-names-feeling-bullish", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "151290c52ddcfb6575c1e29d62953a2f94292c5b1f2ea4fe6462a91501a7327d", "source": "Reddit algotrading", "source_type": "forum", "title": "Fx Agent performance", "url": "https://www.reddit.com/r/algotrading/comments/1uef9sk/fx_agent_performance/", "authors": ["/u/Actual_Resort1892"], "published_at": "2026-06-24", "collected_at": "2026-06-25T00:18:47Z", "raw_text": "EURUSD tp hit 38.7pips CHFJPY 61.4 pips NZDUSD 30.1 pips GBPJPY 65.7 pips Timeframe -> 5min submitted by /u/Actual_Resort1892 [link] [comments]", "abstract": "EURUSD tp hit 38.7pips CHFJPY 61.4 pips NZDUSD 30.1 pips GBPJPY 65.7 pips Timeframe -> 5min submitted by /u/Actual_Resort1892 [link] [comments]", "content_hash": "cafd4167ce2acb3cf88194072f3724f98bf4b1e8921dfcbbece5d545ed8cf43b", "category": "LLM / Agents for Quant", "tags": ["agent"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "外汇交易Agent在5分钟时间框架下实现4个货币对止盈30-66点", "technical_summary": "该帖子展示了一个外汇自动化交易Agent在4个货币对上5分钟周期的止盈点数。未提及策略逻辑、回测设置、样本外验证或胜率。社区主流观点认为这是用户单方面宣称的成绩，需要独立验证。", "key_points": ["核心发现：Agent在5分钟图上对EURUSD/CHFJPY/NZDUSD/GBPJPY分别实现38.7/61.4/30.1/65.7点止盈，但缺乏胜率和回撤数据。", "可操作建议：可尝试复现该类Agent（如使用强化学习或LSTM）并在相似数据上回测，但必须加入止损和交易成本。", "局限性：仅给出单次止盈结果，无样本外测试、无风险指标（夏普、最大回撤）、无与基准对比，不能作为可靠性证据。"], "quant_relevance": "提供了潜在交易信号的止盈水平参考，但无风险调整后收益，直接影响有限。", "possible_use_case": "可作为初步筛选潜在策略的线索，但需自行在2018-2023年5分钟数据上回测并评估统计显著性。", "limitations": "社区讨论缺乏严格实验：未说明策略类型、是否实盘、数据期间、交易成本、滑点、胜率及最大回撤。单独止盈点可能源于单次/少量交易，存在过拟合和幸存者偏差风险。", "read_priority": "低", "key_figures_md": "", "relevance_score": 4.2, "novelty_score": 9.78, "academic_score": 4.179, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 5.593, "display_title": "量化大模型 / 智能体实践讨论", "tldr": "外汇交易Agent在5分钟时间框架下实现4个货币对止盈30-66点", "core_value": "对你的量化工作帮助：把它当作量化大模型 / 智能体的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["核心发现：智能体在5分钟图上对EURUSD/CHFJPY/NZDUSD/GBPJPY分别实现38.7/61.4/30.1/65.7点止盈，但缺乏胜率和回撤数据。", "可操作建议：可尝试复现该类智能体（如使用强化学习或LSTM）并在相似数据上回测，但必须加入止损和交易成本。", "局限性：仅给出单次止盈结果，无样本外测试、无风险指标（夏普、最大回撤）、无与基准对比，不能作为可靠性证据。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1uef9sk/fx_agent_performance/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "量化大模型 / 智能体", "priority_label": "低", "source_type_label": "论坛"}, {"id": "beda35dd63c135fcd1d829374ad011d56cccc90ea1b7a5b393c3afbaeff00fff", "source": "CoinTelegraph", "source_type": "crypto_news", "title": "FTX exec’s wife scheduled for November trial on campaign finance charges", "url": "https://cointelegraph.com/news/ftx-exec-wife-november-trial-campaign-finance-charges?utm_source=rss&utm_medium=rss&utm_campaign=rss", "authors": [], "published_at": "2026-06-24", "collected_at": "2026-06-25T00:18:48Z", "raw_text": "A Manhattan judge ordered that Michelle Bond’s criminal trial start in November after he denied a motion to dismiss the indictment based on claims that prosecutors misled her husband over her charges.", "abstract": "A Manhattan judge ordered that Michelle Bond’s criminal trial start in November after he denied a motion to dismiss the indictment based on claims that prosecutors misled her husband over her charges.", "content_hash": "78c9a3cc35c55122da1b93c8101b2184900c2b22eea7d4d80118505ce9170e6d", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://cointelegraph.com/rss"}, "one_line_summary": "FTX 高管妻子 Michelle Bond 因竞选财务指控于 11 月受审，法官驳回撤案动议", "technical_summary": "1. 事件：FTX 高管 Ryan Salame 的妻子 Michelle Bond 被指控非法竞选捐款，法官驳回撤案动议，定于 11 月审判。2. 市场关联：FTX 破产重组进程持续，法律案件可能影响市场对 FTX 剩余价值分配的预期。3. 量化角度：此类监管新闻对加密市场情绪短期扰动有限，但若出现超预期判决（如牵连更广），可能引发 FTX 相关代币价格波动。", "key_points": ["Michelle Bond 刑事审判定于 11 月，法官驳回撤案动议，FTX 高管家属案件继续推进。", "对加密量化交易者：短期直接影响小，但可关注 FTX 重组动态及关联代币（如 FTT）的波动风险。", "审判结果不确定性高，且属于个人案件，对整体加密市场情绪影响有限，不宜过度交易。"], "quant_relevance": "可作为加密市场情绪风险因子，尤其是 FTX 代币及关联资产短期波动参考。", "possible_use_case": "可纳入加密市场事件数据库，作为市场情绪风险因子，与 FTT 价格联动分析，用于事件驱动策略的辅助信号。", "limitations": "单一法律进程对量化策略的预测价值低，需结合更多系统性法律事件链；信息来源为 CoinTelegraph，需交叉验证。", "read_priority": "中", "key_figures_md": "", "relevance_score": 3.7, "novelty_score": 9.78, "academic_score": 5.75, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.529, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "FTX 高管妻子 Michelle Bond 因竞选财务指控于 11 月受审，法官驳回撤案动议", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["Michelle Bond 刑事审判定于 11 月，法官驳回撤案动议，FTX 高管家属案件继续推进。", "对加密量化交易者：短期直接影响小，但可关注 FTX 重组动态及关联代币（如 FTT）的波动风险。", "审判结果不确定性高，且属于个人案件，对整体加密市场情绪影响有限，不宜过度交易。"], "reference_url": "https://cointelegraph.com/news/ftx-exec-wife-november-trial-campaign-finance-charges?utm_source=rss&utm_medium=rss&utm_campaign=rss", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "中", "source_type_label": "加密市场新闻"}, {"id": "e52edcfccbad4e0115af88edf9f82cb62343729c8a218fa0908d883b11b511ae", "source": "Reddit algotrading", "source_type": "forum", "title": "[RELEASE] pandas-ta-classic v0.6.52: new SMC Liquidity Sweep indicator + Ichimoku/MACD fixes", "url": "https://www.reddit.com/r/algotrading/comments/1uegoa6/release_pandastaclassic_v0652_new_smc_liquidity/", "authors": ["/u/AMGraduate564"], "published_at": "2026-06-24", "collected_at": "2026-06-25T00:18:47Z", "raw_text": "Hey r/algotrading , Just merged a batch of changes into pandas-ta-classic (the community-maintained fork of pandas-ta). Here's what dropped since 0.6.20: 🆕 New: Smart Money Concept Liquidity Sweep ( smc_sweep ) Detects liquidity sweep candles — the \"stop hunt\" pattern where price breaks a recent swing high/low, gets rejected, and closes back inside. Returns +1 (bullish sweep), -1 (bearish sweep), 0 (none). ```python df.ta.smc_sweep(length=15, wick_mult=1.5, append=True) → SMC_SWEEP_15_1.5 column: +1 / -1 / 0 ``` length controls the swing lookback, wick_mult tunes how aggressive the wick rejection has to be relative to the candle body. 🔧 Ichimoku overhaul Multiple bugs fixed in the accessor: Returned a tuple instead of a DataFrame — broke df.ta.ichimoku(append=True) for anyone not unwrapping Span columns had duplicated prefix/suffix in names _mp_worker had a special-case for ichimoku that conflicted with multiprocessing strategy runs New append_span parameter lets you optionally include the forward-projected cloud spans in the output 🔧 MACD Extended ( macdext ) silent fallback fixed macdext was silently falling back twice when KAMA / MAMA matypes failed validation — you'd ask for one MA type, get a completely different one, no warning. Now it raises on invalid matype instead of guessing. 🔧 CPR now returns int8 instead of strings CPR_POSITION and CPR_WIDTH_CLASS used to return string labels ( \"above_tc\" etc.). Now returns int8 — plays nicer with vectorbt, numpy operations, and everything that expects numeric columns. 📦 Total: 193 indicators, 62 native CDL patterns (253 unique) No TA-Lib required for any CDL pattern. TA-Lib optional for acceleration on 34 core indicators. Install: bash pip install pandas-ta-classic Feedback welcome, especially on smc_sweep — parameter defaults (length=15, wick_mult=1.5) are reasonable starting points but SMC traders might have opinions. Community maintained. PRs open. submitted by /u/AMGraduate564 [link] [comments]", "abstract": "Hey r/algotrading , Just merged a batch of changes into pandas-ta-classic (the community-maintained fork of pandas-ta). Here's what dropped since 0.6.20: 🆕 New: Smart Money Concept Liquidity Sweep ( smc_sweep ) Detects liquidity sweep candles — the \"stop hunt\" pattern where price breaks a recent swing high/low, gets rejected, and closes back inside. Returns +1 (bullish sweep), -1 (bearish sweep), 0 (none). ```python df.ta.smc_sweep(length=15, wick_mult=1.5, append=True) → SMC_SWEEP_15_1.5 column: +1 / -1 / 0 ``` length controls the swing lookback, wick_mult tunes how aggressive the wick rejection has to be relative to the candle body. 🔧 Ichimoku overhaul Multiple bugs fixed in the accessor: Returned a tuple instead of a DataFrame — broke df.ta.ichimoku(append=True) for anyone not unwrapping Span columns had duplicated prefix/suffix in names _mp_worker had a special-case for ichimoku that conflicted with multiprocessing strategy runs New append_span parameter lets you optionally include the forward-projected cloud spans in the output 🔧 MACD Extended ( macdext ) silent fallback fixed macdext was silently falling back twice when KAMA / MAMA matypes failed validation — you'd ask for one MA type, get a completely different one, no warning. Now it raises on invalid matype instead of guessing. 🔧 CPR now returns int8 instead of strings CPR_POSITION and CPR_WIDTH_CLASS used to return string labels ( \"above_tc\" etc.). Now returns int8 — plays nicer with vectorbt, numpy operations, and everything that expects numeric columns. 📦 Total: 193 indicators, 62 native CDL patterns (253 unique) No TA-Lib required for any CDL pattern. TA-Lib optional for acceleration on 34 core indicators. Install: bash pip install pandas-ta-classic Feedback welcome, especially on smc_sweep — parameter defaults (length=15, wick_mult=1.5) are reasonable starting points but SMC traders might have opinions. Community maintained. PRs open. submitted by /u/AMGraduate564 [link] [comments]", "content_hash": "31e4cc00a64ee736eff45617c724a27248ad623d252c4cf1bfc43266537582e3", "category": "Market Microstructure", "tags": ["liquidity"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "pandas-ta-classic 新增 SMC 流动性扫荡指标，修复 Ichimoku/MACD 多个 bug，可直接在回测中调用", "technical_summary": "此版本核心是新增 SMC（Smart Money Concept）流动性扫荡指标 smc_sweep，检测价格突破近期摆动高/低点后被拒绝并收回到内部的蜡烛形态，输出多头扫荡(+1)、空头扫荡(-1)或无效(0)。参数 length 控制摆动回溯周期，wick_mult 控制影线拒绝幅度相对于实体的比例。同时修复了 Ichimoku 访问器返回 tuple 而非 DataFrame 的 bug，修复了 Span 列名重复前缀/后缀问题，以及 MACD Extended 在 KAMA/MAMA 类型验证失败时静默降级为其他 MA 类型的 bug。CPR 位置和宽度分类从字符串改为 int8，便于与 vectorbt 和 numpy 操作配合。该库共提供 193 个指标和 62 个原生 K 线形态（无需 TA-Lib）。", "key_points": ["新增 SMC 流动性扫荡指标，可识别价格突破后快速反转的形态，输出 +1/-1/0 信号，适合构建日内反转因子。", "使用简单：`df.ta.smc_sweep(length=15, wick_mult=1.5, append=True)` 即可添加信号列，默认参数可作为起点；修复后的 Ichimoku 和 MACDE 可稳定用于策略回测。", "局限性：SMC 指标基于视觉形态规则，存在过拟合风险；参数默认值（length=15, wick_mult=1.5）未经广泛验证；作为社区维护版本，长期稳定性和兼容性需自行测试。"], "quant_relevance": "因子/alpha信号：新增做市商流动性扫荡模式识别，可快速构建日内反转信号；研究工具/工作流提效：修复关键 bug 后，Ichimoku、MACDE 等复杂指标可在向量化回测中稳定使用，CPR 的 int8 输出兼容 vectorbt。", "possible_use_case": "可尝试在日内 tick 或 1 分钟 K 线数据上使用 smc_sweep 信号作为反转因子，结合其他动量或成交量指标，在加密货币或美股日内回测框架（如 vectorbt）中测试其 alpha 表现；修复后的 Ichimoku 可用于趋势过滤或支撑阻力识别。", "limitations": "这是社区讨论和工具发布内容，缺乏严格的样本外验证和统计显著性检验；SMC 指标参数依赖于用户自定义，容易过拟合；需用自有数据独立回测后才能应用于实盘决策。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.2, "novelty_score": 9.78, "academic_score": 5.5, "discussion_score": 3.0, "actionable_score": 4.5, "final_score": 5.391, "display_title": "流动性实践讨论", "tldr": "pandas-ta-classic 新增 SMC 流动性扫荡指标，修复 Ichimoku/MACD 多个 bug，可直接在回测中调用", "core_value": "对你的量化工作帮助：把它当作流动性的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["新增 SMC 流动性扫荡指标，可识别价格突破后快速反转的形态，输出 +1/-1/0 信号，适合构建日内反转因子。", "使用简单：`df.ta.smc_sweep(length=15, wick_mult=1.5, append=True)` 即可添加信号列，默认参数可作为起点；修复后的 Ichimoku 和 MACDE 可稳定用于策略回测。", "局限性：SMC 指标基于视觉形态规则，存在过拟合风险；参数默认值（length=15, wick_mult=1.5）未经广泛验证；作为社区维护版本，长期稳定性和兼容性需自行测试。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1uegoa6/release_pandastaclassic_v0652_new_smc_liquidity/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "市场微观结构", "priority_label": "高", "source_type_label": "论坛"}, {"id": "c8dc3d448de58676a1d4c53604656dcee5d74f4b7bcb961a2f86b3678098865b", "source": "CoinDesk", "source_type": "crypto_news", "title": "The banking lobby is wrong about stablecoins and community banks", "url": "https://www.coindesk.com/opinion/2026/06/24/the-banking-lobby-is-wrong-about-stablecoins-and-community-banks", "authors": [], "published_at": "2026-06-24", "collected_at": "2026-06-25T00:18:48Z", "raw_text": "Congress should not kneecap one of the clearest advances in payment infrastructure to protect community banks from a threat that has not been proven, argues Eco CEO Ryne Saxe.", "abstract": "Congress should not kneecap one of the clearest advances in payment infrastructure to protect community banks from a threat that has not been proven, argues Eco CEO Ryne Saxe.", "content_hash": "091d2942344c9b2711367c58058e416b20ac102ecba7dd9bfa1e8529aec359d3", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "美国稳定币立法争论：银行游说团反对支付创新，可能影响加密市场交易基础设施", "technical_summary": "美国银行游说团体以保护社区银行为由，试图阻止国会推进稳定币立法。Eco CEO Ryne Saxe在CoinDesk观点文章中反驳，认为稳定币是支付基础设施的明显进步，而社区银行面临的稳定币威胁尚未被证实。他指出，若国会屈从于游说压力而限制稳定币，将扼杀金融创新，且对社区银行的保护并无实证基础。文章呼吁国会按照既有立法逻辑推进稳定币框架。", "key_points": ["美国银行游说团体反对稳定币立法，声称保护社区银行免受威胁，但Eco CEO认为该威胁未被证实。", "稳定币监管进程直接影响加密市场稳定币发行、兑换和流动性，量化交易者需跟踪立法动态调整策略。", "立法结果高度不确定，游说力量对比和具体条款未知，交易者面临政策突变风险，需结合多源信息验证。"], "quant_relevance": "风险建模：稳定币监管不确定性将影响加密市场流动性、交易对可用性和套利空间，需纳入政策风险因子。", "possible_use_case": "作为加密监管风险监控信号，用于调整稳定币相关交易对的头寸、套利策略及流动性管理。", "limitations": "本文为观点文章，缺乏具体数据或立法文本，结论基于作者立场，需结合官方立法进展和多方报道交叉验证。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 5.719, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.314, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "美国稳定币立法争论：银行游说团反对支付创新，可能影响加密市场交易基础设施", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["美国银行游说团体反对稳定币立法，声称保护社区银行免受威胁，但Eco CEO认为该威胁未被证实。", "稳定币监管进程直接影响加密市场稳定币发行、兑换和流动性，量化交易者需跟踪立法动态调整策略。", "立法结果高度不确定，游说力量对比和具体条款未知，交易者面临政策突变风险，需结合多源信息验证。"], "reference_url": "https://www.coindesk.com/opinion/2026/06/24/the-banking-lobby-is-wrong-about-stablecoins-and-community-banks", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "9e50cc2f41e41570271430750583db36df593ad0f8f7edb7181d0db1ce9a4d7d", "source": "Reddit algotrading", "source_type": "forum", "title": "Tool/Platform Recommendation for someone with Python/Tensorflow background", "url": "https://www.reddit.com/r/algotrading/comments/1ue9n5n/toolplatform_recommendation_for_someone_with/", "authors": ["/u/bolodski"], "published_at": "2026-06-24", "collected_at": "2026-06-25T00:18:47Z", "raw_text": "Hi, I'm coming from a Python/Numpy/Tensorflow ML background and looking to trade crypto. Is Freqtrade the right tool for me? I understand it is mainly using Pytorch, how easy is it to use Tensorflow instead or should I go ahead and move to Pytorch? submitted by /u/bolodski [link] [comments]", "abstract": "Hi, I'm coming from a Python/Numpy/Tensorflow ML background and looking to trade crypto. Is Freqtrade the right tool for me? I understand it is mainly using Pytorch, how easy is it to use Tensorflow instead or should I go ahead and move to Pytorch? submitted by /u/bolodski [link] [comments]", "content_hash": "f8060108961f0ba6906ab90fefe1d227e6afdb248b76ec269f56193522f78dd1", "category": "Crypto Quant", "tags": ["crypto"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "Freqtrade工具推荐与TensorFlow/PyTorch框架选型咨询", "technical_summary": "该讨论来自Reddit algotrading板块，用户有Python/TensorFlow ML背景，希望交易加密货币，询问Freqtrade是否合适以及能否用TensorFlow代替PyTorch。由于仅有提问而无社区回复，核心话题围绕工具迁移成本和框架生态选择。常见社区共识是：Freqtrade本身不绑定具体ML框架，策略代码可自定义，故可继续使用TensorFlow，但官方示例和社区策略以PyTorch为主，迁移学习便利性略低。", "key_points": ["Freqtrade支持自定义策略，不限制ML框架，TensorFlow可通过自定义策略集成，但原生PyTorch生态更便利。", "建议继续使用TensorFlow，需注意模型保存格式（如ONNX）和回测环境兼容性；也可尝试直接集成PyTorch以提高与现有策略的兼容性。", "缺乏社区回复，实际迁移难度未知；需自行验证模型序列化和性能差异，可能存在版本冲突风险。"], "quant_relevance": "研究工具/工作流提效", "possible_use_case": "可作为入门crypto量化时评估Freqtrade与自有ML框架兼容性的快速参考，辅助决定是否学习PyTorch。", "limitations": "原文仅为提问，无任何社区回复或讨论，结论基于常见做法推测，需在GitHub或Discord中进一步获取实际用户反馈后验证。", "read_priority": "低", "key_figures_md": "", "relevance_score": 4.2, "novelty_score": 9.78, "academic_score": 4.364, "discussion_score": 3.0, "actionable_score": 4.5, "final_score": 5.221, "display_title": "加密资产实践讨论", "tldr": "Freqtrade工具推荐与TensorFlow/PyTorch框架选型咨询", "core_value": "对你的量化工作帮助：把它当作加密资产的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["Freqtrade支持自定义策略，不限制ML框架，TensorFlow可通过自定义策略集成，但原生PyTorch生态更便利。", "建议继续使用TensorFlow，需注意模型保存格式（如ONNX）和回测环境兼容性；也可尝试直接集成PyTorch以提高与现有策略的兼容性。", "缺乏社区回复，实际迁移难度未知；需自行验证模型序列化和性能差异，可能存在版本冲突风险。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1ue9n5n/toolplatform_recommendation_for_someone_with/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "加密资产量化", "priority_label": "低", "source_type_label": "论坛"}], "source_stats": {"arXiv": 2, "Decrypt": 1, "CoinDesk": 3, "Reddit algotrading": 3, "CoinTelegraph": 1}, "category_counts": {"LLM / Agents for Quant": 2, "Alpha / Factor Research": 3, "Crypto Quant": 4, "Market Microstructure": 1}, "section_counts": {"ai_quant_tools": 5, "daily_news": 5}, "sections": [{"key": "deep_learning_quant", "label": "深度学习量化未来", "description": "技术主线：深度学习、强化学习、Transformer、图神经网络、表征学习、订单簿预测、金融时间序列大模型等在量化里的应用。"}, {"key": "ai_quant_tools", "label": "AI 量化工具", "description": "工具主线：能提升量化研究效率的 AI 工具、代码仓库、研究自动化、智能体、回测/数据工程工具和可接入团队工作流的基础设施。"}, {"key": "daily_news", "label": "Crypto 市场每日 Top 5", "description": "加密市场新闻主线：来自 CoinDesk、CoinTelegraph、The Block、Decrypt、Blockworks 等主流媒体当日最重要的 Crypto 市场报道。"}], "category_labels": {"Alpha / Factor Research": "阿尔法 / 因子研究", "Statistical Arbitrage": "统计套利", "Portfolio Construction": "组合构建", "Risk Management": "风险管理", "Options / Volatility": "期权 / 波动率", "Market Microstructure": "市场微观结构", "Execution / Transaction Cost": "交易执行 / 交易成本", "Machine Learning for Finance": "金融机器学习", "LLM / Agents for Quant": "量化大模型 / 智能体", "Crypto Quant": "加密资产量化", "Data Engineering": "数据工程", "Backtesting / Research Tools": "回测 / 研究工具", "Industry / Career": "行业 / 职业 / 合规", "Unclassified": "未分类"}, "priority_labels": {"High": "高", "Medium": "中", "Low": "低", "高": "高", "中": "中", "低": "低"}, "source_type_labels": {"paper": "论文", "forum": "论坛", "github": "代码仓库", "blog": "博客", "news": "新闻", "social": "社交媒体", "zhihu": "知乎", "x": "X", "quantml": "QuantML", "crypto_news": "加密市场新闻"}, "report_config": {"max_items_per_category": 5, "max_total_items": 60, "executive_brief_items": 5}}</script>
+  <script>
+    const payload = JSON.parse(document.getElementById('dashboard-data').textContent);
+    const items = payload.items || [];
+    const categoryLabels = payload.category_labels || {};
+    const priorityLabels = payload.priority_labels || {};
+    const sourceTypeLabels = payload.source_type_labels || {};
+    const state = {
+      query: '',
+      section: 'All',
+      category: 'All',
+      sort: 'score',
+      activeId: items[0]?.id || null,
+    };
+
+    const priorityRank = { High: 3, Medium: 2, Low: 1, '高': 3, '中': 2, '低': 1 };
+    const $ = (id) => document.getElementById(id);
+
+    // --- Feedback ---
+    const _feedbackStore = JSON.parse(localStorage.getItem('quant-feedback') || '{}');
+    function getFeedback(id) { return _feedbackStore[id] || 0; }
+    function setFeedback(id, signal) {
+      if (_feedbackStore[id] === signal) { delete _feedbackStore[id]; signal = 0; }
+      else { _feedbackStore[id] = signal; }
+      localStorage.setItem('quant-feedback', JSON.stringify(_feedbackStore));
+      fetch('http://localhost:8080/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, signal }),
+      }).catch(() => {});
+    }
+
+    function init() {
+      $('report-date').textContent = payload.report_date + ' - 主力源：arXiv / 知乎 / QuantML / 大型论坛 - 生成时间 ' + payload.generated_at;
+      $('metric-items').textContent = items.length;
+      $('metric-categories').textContent = new Set(items.map((item) => item.category)).size;
+      $('metric-high').textContent = items.filter((item) => priorityLabel(item.read_priority) === '高').length;
+      $('metric-avg').textContent = averageScore(items).toFixed(1);
+
+      buildSectionControls();
+      buildCategoryControls();
+      buildSourceList();
+      bindControls();
+      render();
+    }
+
+    function bindControls() {
+      $('search').addEventListener('input', (event) => {
+        state.query = event.target.value.trim().toLowerCase();
+        render();
+      });
+      $('category-select').addEventListener('change', (event) => {
+        state.category = event.target.value;
+        render();
+      });
+      $('section-select').addEventListener('change', (event) => {
+        state.section = event.target.value;
+        render();
+      });
+      $('sort-select').addEventListener('change', (event) => {
+        state.sort = event.target.value;
+        render();
+      });
+    }
+
+    function buildCategoryControls() {
+      const counts = countBy(items, 'category');
+      const categories = Object.keys(counts).sort();
+      const select = $('category-select');
+      select.innerHTML = option('All', `全部细分标签 (${items.length})`) +
+        categories.map((category) => option(category, `${categoryLabel(category)} (${counts[category]})`)).join('');
+
+      const list = $('category-list');
+      list.innerHTML = categoryButton('All', items.length) +
+        categories.map((category) => categoryButton(category, counts[category])).join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.category = button.dataset.category;
+          select.value = state.category;
+          if (state.category === 'All') {
+            state.section = 'All';
+            $('section-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSectionControls() {
+      const counts = payload.section_counts || {};
+      const sections = payload.sections || [];
+      const select = $('section-select');
+      select.innerHTML = option('All', `全部主线 (${items.length})`) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => option(section.key, `${section.label} (${counts[section.key]})`))
+          .join('');
+
+      const list = $('section-list');
+      list.innerHTML = sectionButton('All', '全部', items.length) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => sectionButton(section.key, section.label, counts[section.key]))
+          .join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.section = button.dataset.section;
+          select.value = state.section;
+          if (state.section === 'All') {
+            state.category = 'All';
+            $('category-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSourceList() {
+      const stats = payload.source_stats || {};
+      const entries = Object.entries(stats)
+        .filter(([source]) => !source.startsWith('fetched:'))
+        .sort((a, b) => b[1] - a[1]);
+      $('source-list').innerHTML = entries.length
+        ? entries.map(([source, count]) => `<li><span>${escapeHtml(source)}</span><b>${count}</b></li>`).join('')
+        : '<li><span>暂无来源统计</span><b>0</b></li>';
+    }
+
+    function render() {
+      let visible = items.filter(matchesFilters);
+      visible = sortItems(visible);
+      if (!visible.some((item) => item.id === state.activeId)) {
+        state.activeId = visible[0]?.id || null;
+      }
+
+      $('feed-title').textContent = feedTitle();
+      $('result-count').textContent = `展示 ${visible.length} 条 - 两条主线每条最多 ${payload.report_config.max_items_per_category} 条`;
+      renderSectionActive();
+      renderCategoryActive();
+      renderItems(visible);
+      renderDetail(visible.find((item) => item.id === state.activeId) || visible[0]);
+    }
+
+    function matchesFilters(item) {
+      const sectionMatch = state.section === 'All' || (item.report_sections || []).includes(state.section);
+      if (!sectionMatch) return false;
+      const categoryMatch = state.category === 'All' || item.category === state.category;
+      if (!categoryMatch) return false;
+      if (!state.query) return true;
+      const haystack = [
+        item.title,
+        item.display_title,
+        item.source,
+        item.source_type,
+        item.category,
+        categoryLabel(item.category),
+        sectionLabel(item.report_sections?.[0]),
+        sourceTypeLabel(item.source_type),
+        priorityLabel(item.read_priority),
+        item.one_line_summary,
+        item.technical_summary,
+        item.quant_relevance,
+        item.possible_use_case,
+        item.tldr,
+        item.core_value,
+        ...(item.key_points_list || []),
+        item.reference_url,
+      ].join(' ').toLowerCase();
+      return haystack.includes(state.query);
+    }
+
+    function sortItems(list) {
+      return [...list].sort((a, b) => {
+        if (state.sort === 'priority') {
+          return (priorityRank[b.read_priority] || 0) - (priorityRank[a.read_priority] || 0)
+            || b.final_score - a.final_score;
+        }
+        if (state.sort === 'source') {
+          return a.source.localeCompare(b.source) || b.final_score - a.final_score;
+        }
+        return b.final_score - a.final_score;
+      });
+    }
+
+    function renderCategoryActive() {
+      document.querySelectorAll('.category-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.category === state.category);
+      });
+    }
+
+    function renderSectionActive() {
+      document.querySelectorAll('.section-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.section === state.section);
+      });
+    }
+
+    function itemCard(item) {
+      const sec = item.report_sections?.[0] || 'other';
+      const sig = getFeedback(item.id);
+      return `
+        <article class="item ${item.id === state.activeId ? 'active' : ''}"
+                 data-id="${escapeAttr(item.id)}"
+                 data-section="${escapeAttr(sec)}">
+          <div class="item-top">
+            <h3>${escapeHtml(item.display_title || item.title)}</h3>
+            <div class="score">${Number(item.final_score).toFixed(1)}</div>
+          </div>
+          <div class="meta">
+            <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+            <span class="tag">${escapeHtml(item.source)}</span>
+            <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+          </div>
+          ${readerFormat(item, true)}
+          <div class="feedback-row">
+            <button class="feedback-btn ${sig === 1 ? 'active-up' : ''}" data-feedback="1" title="有用">👍</button>
+            <button class="feedback-btn ${sig === -1 ? 'active-down' : ''}" data-feedback="-1" title="跳过">👎</button>
+            <span class="feedback-hint">${sig === 1 ? '已标记有用' : sig === -1 ? '已标记跳过' : ''}</span>
+          </div>
+        </article>
+      `;
+    }
+
+    function sectionGroupHeader(section, count) {
+      return `
+        <div class="section-group-header" data-section="${escapeAttr(section.key)}">
+          <span class="section-group-title">${escapeHtml(section.label)}</span>
+          <span class="section-group-count">${count} 条</span>
+        </div>
+      `;
+    }
+
+    function renderItems(visible) {
+      const container = $('items');
+      if (!visible.length) {
+        container.innerHTML = '<div class="empty">当前筛选条件下没有匹配内容。</div>';
+        return;
+      }
+
+      let html = '';
+      if (state.section === 'All') {
+        // Group by section in defined order, with a header for each group
+        const grouped = {};
+        for (const item of visible) {
+          const sec = item.report_sections?.[0] || 'other';
+          if (!grouped[sec]) grouped[sec] = [];
+          grouped[sec].push(item);
+        }
+        for (const section of (payload.sections || [])) {
+          const group = grouped[section.key];
+          if (!group || !group.length) continue;
+          html += sectionGroupHeader(section, group.length);
+          html += group.map((item) => itemCard(item)).join('');
+        }
+        // Append any items that fell into 'other' (shouldn't normally happen)
+        if (grouped['other']?.length) {
+          html += grouped['other'].map((item) => itemCard(item)).join('');
+        }
+      } else {
+        html = visible.map((item) => itemCard(item)).join('');
+      }
+
+      container.innerHTML = html;
+      container.querySelectorAll('.item').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.activeId = node.dataset.id;
+          render();
+        });
+      });
+      container.querySelectorAll('.feedback-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const itemNode = btn.closest('.item');
+          setFeedback(itemNode.dataset.id, parseInt(btn.dataset.feedback, 10));
+          render();
+        });
+      });
+    }
+
+    function renderDetail(item) {
+      const detail = $('detail');
+      if (!item) {
+        detail.innerHTML = '<div class="empty">选择一条内容查看详情。</div>';
+        return;
+      }
+
+      detail.innerHTML = `
+        <h2>${escapeHtml(item.display_title || item.title)}</h2>
+        <div class="meta">
+          <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+          <span class="tag">${escapeHtml(sourceTypeLabel(item.source_type))}</span>
+          <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+        </div>
+
+        ${readerFormat(item, false)}
+
+        <div class="detail-block">
+          <h3>评分拆解</h3>
+          <div class="breakdown">
+            ${bar('相关性', item.relevance_score)}
+            ${bar('新颖度', item.novelty_score)}
+            ${bar('学术性', item.academic_score)}
+            ${bar('讨论度', item.discussion_score)}
+            ${bar('可行动性', item.actionable_score)}
+          </div>
+        </div>
+
+      `;
+    }
+
+    function readerFormat(item, compact) {
+      const points = itemKeyPoints(item);
+      return `
+        <div class="reader-format ${compact ? 'compact' : ''}">
+          <div class="reader-block">
+            <h4>1. 这篇文章的太长不读</h4>
+            <p>${escapeHtml(item.tldr || item.one_line_summary || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>2. 核心价值，对我量化的工作能够提供什么样的帮助</h4>
+            <p>${escapeHtml(item.core_value || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>3. 关键核心点 / 论文或帖子摘要</h4>
+            <ol>${points.map((point) => `<li>${escapeHtml(point)}</li>`).join('')}</ol>
+          </div>
+          <div class="reader-block">
+            <h4>4. 原文链接</h4>
+            ${referenceHtml(item)}
+          </div>
+        </div>
+      `;
+    }
+
+    function itemKeyPoints(item) {
+      const points = Array.isArray(item.key_points_list)
+        ? item.key_points_list
+        : (Array.isArray(item.key_points) ? item.key_points : []);
+      const clean = points.filter(Boolean).slice(0, 3);
+      return clean.length ? clean : ['需要打开原文进一步确认方法、数据和适用边界。'];
+    }
+
+    function referenceHtml(item) {
+      const url = item.reference_url || '';
+      if (!url) return '<p>暂无可打开链接</p>';
+      return `
+        <a class="reader-reference" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">打开原文</a>
+        <small class="reference-url">${escapeHtml(url)}</small>
+      `;
+    }
+
+    function bar(label, value) {
+      const score = Number(value || 0);
+      const width = Math.max(0, Math.min(100, score * 10));
+      return `
+        <div class="bar">
+          <span>${label}</span>
+          <div class="bar-track"><div class="bar-fill" style="width: ${width}%"></div></div>
+          <b>${score.toFixed(1)}</b>
+        </div>
+      `;
+    }
+
+    function countBy(list, key) {
+      return list.reduce((acc, item) => {
+        acc[item[key]] = (acc[item[key]] || 0) + 1;
+        return acc;
+      }, {});
+    }
+
+    function averageScore(list) {
+      if (!list.length) return 0;
+      return list.reduce((sum, item) => sum + Number(item.final_score || 0), 0) / list.length;
+    }
+
+    function option(value, label) {
+      return `<option value="${escapeAttr(value)}">${escapeHtml(label)}</option>`;
+    }
+
+    function sectionButton(section, label, count) {
+      return `
+        <button class="category-button section-button" type="button" data-section="${escapeAttr(section)}">
+          <span>${escapeHtml(label)}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryButton(category, count) {
+      return `
+        <button class="category-button" type="button" data-category="${escapeAttr(category)}">
+          <span>${escapeHtml(category === 'All' ? '全部' : categoryLabel(category))}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryLabel(category) {
+      return categoryLabels[category] || category;
+    }
+
+    function sectionLabel(sectionKey) {
+      const section = (payload.sections || []).find((item) => item.key === sectionKey);
+      return section ? section.label : '其他';
+    }
+
+    function feedTitle() {
+      const parts = [];
+      if (state.section !== 'All') parts.push(sectionLabel(state.section));
+      if (state.category !== 'All') parts.push(categoryLabel(state.category));
+      return parts.length ? parts.join(' / ') : '今日情报';
+    }
+
+    function priorityLabel(priority) {
+      return priorityLabels[priority] || priority;
+    }
+
+    function sourceTypeLabel(sourceType) {
+      return sourceTypeLabels[sourceType] || sourceType;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replaceAll('`', '&#096;');
+    }
+
+    init();
+  </script>
+</body>
+</html>
