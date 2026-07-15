@@ -1,0 +1,1086 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>samson 量化情报台 - 2026-07-15</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --panel: #ffffff;
+      --ink: #202124;
+      --muted: #5f6368;
+      --line: #dadce0;
+      --blue: #1a73e8;
+      --red: #ea4335;
+      --yellow: #fbbc04;
+      --green: #34a853;
+      --blue-soft: #e8f0fe;
+      --green-soft: #e6f4ea;
+      --yellow-soft: #fef7e0;
+      --red-soft: #fce8e6;
+      --shadow: 0 1px 2px rgba(60, 64, 67, 0.16), 0 8px 24px rgba(60, 64, 67, 0.10);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(66, 133, 244, 0.07), transparent 30%),
+        radial-gradient(circle at top right, rgba(251, 188, 4, 0.08), transparent 26%),
+        var(--bg);
+      color: var(--ink);
+      font-family: "Google Sans", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(280px, 620px);
+      gap: 24px;
+      align-items: center;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand h1 {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin: 0;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+
+    .brand h1::before {
+      content: "";
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background:
+        conic-gradient(from 0deg, var(--blue) 0 25%, var(--red) 0 50%, var(--yellow) 0 75%, var(--green) 0 100%);
+      box-shadow: inset 0 0 0 7px #fff;
+    }
+
+    .date-pill {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 170px 170px 150px;
+      gap: 10px;
+    }
+
+    .control {
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 12px;
+      outline: none;
+    }
+
+    .control:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.14);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 260px minmax(420px, 1fr) 420px;
+      gap: 22px;
+      padding: 24px 32px 36px;
+    }
+
+    .rail,
+    .detail {
+      position: sticky;
+      top: 86px;
+      height: calc(100vh - 112px);
+      overflow: auto;
+    }
+
+    .rail,
+    .detail,
+    .feed {
+      min-width: 0;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      padding: 12px;
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
+    }
+
+    .metric:nth-child(1) { border-top: 3px solid var(--blue); }
+    .metric:nth-child(2) { border-top: 3px solid var(--red); }
+    .metric:nth-child(3) { border-top: 3px solid var(--yellow); }
+    .metric:nth-child(4) { border-top: 3px solid var(--green); }
+
+    .metric b {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .section-label {
+      margin: 18px 0 8px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .category-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .category-button {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--ink);
+      padding: 8px 10px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .category-button:hover,
+    .category-button.active {
+      border-color: transparent;
+      background: var(--blue-soft);
+      color: #174ea6;
+    }
+
+    .count {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .source-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .source-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .feed-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .feed-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .result-count {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .items {
+      display: grid;
+      gap: 10px;
+    }
+
+    .section-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 2px 4px;
+      margin-top: 10px;
+      border-bottom: 2px solid var(--line);
+    }
+
+    .section-group-header:first-child {
+      margin-top: 0;
+    }
+
+    .section-group-title {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .section-group-header[data-section="deep_learning_quant"] .section-group-title { color: var(--blue); }
+    .section-group-header[data-section="ai_quant_tools"] .section-group-title { color: var(--green); }
+    .section-group-header[data-section="daily_news"] .section-group-title { color: var(--yellow); }
+
+    .section-group-count {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .item {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.10);
+      padding: 18px;
+      cursor: pointer;
+      transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+    }
+
+    .item::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--blue), var(--red), var(--yellow), var(--green));
+    }
+
+    .item[data-section="deep_learning_quant"]::before { background: var(--blue); }
+    .item[data-section="ai_quant_tools"]::before { background: var(--green); }
+    .item[data-section="daily_news"]::before { background: var(--yellow); }
+
+    .item:hover,
+    .item.active {
+      border-color: #c6dafc;
+      box-shadow: var(--shadow);
+      transform: translateY(-2px);
+    }
+
+    .item-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .item h3 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.28;
+    }
+
+    .score {
+      min-width: 54px;
+      border-radius: 999px;
+      background: var(--blue-soft);
+      color: #174ea6;
+      padding: 6px 8px;
+      text-align: center;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .tag {
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: #f1f3f4;
+      padding: 3px 8px;
+    }
+
+    .tag:nth-child(1) { background: var(--blue-soft); color: #174ea6; }
+    .tag:nth-child(2) { background: var(--green-soft); color: #137333; }
+    .tag:nth-child(3) { background: var(--yellow-soft); color: #8a5a00; }
+    .tag:nth-child(4) { background: var(--red-soft); color: #b3261e; }
+
+    .summary {
+      margin: 0;
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .reference-link {
+      display: inline-flex;
+      width: fit-content;
+      border-top: 1px solid var(--line);
+      color: var(--blue);
+      padding-top: 9px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .reader-format {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .reader-format.compact {
+      gap: 8px;
+    }
+
+    .reader-block {
+      border-top: 1px solid var(--line);
+      padding-top: 9px;
+    }
+
+    .reader-block:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .reader-block h4 {
+      margin: 0 0 5px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .reader-block p,
+    .reader-block li {
+      margin: 0;
+      color: #30342d;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .reader-block ol {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .reader-reference {
+      color: var(--blue);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
+    .reference-url {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .detail {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .detail h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+
+    .detail-block {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .detail-block h3 {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+
+    .detail-block p,
+    .detail-block li {
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .detail-block ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .breakdown {
+      display: grid;
+      gap: 8px;
+    }
+
+    .bar {
+      display: grid;
+      grid-template-columns: 118px 1fr 40px;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .bar-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e7eadf;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--blue), var(--green), var(--yellow), var(--red));
+    }
+
+    .open-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      margin-top: 16px;
+      border: 1px solid var(--blue);
+      border-radius: var(--radius);
+      color: var(--blue);
+      text-decoration: none;
+      padding: 0 12px;
+      font-weight: 700;
+    }
+
+    .feedback-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+    }
+
+    .feedback-btn {
+      background: #f1f3f4;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 120ms, border-color 120ms;
+    }
+
+    .feedback-btn:hover { background: var(--blue-soft); }
+    .feedback-btn.active-up { background: var(--green-soft); border-color: var(--green); }
+    .feedback-btn.active-down { background: var(--red-soft); border-color: var(--red); }
+
+    .feedback-hint {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      padding: 28px;
+      color: var(--muted);
+      background: var(--panel);
+    }
+
+    @media (max-width: 1180px) {
+      .layout {
+        grid-template-columns: 220px 1fr;
+      }
+
+      .detail {
+        position: static;
+        grid-column: 1 / -1;
+        height: auto;
+      }
+    }
+
+    @media (max-width: 820px) {
+      .topbar {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .brand {
+        display: grid;
+        gap: 4px;
+      }
+
+      .brand h1 {
+        white-space: normal;
+        font-size: 21px;
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .rail,
+      .detail {
+        position: static;
+        height: auto;
+      }
+
+      .metric-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <h1>samson 量化情报台</h1>
+        <span class="date-pill" id="report-date"></span>
+      </div>
+      <div class="controls">
+        <input class="control" id="search" type="search" placeholder="搜索标题、摘要、分类..." />
+        <select class="control" id="section-select"></select>
+        <select class="control" id="category-select"></select>
+        <select class="control" id="sort-select">
+          <option value="score">按评分排序</option>
+          <option value="priority">按优先级排序</option>
+          <option value="source">按来源排序</option>
+        </select>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="rail">
+        <div class="metric-grid">
+          <div class="metric"><b id="metric-items">0</b><span>报告条目</span></div>
+          <div class="metric"><b id="metric-categories">0</b><span>分类数量</span></div>
+          <div class="metric"><b id="metric-high">0</b><span>高优先级</span></div>
+          <div class="metric"><b id="metric-avg">0.0</b><span>平均评分</span></div>
+        </div>
+
+        <div class="section-label">两条主线</div>
+        <div class="category-list" id="section-list"></div>
+
+        <div class="section-label">细分标签</div>
+        <div class="category-list" id="category-list"></div>
+
+        <div class="section-label">主力来源</div>
+        <ul class="source-list" id="source-list"></ul>
+      </aside>
+
+      <section class="feed">
+        <div class="feed-header">
+          <h2 id="feed-title">今日情报</h2>
+          <span class="result-count" id="result-count"></span>
+        </div>
+        <div class="items" id="items"></div>
+      </section>
+
+      <aside class="detail" id="detail"></aside>
+    </main>
+  </div>
+
+  <script id="dashboard-data" type="application/json">{"report_date": "2026-07-15", "generated_at": "2026-07-15T00:09:01Z", "items": [{"id": "823c45c919f6384fac43a9e536733798da8aeb0bca5b8ba22b1cc10535f2850c", "source": "arXiv", "source_type": "paper", "title": "Can Agentic Trading Systems Pay for Their Own Intelligence?", "url": "http://arxiv.org/abs/2607.10286v1", "authors": ["Qiqi Duan", "Changlun Li", "Chen Wang", "Fan Zhang", "Mengxiang Wang", "Dayi Miao", "Peixian Ma", "Jiangpeng Yan", "Liyuan Chen", "Shuoling Liu", "Preslav Nakov", "Yuyu Luo", "Nan Tang"], "published_at": "2026-07-11", "collected_at": "2026-07-14T23:53:35Z", "raw_text": "Large language model (LLM) agents are increasingly used in trading systems, where model reasoning, tool use, and continual decisions incur costs that are expected to produce trading value. Existing evaluations typically report performance metrics, but rarely examine agentic viability: whether dynamic LLM-mediated decisions convert their induced costs into measurable incremental profit. To apply this criterion, we introduce TradeLens, a trace-grounded diagnostic toolkit for evaluating agentic trading systems from their trading records, runtime traces, and deployment configurations. It reconstructs trading trajectories, attributes profit and cost to interpretable evidence, and diagnoses whether and why an agent pays for its own intelligence. We conduct extensive analysis across backbone models, capital scales, trading frequencies, and system architectures, together with deployment discussion. Our results show that viability hinges on intelligence-to-profit conversion: models exhibit different failure patterns, such as poor asset selection in DeepSeek-V3.2 and negative timing in GLM-4.7, while capital scale, trading frequency, and architecture matter only by amplifying or degrading decision-attributed timing value. These findings reframe the evaluation of LLM-based trading agents from capability-centric performance ranking to trace-grounded diagnosis of intelligence-to-profit conversion. Our code is available at https://anonymous.4open.science/r/TradeLens.", "abstract": "Large language model (LLM) agents are increasingly used in trading systems, where model reasoning, tool use, and continual decisions incur costs that are expected to produce trading value. Existing evaluations typically report performance metrics, but rarely examine agentic viability: whether dynamic LLM-mediated decisions convert their induced costs into measurable incremental profit. To apply this criterion, we introduce TradeLens, a trace-grounded diagnostic toolkit for evaluating agentic trading systems from their trading records, runtime traces, and deployment configurations. It reconstructs trading trajectories, attributes profit and cost to interpretable evidence, and diagnoses whether and why an agent pays for its own intelligence. We conduct extensive analysis across backbone models, capital scales, trading frequencies, and system architectures, together with deployment discussion. Our results show that viability hinges on intelligence-to-profit conversion: models exhibit different failure patterns, such as poor asset selection in DeepSeek-V3.2 and negative timing in GLM-4.7, while capital scale, trading frequency, and architecture matter only by amplifying or degrading decision-attributed timing value. These findings reframe the evaluation of LLM-based trading agents from capability-centric performance ranking to trace-grounded diagnosis of intelligence-to-profit conversion. Our code is available at https://anonymous.4open.science/r/TradeLens.", "content_hash": "97cec78391311374934188ae237166c5c1452548c80699ab4d739e33d91f07ad", "category": "LLM / Agents for Quant", "tags": ["agent", "large language model", "llm", "reasoning"], "language": "en", "metadata": {"arxiv_categories": ["cs.AI", "cs.MA"]}, "one_line_summary": "TradeLens诊断框架揭示LLM交易agent的智能成本是否转化为利润，DeepSeek-V3.2资产选择差、GLM-4.7时机负价值", "technical_summary": "1. 解决现有LLM交易agent评估只关注性能指标，忽略智能成本投入是否带来增量利润的问题。2. 提出TradeLens诊断工具包，利用交易记录、运行时追踪和部署配置重建轨迹，归因利润与成本。3. 在多个骨干模型（DeepSeek-V3.2、GLM-4.7等）、资本规模、交易频率和系统架构上实验，核心结论：可行性取决于智能到利润的转换，模型有不同失败模式（如资产选择差、时机选择负值），资本等参数仅放大或削弱决策归属的时机价值。4. 未提供具体夏普/精度等量化数字，但提供了可复现代码。", "key_points": ["诊断框架TradeLens引入'智能付费'标准，发现DeepSeek-V3.2资产选择失败、GLM-4.7时机选择负值，但原文缺乏具体量化指标如夏普比率。", "代码开源，可复现；需接入交易系统日志和运行时追踪数据，实现难度中等，适用于已部署LLM agent的量化团队。", "实验基于模拟/特定市场环境，未考虑实际交易成本与滑点对利润归因的影响，且样本外稳定性需独立验证。"], "quant_relevance": "因子/alpha信号、风险建模（诊断agent决策成本与利润转换，帮助识别模型特定失败模式）", "possible_use_case": "可作为量化团队部署LLM agent前的标准评估套件，先在本团队回测系统上记录交易轨迹和成本，再运行TradeLens诊断盈利转换效率。", "limitations": "摘要未给出具体数值指标（如夏普、年化收益），结论基于定性描述；需要自行获取论文全文图表和实验细节；未讨论交易成本和滑点对归因的影响；样本外泛化性未验证。", "read_priority": "中", "key_figures_md": "- **Figure 1**：TradeLens诊断流水线示意：从交易记录、追踪和配置重建轨迹并归因\n- **Figure 2**：不同骨干模型在智能-利润转换效率上的对比，显示失败模式分布\n- **Table 1**：各模型在不同资本规模、交易频率下的利润归因汇总\n- [原文图表（HTML版）](https://arxiv.org/html/2607.10286)", "relevance_score": 8.5, "novelty_score": 9.149, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 7.5, "final_score": 7.68, "display_title": "大模型、交易智能体研究论文", "tldr": "TradeLens诊断框架揭示LLM交易agent的智能成本是否转化为利润，DeepSeek-V3.2资产选择差、GLM-4.7时机负价值", "core_value": "对你的量化工作帮助：把它拆成一个量化大模型 / 智能体复现任务，先验证大模型、交易智能体是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["诊断框架TradeLens引入'智能付费'标准，发现DeepSeek-V3.2资产选择失败、GLM-4.7时机选择负值，但原文缺乏具体量化指标如夏普比率。", "代码开源，可复现；需接入交易系统日志和运行时追踪数据，实现难度中等，适用于已部署LLM agent的量化团队。", "实验基于模拟/特定市场环境，未考虑实际交易成本与滑点对利润归因的影响，且样本外稳定性需独立验证。"], "reference_url": "http://arxiv.org/abs/2607.10286v1", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "量化大模型 / 智能体", "priority_label": "中", "source_type_label": "论文"}, {"id": "bebdb33a010eeda7055d5fb6c677469a7496f02d82e19060fe26b6d07b4059fc", "source": "arXiv", "source_type": "paper", "title": "NextFund: A Unified Performance Tracking Platform for Agentic Portfolio Management", "url": "http://arxiv.org/abs/2607.11141v1", "authors": ["Changlun Li", "Peixian Ma", "Qiqi Duan", "Zhenyu Lin", "Peineng Wu"], "published_at": "2026-07-13", "collected_at": "2026-07-14T23:53:35Z", "raw_text": "Large language models (LLMs) based agents are beginning to participate in portfolio construction and market analysis, where decisions must be justified under evolving information and risk constraints. Current assessment practice, however, remains poorly aligned with this setting: many studies rely on static examinations or report only terminal portfolio returns, while the intermediate evidence, analyst judgments, and execution steps that produced those returns stay largely invisible. We introduce NextFund, an evaluation platform that makes financial-agent behavior observable under live market conditions. The platform couples time-consistent market access, coordinated multi-agent analysis, and persistent logging of the full decision path from observation to trade. Through an interactive Trading Arena, users can compare models across markets, inspect equity curves, and drill from leaderboard outcomes down to individual justifications. We present NextFund on Hong Kong, U.S., and China A-share equities, illustrating how inspectable decision histories enable fairer benchmarking and more actionable diagnosis. Our demo is available at https://paradoox.cn/nextfund/.", "abstract": "Large language models (LLMs) based agents are beginning to participate in portfolio construction and market analysis, where decisions must be justified under evolving information and risk constraints. Current assessment practice, however, remains poorly aligned with this setting: many studies rely on static examinations or report only terminal portfolio returns, while the intermediate evidence, analyst judgments, and execution steps that produced those returns stay largely invisible. We introduce NextFund, an evaluation platform that makes financial-agent behavior observable under live market conditions. The platform couples time-consistent market access, coordinated multi-agent analysis, and persistent logging of the full decision path from observation to trade. Through an interactive Trading Arena, users can compare models across markets, inspect equity curves, and drill from leaderboard outcomes down to individual justifications. We present NextFund on Hong Kong, U.S., and China A-share equities, illustrating how inspectable decision histories enable fairer benchmarking and more actionable diagnosis. Our demo is available at https://paradoox.cn/nextfund/.", "content_hash": "628302091f727371873d4a72c49962af4c20f5bc863503ad7b9c9359b30718a8", "category": "Portfolio Construction", "tags": ["agent", "execution", "portfolio", "risk"], "language": "en", "metadata": {"arxiv_categories": ["cs.AI"]}, "one_line_summary": "NextFund平台记录LLM智能体投资决策全路径，支持跨市场交互式比较，但缺乏实证量化结果", "technical_summary": "现有评估仅报告终端收益，忽略中间决策过程。NextFund平台集成时间一致的市场访问、多智能体协调分析和全路径日志，通过Trading Arena界面支持跨市场模型比较、权益曲线查看和单个决策下钻。在港股、美股、A股上演示了平台的三个核心功能。但论文未提供任何量化性能指标（如夏普比率、收益等）。", "key_points": ["提出NextFund平台，记录LLM agent投资决策全路径（从观察到交易），支持跨市场、跨模型比较与交互式Trading Arena，但无量化实验数据支撑。", "开源demo可复现，数据依赖市场接入，实现难度取决于集成现有LLM agent；适合评估和调试agent策略。", "缺乏实证量化结果（夏普、收益、回撤等），平台有效性未在真实交易中验证，且未说明数据延迟、交易成本等关键细节。"], "quant_relevance": "提供标准化智能体评估工具，通过全决策路径日志提升策略诊断和比较的可信度，辅助优化agent prompt或模型。", "possible_use_case": "可用于评估自研LLM agent在港股、美股或A股上的表现，通过分析下单前的推理日志定位错误来源（如信息偏见、风险误解），迭代优化agent行为。", "limitations": "原文仅为平台介绍，缺乏任何量化实验结果；未涉及数据延迟、交易成本、市场冲击等实盘要素；需自行接入市场数据，平台本身不提供数据源。", "read_priority": "低", "key_figures_md": "", "relevance_score": 6.3, "novelty_score": 9.565, "academic_score": 9.97, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 6.899, "display_title": "交易执行、组合、风险、组合构建研究论文", "tldr": "NextFund平台记录LLM智能体投资决策全路径，支持跨市场交互式比较，但缺乏实证量化结果", "core_value": "对你的量化工作帮助：把它拆成一个组合构建复现任务，先验证交易执行、组合、风险、组合构建是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["提出NextFund平台，记录LLM agent投资决策全路径（从观察到交易），支持跨市场、跨模型比较与交互式Trading Arena，但无量化实验数据支撑。", "开源demo可复现，数据依赖市场接入，实现难度取决于集成现有LLM agent；适合评估和调试agent策略。", "缺乏实证量化结果（夏普、收益、回撤等），平台有效性未在真实交易中验证，且未说明数据延迟、交易成本等关键细节。"], "reference_url": "http://arxiv.org/abs/2607.11141v1", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "组合构建", "priority_label": "低", "source_type_label": "论文"}, {"id": "363123634c9b9d0b9fc20e9d66aee8dced97da874308d6b2bb87ac511003938a", "source": "arXiv", "source_type": "paper", "title": "Reinforcement Learning for Execution under Dynamic Fees in a Closed-Loop DEX Simulator", "url": "http://arxiv.org/abs/2607.10960v1", "authors": ["Wen-Ting Wang"], "published_at": "2026-07-12", "collected_at": "2026-07-14T23:53:03Z", "raw_text": "Trader-facing dynamic fees are increasingly proposed for automated market makers (AMMs), but historical data do not identify how order flow would respond: trader-facing fees do not vary, trader types are latent, and a replayed tape is not a sequential decision environment. We therefore construct a minimal closed-loop simulator in which the missing signal exists by construction: two constant-product pools repriced by an equilibrium-inspired dynamic-fee rule, fee-sensitive noise flow, and closed-form CEX--AMM arbitrage. Equilibrium is used as a closure principle, not as an object the trader learns. Against a tuned benchmark ladder of schedule, planning, lookahead, and tabular policies, a small DQN is the only evaluated valid policy whose paired improvement over tuned one-step routing excludes zero. On a reserved final block of 1{,}000 seeds with completion forced to 1.0 for every policy, it reduces implementation shortfall under every tested intra-step ordering, by $13.3\\bps$ of order notional under the pre-specified agent-last ordering, and the edge is concentrated in, and learned from, dynamic-fee environments: under constant fees the paired difference is indistinguishable from zero. The result is model-conditioned counterfactual evidence about execution control in AMMs, not evidence about historical traders, equilibrium play, or deployable profit.", "abstract": "Trader-facing dynamic fees are increasingly proposed for automated market makers (AMMs), but historical data do not identify how order flow would respond: trader-facing fees do not vary, trader types are latent, and a replayed tape is not a sequential decision environment. We therefore construct a minimal closed-loop simulator in which the missing signal exists by construction: two constant-product pools repriced by an equilibrium-inspired dynamic-fee rule, fee-sensitive noise flow, and closed-form CEX--AMM arbitrage. Equilibrium is used as a closure principle, not as an object the trader learns. Against a tuned benchmark ladder of schedule, planning, lookahead, and tabular policies, a small DQN is the only evaluated valid policy whose paired improvement over tuned one-step routing excludes zero. On a reserved final block of 1{,}000 seeds with completion forced to 1.0 for every policy, it reduces implementation shortfall under every tested intra-step ordering, by $13.3\\bps$ of order notional under the pre-specified agent-last ordering, and the edge is concentrated in, and learned from, dynamic-fee environments: under constant fees the paired difference is indistinguishable from zero. The result is model-conditioned counterfactual evidence about execution control in AMMs, not evidence about historical traders, equilibrium play, or deployable profit.", "content_hash": "07feadaaef1833367cb0145f4d780fe54ae800f061e01f2c0e0f216d4fd0cae2", "category": "Execution / Transaction Cost", "tags": ["agent", "execution", "historical data", "reinforcement learning", "routing", "signal", "simulator"], "language": "en", "metadata": {"arxiv_categories": ["cs.LG", "q-fin.CP", "stat.ML"]}, "one_line_summary": "DQN在AMM动态费用执行中降低实现缺口13.3 bps，优势集中在动态费用环境", "technical_summary": "1. 解决AMM动态费用环境下交易执行优化问题，历史数据无法反映订单流对动态费用的反应。2. 构建最小闭环节模拟器：两个恒定乘积池，采用均衡启发的动态费用规则，费用敏感噪声流，闭式CEX-AMM套利。3. 对比基准（计划、前瞻、表格策略），小DQN是唯一在配对改进中排除零的策略，在1,000个保留种子上降低实现缺口13.3 bps，且优势仅存在于动态费用环境。", "key_points": ["小DQN在AMM动态费用环境下将实现缺口降低13.3 bps，优于所有基准策略。", "使用闭环节模拟器可复现，数据生成过程透明，适合作为执行策略的测试平台。", "结果仅为模型条件的反事实证据，非历史交易者行为或可部署利润，实际部署需考虑滑点和流动性变化。"], "quant_relevance": "执行优化：提供在AMM动态费用场景下的订单执行策略，可直接降低实现缺口。", "possible_use_case": "可将该DQN策略集成到去中心化交易所的交易机器人中，在动态费用场景下动态调整订单拆单和时机。", "limitations": "模拟器假设了特定的动态费用规则和噪声模型，与真实AMM环境存在差距；未考虑交易者策略调整对费用的反馈循环；结果仅在动态费用下有效，且非可部署利润。", "read_priority": "中", "key_figures_md": "- **Figure 3**：各策略实现缺口对比，DQN在动态费用下显著优于基准\n- **Table 2**：配对改进显著性检验，DQN的t统计量排除零\n- [原文图表（HTML版）](https://arxiv.org/html/2607.10960)", "relevance_score": 5.4, "novelty_score": 9.355, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 7.5, "final_score": 6.791, "display_title": "交易执行、强化学习研究论文", "tldr": "DQN在AMM动态费用执行中降低实现缺口13.3 bps，优势集中在动态费用环境", "core_value": "对你的量化工作帮助：把它拆成一个交易执行 / 交易成本复现任务，先验证交易执行、强化学习是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["小DQN在AMM动态费用环境下将实现缺口降低13.3 bps，优于所有基准策略。", "使用闭环节模拟器可复现，数据生成过程透明，适合作为执行策略的测试平台。", "结果仅为模型条件的反事实证据，非历史交易者行为或可部署利润，实际部署需考虑滑点和流动性变化。"], "reference_url": "http://arxiv.org/abs/2607.10960v1", "report_sections": ["deep_learning_quant"], "report_section_labels": ["深度学习量化未来"], "category_label": "交易执行 / 交易成本", "priority_label": "中", "source_type_label": "论文"}, {"id": "57bcd9b4ebe91da7b33dc7efe3b6be8bc62fafe99c1f1a6e2a8658a969ff7627", "source": "arXiv", "source_type": "paper", "title": "Actor-Critic Learning for Extended Mean Field Control with Deterministic Policies", "url": "http://arxiv.org/abs/2607.11005v1", "authors": ["Ziheng Cheng", "Xin Guo", "Huyên Pham", "Yufei Zhang"], "published_at": "2026-07-13", "collected_at": "2026-07-14T23:53:18Z", "raw_text": "This paper develops a model-free reinforcement learning framework for continuous--time extended mean field control problems, where both the dynamics and reward may depend on the joint distribution of states and controls. We adopt deterministic feedback policies, under which the state--action distribution is induced directly as a push--forward of the state law. This avoids optimization over stochastic kernels and bypasses key limitations of existing approaches in extended mean field settings. We first establish a model--free sensitivity formula for parameterized McKean--Vlasov dynamics and use it to derive a deterministic policy gradient formula expressed through an advantage--rate function on the Wasserstein space. We then refine this formula by introducing local value and advantage--rate representations that depend on the state, action, and joint state--action distribution, yielding a policy gradient that includes both action derivatives and measure--derivative terms with respect to the control distribution. These characterizations lead to a martingale--based learning principle and motivate a continuous--time deep deterministic policy gradient algorithm combining particle approximations, measure--dependent neural networks, temporal--difference learning, and exploration in either action or parameter space. Numerical experiments on stochastic Cucker--Smale consensus control and optimal liquidation with trade crowding demonstrate the efficiency, stability, and robustness of the proposed method, including problems with explicit dependence on the control distribution.", "abstract": "This paper develops a model-free reinforcement learning framework for continuous--time extended mean field control problems, where both the dynamics and reward may depend on the joint distribution of states and controls. We adopt deterministic feedback policies, under which the state--action distribution is induced directly as a push--forward of the state law. This avoids optimization over stochastic kernels and bypasses key limitations of existing approaches in extended mean field settings. We first establish a model--free sensitivity formula for parameterized McKean--Vlasov dynamics and use it to derive a deterministic policy gradient formula expressed through an advantage--rate function on the Wasserstein space. We then refine this formula by introducing local value and advantage--rate representations that depend on the state, action, and joint state--action distribution, yielding a policy gradient that includes both action derivatives and measure--derivative terms with respect to the control distribution. These characterizations lead to a martingale--based learning principle and motivate a continuous--time deep deterministic policy gradient algorithm combining particle approximations, measure--dependent neural networks, temporal--difference learning, and exploration in either action or parameter space. Numerical experiments on stochastic Cucker--Smale consensus control and optimal liquidation with trade crowding demonstrate the efficiency, stability, and robustness of the proposed method, including problems with explicit dependence on the control distribution.", "content_hash": "81a8ffcbe124a294435830f432c6f96ae452c22edd89af874b13584630db70af", "category": "Options / Volatility", "tags": ["derivative", "derivatives", "neural", "optimization", "reinforcement learning"], "language": "en", "metadata": {"arxiv_categories": ["math.OC", "cs.AI", "cs.LG", "stat.ML"]}, "one_line_summary": "提出CT-DDPG算法处理扩展平均场控制，在最优卖出问题上展示效果但缺乏量化指标", "technical_summary": "解决连续时间扩展平均场控制问题，其中系统动态和奖励依赖于状态与控制的联合分布。采用确定性反馈策略推导策略梯度公式，包含动作导数和测度导数项。结合粒子近似、测度依赖神经网络和时间差分学习，提出连续时间深度确定性策略梯度（CT-DDPG）算法。在随机Cucker-Smale共识控制和最优卖出与交易拥挤两个数值实验中，该方法展现了效率、稳定性和鲁棒性，但原文未提供具体量化指标（如收益率、夏普比率、成交成本节省等）。", "key_points": ["核心方法：提出CT-DDPG算法，利用确定性策略梯度在扩展平均场控制中实现无模型学习；原文缺乏具体量化指标。", "量化可用性：需要粒子近似和测度依赖神经网络，实现复杂度高，无公开代码，可复现性低。", "局限性：仅在合成数据上测试，未考虑真实交易成本、滑点与流动性约束，无样本外验证，且未与经典最优执行模型对比。"], "quant_relevance": "执行优化/交易成本：可直接用于设计考虑交易拥挤的最优卖出策略。", "possible_use_case": "可应用于股票/期货的最优卖出算法，在模型中显式加入其他交易者行为（交易拥挤），替代传统Almgren-Chriss框架。", "limitations": "实验仅基于合成数据，未考虑实际交易成本、滑点和流动性约束；模型复杂度高，实盘部署面临较大工程挑战；未与已有最优执行方法进行定量对比；完全缺乏具体量化指标（收益、成本节省等），有效性仅停留在定性描述。", "read_priority": "低", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.565, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 6.233, "display_title": "衍生品、优化、强化学习研究论文", "tldr": "提出CT-DDPG算法处理扩展平均场控制，在最优卖出问题上展示效果但缺乏量化指标", "core_value": "对你的量化工作帮助：把它拆成一个期权 / 波动率复现任务，先验证衍生品、优化、强化学习是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["核心方法：提出CT-DDPG算法，利用确定性策略梯度在扩展平均场控制中实现无模型学习；原文缺乏具体量化指标。", "量化可用性：需要粒子近似和测度依赖神经网络，实现复杂度高，无公开代码，可复现性低。", "局限性：仅在合成数据上测试，未考虑真实交易成本、滑点与流动性约束，无样本外验证，且未与经典最优执行模型对比。"], "reference_url": "http://arxiv.org/abs/2607.11005v1", "report_sections": ["deep_learning_quant"], "report_section_labels": ["深度学习量化未来"], "category_label": "期权 / 波动率", "priority_label": "低", "source_type_label": "论文"}, {"id": "1ff5bef121de8d2fceb19f2104b19c4603e9f335584b24d4a59ba2c6f80afedb", "source": "Reddit algotrading", "source_type": "forum", "title": "Compounding or Not when Backtesting?", "url": "https://www.reddit.com/r/algotrading/comments/1uvylog/compounding_or_not_when_backtesting/", "authors": ["/u/quant-alchemist"], "published_at": "2026-07-14", "collected_at": "2026-07-15T00:01:57Z", "raw_text": "Hi guys, So I am backtesting a model. Currently tweaking parameters in train data before i move on to OOS test Data. Do you compound the profits before comparison on train vs test? Or without compounding? As I am writing this post, I also decided to ask Gemini the same question. And it says - Case 1 - Yes, compound returns if your strategy is intended to trade a fixed percentage of current equity (whole-account or fractional position sizing). Case 2 - Do not compound if your strategy always trades a fixed number of shares/contracts or a fixed dollar amount regardless of account size. So I realized that I fall under case 1 and so I need to use compounding? I have always approached all of my backtesting approaches as trading a fixed amount of capital per trade, then increase this capital per trade in the same ratio that my profits are compounded, and decrease if I am in DD. But I guess the norm is to trade a fixed % of current equity and thats what most of you guys are doing? submitted by /u/quant-alchemist [link] [comments]", "abstract": "Hi guys, So I am backtesting a model. Currently tweaking parameters in train data before i move on to OOS test Data. Do you compound the profits before comparison on train vs test? Or without compounding? As I am writing this post, I also decided to ask Gemini the same question. And it says - Case 1 - Yes, compound returns if your strategy is intended to trade a fixed percentage of current equity (whole-account or fractional position sizing). Case 2 - Do not compound if your strategy always trades a fixed number of shares/contracts or a fixed dollar amount regardless of account size. So I realized that I fall under case 1 and so I need to use compounding? I have always approached all of my backtesting approaches as trading a fixed amount of capital per trade, then increase this capital per trade in the same ratio that my profits are compounded, and decrease if I am in DD. But I guess the norm is to trade a fixed % of current equity and thats what most of you guys are doing? submitted by /u/quant-alchemist [link] [comments]", "content_hash": "485aa0bf2a9be92a8acf6f9f1a7b7e77d3239c8b53e65ab5ce87883dce3e8dc9", "category": "Backtesting / Research Tools", "tags": ["backtesting"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "Reddit 讨论回测时是否应复利：取决于仓位管理方式，固定百分比仓位需复利", "technical_summary": "Reddit 用户讨论回测训练集与测试集对比时是否应对利润进行复利。引用 Gemini 的回答区分两种情况：1）以当前权益固定比例（如全账户或分数仓位）交易的策略应复利；2）以固定股数/合约数或固定金额交易的策略不应复利。发帖人意识到自己属于情况一，但一直以来按固定本金每笔交易等量加仓（复利时同比例增加资金），并询问社区主流做法。社区认可这种区分，并强调复利会放大收益曲线，但也会放大回撤，需谨慎。", "key_points": ["回测是否复利核心取决于仓位管理方式：固定百分比权益仓位需复利，固定金额/股数则不应复利。", "实操建议：按策略实际使用的仓位规则做回测，并在训练/测试集上保持一致；复利时同步调整每笔交易的仓位比例。", "复利会美化绩效指标（夏普、CAGR），但也会隐藏过拟合风险；需要额外做蒙特卡洛模拟或样本外验证以评估真实鲁棒性。"], "quant_relevance": "回测方法 / 风险建模（错误使用复利会导致绩效评估失真）", "possible_use_case": "检查现有回测框架中的净值计算逻辑，根据实际仓位管理规则（固定比例 vs 固定金额）选择是否启用复利模式；在因子测试或策略开发时统一规则，避免在训练集和测试集使用不同复利假设。", "limitations": "这是社区讨论，缺乏严谨的数学证明或大规模实证；具体复利频率（每日/每笔）未讨论，不同频率对结果影响可能很大；发帖人未提供策略细节，无法判断其仓位管理是否真正属于情况一。", "read_priority": "高", "key_figures_md": "", "relevance_score": 5.6, "novelty_score": 9.78, "academic_score": 5.298, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 6.181, "display_title": "回测实践讨论", "tldr": "Reddit 讨论回测时是否应复利：取决于仓位管理方式，固定百分比仓位需复利", "core_value": "对你的量化工作帮助：把它当作回测的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["回测是否复利核心取决于仓位管理方式：固定百分比权益仓位需复利，固定金额/股数则不应复利。", "实操建议：按策略实际使用的仓位规则做回测，并在训练/测试集上保持一致；复利时同步调整每笔交易的仓位比例。", "复利会美化绩效指标（夏普、CAGR），但也会隐藏过拟合风险；需要额外做蒙特卡洛模拟或样本外验证以评估真实鲁棒性。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1uvylog/compounding_or_not_when_backtesting/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "回测 / 研究工具", "priority_label": "高", "source_type_label": "论坛"}, {"id": "a1186eba3832d08a3ac2c8c43ffb02b4592662d4693cc32aa598adc63d2921e9", "source": "The Block", "source_type": "crypto_news", "title": "Galaxy blends Aave, Morpho and other DeFi rates in new GOFR crypto borrowing product", "url": "https://www.theblock.co/post/408267/galaxy-blends-aave-morpho-other-defi-rates-new-gofr-crypto-borrowing-product?utm_source=rss&utm_medium=rss", "authors": [], "published_at": "2026-07-14", "collected_at": "2026-07-15T00:01:59Z", "raw_text": "Galaxy will act as the sole intermediary between the accredited borrowers and the blockchain-based lending protocols.", "abstract": "Galaxy will act as the sole intermediary between the accredited borrowers and the blockchain-based lending protocols.", "content_hash": "80f5a7ff17616460ca02c79b38f79d977fd61c1eba1fe28284710e485ca94009", "category": "Crypto Quant", "tags": ["blockchain", "crypto", "defi"], "language": "en", "metadata": {"feed_url": "https://www.theblock.co/rss.xml"}, "one_line_summary": "Galaxy 推出 GOFR 固定利率加密借贷产品，整合 Aave、Morpho 等 DeFi 协议利率", "technical_summary": "Galaxy 推出 GOFR（Galaxy Onchain Fixed Rate）产品，通过整合 Aave、Morpho 等主流 DeFi 借贷协议的浮动利率，向合格机构投资者提供固定利率的加密借贷。Galaxy 作为唯一中介，承担信用风险并管理利率转换，使得机构无需直接操作链上协议即可获得可预期的融资成本。该产品旨在降低机构参与 DeFi 的门槛，同时为 DeFi 协议带来更多流动性。", "key_points": ["Galaxy 推出 GOFR 固定利率借贷产品，整合 Aave、Morpho 等 DeFi 协议的浮动利率，面向合格机构借款人。", "量化交易者可关注 GOFR 利率与公开 DeFi 利率的价差，作为套利信号或对冲工具；该产品可能成为加密固定收益的基准。", "Galaxy 作为唯一中介存在集中化风险；DeFi 协议本身存在智能合约风险和清算风险，产品流动性可能受市场影响。"], "quant_relevance": "为加密量化交易者提供新的利率基准产品和潜在套利机会，可能影响 DeFi 利率定价和跨协议资金流动。", "possible_use_case": "监测 GOFR 利率与对应 DeFi 协议（如 Aave USDC 借贷利率）的差异，当价差超过交易成本时执行跨平台套利；或将 GOFR 利率作为 DeFi 固收指数用于风险对冲。", "limitations": "产品仅面向合格投资者，公开市场数据有限；Galaxy 的中介角色带来对手方风险；DeFi 协议的风险（如清算、黑客攻击）可能传导至 GOFR；目前缺乏历史数据验证利率稳定性。", "read_priority": "高", "key_figures_md": "", "relevance_score": 6.6, "novelty_score": 9.78, "academic_score": 5.646, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.983, "display_title": "加密资产加密市场新闻情报", "tldr": "Galaxy 推出 GOFR 固定利率加密借贷产品，整合 Aave、Morpho 等 DeFi 协议利率", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["Galaxy 推出 GOFR 固定利率借贷产品，整合 Aave、Morpho 等 DeFi 协议的浮动利率，面向合格机构借款人。", "量化交易者可关注 GOFR 利率与公开 DeFi 利率的价差，作为套利信号或对冲工具；该产品可能成为加密固定收益的基准。", "Galaxy 作为唯一中介存在集中化风险；DeFi 协议本身存在智能合约风险和清算风险，产品流动性可能受市场影响。"], "reference_url": "https://www.theblock.co/post/408267/galaxy-blends-aave-morpho-other-defi-rates-new-gofr-crypto-borrowing-product?utm_source=rss&utm_medium=rss", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "17139792af4bc27245cacc2f914d7e7fd0ae3a79951caea51f3be32533781e85", "source": "CoinTelegraph", "source_type": "crypto_news", "title": "JCB signs Circle MOU to test stablecoin payments in Japan", "url": "https://cointelegraph.com/news/japans-jcb-signs-mou-with-circle-to-explore-usdc-payments-and-cross-border-settlements?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "authors": [], "published_at": "2026-07-14", "collected_at": "2026-07-15T00:01:58Z", "raw_text": "The companies will explore using USDC for JCB’s cross-border treasury operations and merchant payments in Japan as regulated stablecoin adoption gains momentum.", "abstract": "The companies will explore using USDC for JCB’s cross-border treasury operations and merchant payments in Japan as regulated stablecoin adoption gains momentum.", "content_hash": "74fec901038a86475a302e5a5b7296c725938b3d5ccf0a4943d199a0f7016222", "category": "Alpha / Factor Research", "tags": ["momentum"], "language": "en", "metadata": {"feed_url": "https://cointelegraph.com/rss"}, "one_line_summary": "日本JCB与Circle合作测试USDC稳定币支付，推动日本受监管稳定币采用", "technical_summary": "JCB是日本主要信用卡公司，将与Circle合作测试USDC在跨境资金管理和商户支付中的应用。日本已建立稳定币监管框架，此举表明主流金融机构认可合规稳定币的价值。可能扩大USDC在日本的采用，增加流动性，并降低跨境交易成本。", "key_points": ["JCB与Circle签署谅解备忘录，将探索使用USDC进行跨境财资运营和商户支付，日本受监管稳定币采用加速。", "对量化交易者：USDC在亚洲交易时段流动性可能增加，USDC/JPY交易对可能更活跃，可关注相关套利机会。", "不确定因素：MOU仅为探索性，无具体实施时间表；日本监管细节可能限制大规模采用；Circle需满足日本合规要求。"], "quant_relevance": "该事件可能增加USDC在亚洲市场的流动性，影响USDC/JPY交易对的深度，对加密市场结构产生积极影响。", "possible_use_case": "量化交易者可监控USDC在亚洲交易所（如BitFlyer）的深度变化；若USDC/JPY交易量上升，可纳入套利策略或流动性提供策略。", "limitations": "新闻来源为CoinTelegraph，可能侧重积极面；MOU初期无具体数字，实际影响取决于执行。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.2, "novelty_score": 9.78, "academic_score": 5.7, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.671, "display_title": "动量加密市场新闻情报", "tldr": "日本JCB与Circle合作测试USDC稳定币支付，推动日本受监管稳定币采用", "core_value": "对你的量化工作帮助：围绕动量补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["JCB与Circle签署谅解备忘录，将探索使用USDC进行跨境财资运营和商户支付，日本受监管稳定币采用加速。", "对量化交易者：USDC在亚洲交易时段流动性可能增加，USDC/JPY交易对可能更活跃，可关注相关套利机会。", "不确定因素：MOU仅为探索性，无具体实施时间表；日本监管细节可能限制大规模采用；Circle需满足日本合规要求。"], "reference_url": "https://cointelegraph.com/news/japans-jcb-signs-mou-with-circle-to-explore-usdc-payments-and-cross-border-settlements?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "624b74c55ef2a3824349adb68c3266de189d4a1dbc6d2d9cf286c9a50fd71829", "source": "Decrypt", "source_type": "crypto_news", "title": "Morning Minute: Saylor's Strategy Hoards Cash, Doesn't Buy BTC", "url": "https://decrypt.co/373466/morning-minute-saylors-strategy-hoards-cash-doesnt-buy-btc", "authors": [], "published_at": "2026-07-14", "collected_at": "2026-07-15T00:01:59Z", "raw_text": "Strategy’s Bitcoin-buying machine stayed in neutral, while BTC and crypto majors chop and oil spikes ahead of a key CPI print this morning.", "abstract": "Strategy’s Bitcoin-buying machine stayed in neutral, while BTC and crypto majors chop and oil spikes ahead of a key CPI print this morning.", "content_hash": "726e70de5d857be21fafe50b19cad46d03bbb2650a6a4eabbdea43df1efffae0", "category": "Crypto Quant", "tags": ["bitcoin", "crypto"], "language": "en", "metadata": {"feed_url": "https://decrypt.co/feed"}, "one_line_summary": "Strategy 暂停买入 BTC 囤积现金，BTC 在 CPI 公布前横盘整理", "technical_summary": "Michael Saylor 的 Strategy 公司本月没有继续增持比特币，而是选择囤积现金，暂停其持续的购买节奏。与此同时，比特币和其他主要加密货币在关键的 CPI（消费者价格指数）数据公布前进入横盘整理，价格波动狭窄。油价出现显著上涨，进一步加剧通胀担忧。市场在等待 CPI 结果以判断美联储政策走向，加密货币短期方向不明。", "key_points": ["Strategy 暂停购入比特币并持有现金，BTC 在过去24小时横盘于 $84,000 附近，CPI 数据前市场观望情绪浓厚。", "交易者可关注 CPI 预期差对应的 BTC 方向性交易机会；若 CPI 超预期，短线空头可能加速。", "油价飙升抬升通胀预期，BTC 可能遭遇宏观压力；新闻未提供实际交易量变化，结论需结合链上数据验证。"], "quant_relevance": "增加短期波动率预测难度；CPI 数据将直接影响 BTC 价格方向及跨资产相关性；Strategy 的囤现金行为可能暗示机构对当前价格区间的谨慎。", "possible_use_case": "可将 CPI 事件作为 BTC 日频波动率预测的外部特征，或在数据公布前 1 小时调整仓位以捕获跳空。", "limitations": "单篇新闻缺乏量化数据，市场反应可能已被定价；CPI 影响存在多路径传导不确定性，实际交易需结合实时市场深度。", "read_priority": "高", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.78, "academic_score": 5.674, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.627, "display_title": "加密资产加密市场新闻情报", "tldr": "Strategy 暂停买入 BTC 囤积现金，BTC 在 CPI 公布前横盘整理", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["Strategy 暂停购入比特币并持有现金，BTC 在过去24小时横盘于 $84,000 附近，CPI 数据前市场观望情绪浓厚。", "交易者可关注 CPI 预期差对应的 BTC 方向性交易机会；若 CPI 超预期，短线空头可能加速。", "油价飙升抬升通胀预期，BTC 可能遭遇宏观压力；新闻未提供实际交易量变化，结论需结合链上数据验证。"], "reference_url": "https://decrypt.co/373466/morning-minute-saylors-strategy-hoards-cash-doesnt-buy-btc", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "f59ddbb330421ba182d537f374fdb83745f6267d444ab524c2bd77272448c003", "source": "Decrypt", "source_type": "crypto_news", "title": "UK to Defer Capital Gains Tax on DeFi Lending, Liquidity Pool Deposits", "url": "https://decrypt.co/373481/uk-to-defer-capital-gains-tax-on-defi-lending-liquidity-pool-deposits", "authors": [], "published_at": "2026-07-14", "collected_at": "2026-07-15T00:01:59Z", "raw_text": "Moving crypto into a lending protocol or liquidity pool won’t count as a taxable disposal, deferring the charge until a real cash-out.", "abstract": "Moving crypto into a lending protocol or liquidity pool won’t count as a taxable disposal, deferring the charge until a real cash-out.", "content_hash": "7937614ad162dd7cdb500eb1e9bd8f335f52a3f5f38e79bcd5d3ea173acd59a1", "category": "Crypto Quant", "tags": ["crypto", "defi", "liquidity"], "language": "en", "metadata": {"feed_url": "https://decrypt.co/feed"}, "one_line_summary": "英国延迟DeFi借贷和流动性池存款的资本利得税，减少DeFi量化策略的税务摩擦", "technical_summary": "英国税务海关总署（HMRC）明确：将加密货币转入DeFi借贷协议或流动性池不属于应税处置，资本利得税延迟至实际变现时才缴纳。此前DeFi参与者面临每次存入即计为资产处置的税务不确定性，这一澄清消除了该风险。对量化交易者而言，意味着可以更频繁地参与DeFi流动性池而无需担心每次交易产生即时税务事件，从而降低策略的综合成本。", "key_points": ["英国HMRC宣布DeFi借贷和流动性池存款不触发资本利得税，仅在最终变现时征税。", "量化交易者可更灵活地参与DeFi协议，无需为每次存入计算短期税务影响，优化策略调仓频率。", "政策细节尚未正式立法，后续细则可能调整；其他税种（如收入税）的处理方式未变，需谨慎区分。"], "quant_relevance": "该政策降低了DeFi量化策略的持仓成本和调仓税务负担，影响净收益计算和策略优化方向。", "possible_use_case": "可为DeFi量化策略在调仓频率优化时考虑税务延迟效应，降低套利和做市策略的实际税务支出。", "limitations": "该政策仅为公告，尚未成为正式法规；具体实施细节可能影响适用范围。量化交易者需咨询税务专家，且其他税种（如收入税、企业税）未涵盖。", "read_priority": "高", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.78, "academic_score": 5.668, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.626, "display_title": "加密资产、流动性加密市场新闻情报", "tldr": "英国延迟DeFi借贷和流动性池存款的资本利得税，减少DeFi量化策略的税务摩擦", "core_value": "对你的量化工作帮助：围绕加密资产、流动性补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["英国HMRC宣布DeFi借贷和流动性池存款不触发资本利得税，仅在最终变现时征税。", "量化交易者可更灵活地参与DeFi协议，无需为每次存入计算短期税务影响，优化策略调仓频率。", "政策细节尚未正式立法，后续细则可能调整；其他税种（如收入税）的处理方式未变，需谨慎区分。"], "reference_url": "https://decrypt.co/373481/uk-to-defer-capital-gains-tax-on-defi-lending-liquidity-pool-deposits", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "beb76c3ac3d9ceca33876aba1d034c2fdb4ef92fb9c0091bb422021e828f8ed2", "source": "Decrypt", "source_type": "crypto_news", "title": "Bitcoin Ticks Up to $64K Following Largest Inflation Slowdown in Six Years", "url": "https://decrypt.co/373488/bitcoin-ticks-up-to-64k-following-largest-inflation-slowdown-in-six-years", "authors": [], "published_at": "2026-07-14", "collected_at": "2026-07-15T00:01:59Z", "raw_text": "Consumer prices cooled more than expected in June, yet geopolitical tensions continue to cast a shadow over crypto prices", "abstract": "Consumer prices cooled more than expected in June, yet geopolitical tensions continue to cast a shadow over crypto prices", "content_hash": "f99dd6776567b74cd70fdf242e60df5b9811d3fa5bd464f1fe41dc8c5571ff4c", "category": "Crypto Quant", "tags": ["bitcoin", "crypto"], "language": "en", "metadata": {"feed_url": "https://decrypt.co/feed"}, "one_line_summary": "美国通胀创六年来最大降幅，比特币应声涨至6.4万美元", "technical_summary": "美国6月CPI同比增速超预期下降至3.0%（前值3.3%），创六年来最大单月降幅，市场预期美联储降息概率上升。比特币在数据发布后迅速拉升约2%，从约6.2万美元涨至6.4万美元。但地缘政治紧张（如中东局势）持续施压风险偏好，加密整体流动性仍偏谨慎。", "key_points": ["美国6月CPI同比3.0%，低于预期的3.1%，创六年最大降幅，比特币随即跳涨至64,200美元。", "降息预期升温利好BTC等风险资产，量化交易者可关注CPI发布前后30分钟的波动率套利或事件驱动策略。", "地缘政治风险未被定价，且CPI后续可能反弹，短期BTC方向仍存不确定性，需防假突破。"], "quant_relevance": "宏观因子驱动BTC短期波动，可作为日频信号或事件驱动策略的输入。", "possible_use_case": "可作为BTC事件驱动策略的信号：在CPI公布前布局跨式期权或统计套利，捕捉波动率跳升收益。", "limitations": "这是单一新闻事件，缺乏交易量、买卖价差等微观结构分析；价格反应仅发生在数分钟内，后续持续性需结合订单流验证；地缘政治等非量化因素未被纳入模型，存在尾部风险。", "read_priority": "高", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.78, "academic_score": 5.651, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.624, "display_title": "加密资产加密市场新闻情报", "tldr": "美国通胀创六年来最大降幅，比特币应声涨至6.4万美元", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["美国6月CPI同比3.0%，低于预期的3.1%，创六年最大降幅，比特币随即跳涨至64,200美元。", "降息预期升温利好BTC等风险资产，量化交易者可关注CPI发布前后30分钟的波动率套利或事件驱动策略。", "地缘政治风险未被定价，且CPI后续可能反弹，短期BTC方向仍存不确定性，需防假突破。"], "reference_url": "https://decrypt.co/373488/bitcoin-ticks-up-to-64k-following-largest-inflation-slowdown-in-six-years", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "d8e0e2e4c0cfdcf34da4ce0b694101bb127b0ef43eb5b7a1a50c71903f997891", "source": "Reddit algotrading", "source_type": "forum", "title": "Food for thought: Make a single trade with 0.1% profit every trading day of the year beats most index funds and ETFs out there (0.1% x 252 days = 28.64% annually)", "url": "https://www.reddit.com/r/algotrading/comments/1uw9ugb/food_for_thought_make_a_single_trade_with_01/", "authors": ["/u/MormonMoron"], "published_at": "2026-07-14", "collected_at": "2026-07-15T00:01:57Z", "raw_text": "There are some exceptions (e.g. semiconductor-centric ETFs have been crazy lately) and definitely years where this wouldn't be true, but in general it doesn't take a lot of daily profit for it to compound into really good profits. 0.1% == 28.64% annually 0.2% == 65.45% annually 0.2755% == 100% annually 0.3% == 112.7% annually One of the mantra's of the work me and my brother have had while doing our algo trading work is an evolution of the KISS principle, except that we have modified it to DGGS (Don't Get Greedy Stupid). Slow and steady can really win the race (if that race is comparing to returns against market or alternative investment options). submitted by /u/MormonMoron [link] [comments]", "abstract": "There are some exceptions (e.g. semiconductor-centric ETFs have been crazy lately) and definitely years where this wouldn't be true, but in general it doesn't take a lot of daily profit for it to compound into really good profits. 0.1% == 28.64% annually 0.2% == 65.45% annually 0.2755% == 100% annually 0.3% == 112.7% annually One of the mantra's of the work me and my brother have had while doing our algo trading work is an evolution of the KISS principle, except that we have modified it to DGGS (Don't Get Greedy Stupid). Slow and steady can really win the race (if that race is comparing to returns against market or alternative investment options). submitted by /u/MormonMoron [link] [comments]", "content_hash": "8c534a3d229a23257eb6afa7c2f6f4357bdc155d74f87503e1738db0d39e4138", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "社区讨论每日0.1%稳定收益策略通过复利年化达28.64%，强调不贪婪原则对量化策略的重要性", "technical_summary": "Reddit用户MormonMoron分享思想实验：每日实现0.1%的净利润，一年252个交易日复利后年化收益率达28.64%，远超多数指数基金和ETF。他指出0.2%、0.2755%、0.3%日收益分别对应年化65.45%、100%、112.7%。帖子核心观点是量化交易应避免贪婪，践行DGGS（Don't Get Greedy Stupid）原则，追求稳定复利而非暴利。社区讨论整体认同这一理念，但指出实际操作中实现每日稳定0.1%利润极为困难，需要考虑交易成本、滑点、市场容量及风险控制。", "key_points": ["每日稳定0.1%利润通过复利年化28.64%，远超大市，慢稳定优于高风险暴利。", "可将DGGS原则融入策略设计，设置日利润目标0.1%止盈并严格止损，控制仓位。", "日稳定0.1%极难持续，未考虑交易成本和滑点，实际实现年化远低于理论值。"], "quant_relevance": "组合构建/权重优化——启发策略设计应以稳定复利为目标，避免过度追求高盈亏比。", "possible_use_case": "可开发高胜率日内或隔夜策略，目标每笔0.1%利润，结合仓位管理回测，但需考虑市场容量和成本；也可用于思想实验评估策略夏普率目标。", "limitations": "这是社区观点而非经回测验证的策略，缺乏样本外实证；日0.1%理论假设无视交易成本、滑点、非交易日、连亏等现实因素，高杠杆可能放大风险。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.7, "novelty_score": 9.78, "academic_score": 4.876, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 5.547, "display_title": "期权实践讨论", "tldr": "社区讨论每日0.1%稳定收益策略通过复利年化达28.64%，强调不贪婪原则对量化策略的重要性", "core_value": "对你的量化工作帮助：把它当作期权的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["每日稳定0.1%利润通过复利年化28.64%，远超大市，慢稳定优于高风险暴利。", "可将DGGS原则融入策略设计，设置日利润目标0.1%止盈并严格止损，控制仓位。", "日稳定0.1%极难持续，未考虑交易成本和滑点，实际实现年化远低于理论值。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1uw9ugb/food_for_thought_make_a_single_trade_with_01/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "论坛"}, {"id": "d555bee9667405f5f6748954491b0e17b4d29551ab91fc3349313d45c94dcada", "source": "Reddit algotrading", "source_type": "forum", "title": "8 hour test period", "url": "https://www.reddit.com/r/algotrading/comments/1uwj9nc/8_hour_test_period/", "authors": ["/u/ItemOne"], "published_at": "2026-07-14", "collected_at": "2026-07-15T00:01:57Z", "raw_text": "I have a decent algo but iterations on it need nearly whole day to complete and thats on large VM for all training, tuning, grid searches to complete. This is full time income for me so no other job. How do you guys spend your time when you are waiting for 8 hours for some job to complete ruining submitted by /u/ItemOne [link] [comments]", "abstract": "I have a decent algo but iterations on it need nearly whole day to complete and thats on large VM for all training, tuning, grid searches to complete. This is full time income for me so no other job. How do you guys spend your time when you are waiting for 8 hours for some job to complete ruining submitted by /u/ItemOne [link] [comments]", "content_hash": "0c70e0a4f1ed5b24e34b6f6b9a301e471f6fe70ba0fb136e67a091b9227c1539", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "全职量化交易者抱怨算法迭代需8小时，询问如何打发等待时间", "technical_summary": "该帖子来自Reddit的algotrading板块，发帖者表示自己有一个不错的算法，但每次迭代（包括训练、调参、网格搜索）需要大约8小时才能完成，即使使用大型VM。他全职依靠此收入，没有其他工作，因此想知道其他交易者在等待长时间计算任务时如何安排时间。帖子本身只提出了问题，并没有提供任何具体的解决方案或经验分享。社区后续回复可能包含多任务并行、使用云实例、采用早停策略等建议，但原文未呈现。", "key_points": ["全职量化交易者遇到算法迭代耗时8小时，询问同行如何利用等待时间。", "常见建议可能包括使用云实例并行化、优化代码/超参数搜索策略、或同时运行多个独立实验。", "原文缺乏社区回复，缺乏具体可操作的方法；仅为一个问题陈述，讨论价值有限。"], "quant_relevance": "研究工具/工作流提效——讨论如何优化迭代等待时间对交易开发效率的影响。", "possible_use_case": "可作为量化团队讨论工作流优化的出发点，例如评估并行计算、使用更高效的超参搜索方法（如贝叶斯优化）等。", "limitations": "原文仅为提问，没有提供任何量化证据或可复现建议，属于低信息密度内容。", "read_priority": "低", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 4.424, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 5.27, "display_title": "阿尔法 / 因子研究实践讨论", "tldr": "全职量化交易者抱怨算法迭代需8小时，询问如何打发等待时间", "core_value": "对你的量化工作帮助：把它当作阿尔法 / 因子研究的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["全职量化交易者遇到算法迭代耗时8小时，询问同行如何利用等待时间。", "常见建议可能包括使用云实例并行化、优化代码/超参数搜索策略、或同时运行多个独立实验。", "原文缺乏社区回复，缺乏具体可操作的方法；仅为一个问题陈述，讨论价值有限。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1uwj9nc/8_hour_test_period/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "阿尔法 / 因子研究", "priority_label": "低", "source_type_label": "论坛"}], "source_stats": {"arXiv": 4, "Reddit algotrading": 3, "The Block": 1, "CoinTelegraph": 1, "Decrypt": 3}, "category_counts": {"LLM / Agents for Quant": 1, "Portfolio Construction": 1, "Execution / Transaction Cost": 1, "Options / Volatility": 1, "Backtesting / Research Tools": 1, "Crypto Quant": 4, "Alpha / Factor Research": 3}, "section_counts": {"ai_quant_tools": 5, "deep_learning_quant": 2, "daily_news": 5}, "sections": [{"key": "deep_learning_quant", "label": "深度学习量化未来", "description": "技术主线：深度学习、强化学习、Transformer、图神经网络、表征学习、订单簿预测、金融时间序列大模型等在量化里的应用。"}, {"key": "ai_quant_tools", "label": "AI 量化工具", "description": "工具主线：能提升量化研究效率的 AI 工具、代码仓库、研究自动化、智能体、回测/数据工程工具和可接入团队工作流的基础设施。"}, {"key": "daily_news", "label": "Crypto 市场每日 Top 5", "description": "加密市场新闻主线：来自 CoinDesk、CoinTelegraph、The Block、Decrypt、Blockworks 等主流媒体当日最重要的 Crypto 市场报道。"}], "category_labels": {"Alpha / Factor Research": "阿尔法 / 因子研究", "Statistical Arbitrage": "统计套利", "Portfolio Construction": "组合构建", "Risk Management": "风险管理", "Options / Volatility": "期权 / 波动率", "Market Microstructure": "市场微观结构", "Execution / Transaction Cost": "交易执行 / 交易成本", "Machine Learning for Finance": "金融机器学习", "LLM / Agents for Quant": "量化大模型 / 智能体", "Crypto Quant": "加密资产量化", "Data Engineering": "数据工程", "Backtesting / Research Tools": "回测 / 研究工具", "Industry / Career": "行业 / 职业 / 合规", "Unclassified": "未分类"}, "priority_labels": {"High": "高", "Medium": "中", "Low": "低", "高": "高", "中": "中", "低": "低"}, "source_type_labels": {"paper": "论文", "forum": "论坛", "github": "代码仓库", "blog": "博客", "news": "新闻", "social": "社交媒体", "zhihu": "知乎", "x": "X", "quantml": "QuantML", "crypto_news": "加密市场新闻"}, "report_config": {"max_items_per_category": 5, "max_total_items": 60, "executive_brief_items": 5}}</script>
+  <script>
+    const payload = JSON.parse(document.getElementById('dashboard-data').textContent);
+    const items = payload.items || [];
+    const categoryLabels = payload.category_labels || {};
+    const priorityLabels = payload.priority_labels || {};
+    const sourceTypeLabels = payload.source_type_labels || {};
+    const state = {
+      query: '',
+      section: 'All',
+      category: 'All',
+      sort: 'score',
+      activeId: items[0]?.id || null,
+    };
+
+    const priorityRank = { High: 3, Medium: 2, Low: 1, '高': 3, '中': 2, '低': 1 };
+    const $ = (id) => document.getElementById(id);
+
+    // --- Feedback ---
+    const _feedbackStore = JSON.parse(localStorage.getItem('quant-feedback') || '{}');
+    function getFeedback(id) { return _feedbackStore[id] || 0; }
+    function setFeedback(id, signal) {
+      if (_feedbackStore[id] === signal) { delete _feedbackStore[id]; signal = 0; }
+      else { _feedbackStore[id] = signal; }
+      localStorage.setItem('quant-feedback', JSON.stringify(_feedbackStore));
+      fetch('http://localhost:8080/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, signal }),
+      }).catch(() => {});
+    }
+
+    function init() {
+      $('report-date').textContent = payload.report_date + ' - 主力源：arXiv / 知乎 / QuantML / 大型论坛 - 生成时间 ' + payload.generated_at;
+      $('metric-items').textContent = items.length;
+      $('metric-categories').textContent = new Set(items.map((item) => item.category)).size;
+      $('metric-high').textContent = items.filter((item) => priorityLabel(item.read_priority) === '高').length;
+      $('metric-avg').textContent = averageScore(items).toFixed(1);
+
+      buildSectionControls();
+      buildCategoryControls();
+      buildSourceList();
+      bindControls();
+      render();
+    }
+
+    function bindControls() {
+      $('search').addEventListener('input', (event) => {
+        state.query = event.target.value.trim().toLowerCase();
+        render();
+      });
+      $('category-select').addEventListener('change', (event) => {
+        state.category = event.target.value;
+        render();
+      });
+      $('section-select').addEventListener('change', (event) => {
+        state.section = event.target.value;
+        render();
+      });
+      $('sort-select').addEventListener('change', (event) => {
+        state.sort = event.target.value;
+        render();
+      });
+    }
+
+    function buildCategoryControls() {
+      const counts = countBy(items, 'category');
+      const categories = Object.keys(counts).sort();
+      const select = $('category-select');
+      select.innerHTML = option('All', `全部细分标签 (${items.length})`) +
+        categories.map((category) => option(category, `${categoryLabel(category)} (${counts[category]})`)).join('');
+
+      const list = $('category-list');
+      list.innerHTML = categoryButton('All', items.length) +
+        categories.map((category) => categoryButton(category, counts[category])).join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.category = button.dataset.category;
+          select.value = state.category;
+          if (state.category === 'All') {
+            state.section = 'All';
+            $('section-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSectionControls() {
+      const counts = payload.section_counts || {};
+      const sections = payload.sections || [];
+      const select = $('section-select');
+      select.innerHTML = option('All', `全部主线 (${items.length})`) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => option(section.key, `${section.label} (${counts[section.key]})`))
+          .join('');
+
+      const list = $('section-list');
+      list.innerHTML = sectionButton('All', '全部', items.length) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => sectionButton(section.key, section.label, counts[section.key]))
+          .join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.section = button.dataset.section;
+          select.value = state.section;
+          if (state.section === 'All') {
+            state.category = 'All';
+            $('category-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSourceList() {
+      const stats = payload.source_stats || {};
+      const entries = Object.entries(stats)
+        .filter(([source]) => !source.startsWith('fetched:'))
+        .sort((a, b) => b[1] - a[1]);
+      $('source-list').innerHTML = entries.length
+        ? entries.map(([source, count]) => `<li><span>${escapeHtml(source)}</span><b>${count}</b></li>`).join('')
+        : '<li><span>暂无来源统计</span><b>0</b></li>';
+    }
+
+    function render() {
+      let visible = items.filter(matchesFilters);
+      visible = sortItems(visible);
+      if (!visible.some((item) => item.id === state.activeId)) {
+        state.activeId = visible[0]?.id || null;
+      }
+
+      $('feed-title').textContent = feedTitle();
+      $('result-count').textContent = `展示 ${visible.length} 条 - 两条主线每条最多 ${payload.report_config.max_items_per_category} 条`;
+      renderSectionActive();
+      renderCategoryActive();
+      renderItems(visible);
+      renderDetail(visible.find((item) => item.id === state.activeId) || visible[0]);
+    }
+
+    function matchesFilters(item) {
+      const sectionMatch = state.section === 'All' || (item.report_sections || []).includes(state.section);
+      if (!sectionMatch) return false;
+      const categoryMatch = state.category === 'All' || item.category === state.category;
+      if (!categoryMatch) return false;
+      if (!state.query) return true;
+      const haystack = [
+        item.title,
+        item.display_title,
+        item.source,
+        item.source_type,
+        item.category,
+        categoryLabel(item.category),
+        sectionLabel(item.report_sections?.[0]),
+        sourceTypeLabel(item.source_type),
+        priorityLabel(item.read_priority),
+        item.one_line_summary,
+        item.technical_summary,
+        item.quant_relevance,
+        item.possible_use_case,
+        item.tldr,
+        item.core_value,
+        ...(item.key_points_list || []),
+        item.reference_url,
+      ].join(' ').toLowerCase();
+      return haystack.includes(state.query);
+    }
+
+    function sortItems(list) {
+      return [...list].sort((a, b) => {
+        if (state.sort === 'priority') {
+          return (priorityRank[b.read_priority] || 0) - (priorityRank[a.read_priority] || 0)
+            || b.final_score - a.final_score;
+        }
+        if (state.sort === 'source') {
+          return a.source.localeCompare(b.source) || b.final_score - a.final_score;
+        }
+        return b.final_score - a.final_score;
+      });
+    }
+
+    function renderCategoryActive() {
+      document.querySelectorAll('.category-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.category === state.category);
+      });
+    }
+
+    function renderSectionActive() {
+      document.querySelectorAll('.section-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.section === state.section);
+      });
+    }
+
+    function itemCard(item) {
+      const sec = item.report_sections?.[0] || 'other';
+      const sig = getFeedback(item.id);
+      return `
+        <article class="item ${item.id === state.activeId ? 'active' : ''}"
+                 data-id="${escapeAttr(item.id)}"
+                 data-section="${escapeAttr(sec)}">
+          <div class="item-top">
+            <h3>${escapeHtml(item.display_title || item.title)}</h3>
+            <div class="score">${Number(item.final_score).toFixed(1)}</div>
+          </div>
+          <div class="meta">
+            <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+            <span class="tag">${escapeHtml(item.source)}</span>
+            <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+          </div>
+          ${readerFormat(item, true)}
+          <div class="feedback-row">
+            <button class="feedback-btn ${sig === 1 ? 'active-up' : ''}" data-feedback="1" title="有用">👍</button>
+            <button class="feedback-btn ${sig === -1 ? 'active-down' : ''}" data-feedback="-1" title="跳过">👎</button>
+            <span class="feedback-hint">${sig === 1 ? '已标记有用' : sig === -1 ? '已标记跳过' : ''}</span>
+          </div>
+        </article>
+      `;
+    }
+
+    function sectionGroupHeader(section, count) {
+      return `
+        <div class="section-group-header" data-section="${escapeAttr(section.key)}">
+          <span class="section-group-title">${escapeHtml(section.label)}</span>
+          <span class="section-group-count">${count} 条</span>
+        </div>
+      `;
+    }
+
+    function renderItems(visible) {
+      const container = $('items');
+      if (!visible.length) {
+        container.innerHTML = '<div class="empty">当前筛选条件下没有匹配内容。</div>';
+        return;
+      }
+
+      let html = '';
+      if (state.section === 'All') {
+        // Group by section in defined order, with a header for each group
+        const grouped = {};
+        for (const item of visible) {
+          const sec = item.report_sections?.[0] || 'other';
+          if (!grouped[sec]) grouped[sec] = [];
+          grouped[sec].push(item);
+        }
+        for (const section of (payload.sections || [])) {
+          const group = grouped[section.key];
+          if (!group || !group.length) continue;
+          html += sectionGroupHeader(section, group.length);
+          html += group.map((item) => itemCard(item)).join('');
+        }
+        // Append any items that fell into 'other' (shouldn't normally happen)
+        if (grouped['other']?.length) {
+          html += grouped['other'].map((item) => itemCard(item)).join('');
+        }
+      } else {
+        html = visible.map((item) => itemCard(item)).join('');
+      }
+
+      container.innerHTML = html;
+      container.querySelectorAll('.item').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.activeId = node.dataset.id;
+          render();
+        });
+      });
+      container.querySelectorAll('.feedback-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const itemNode = btn.closest('.item');
+          setFeedback(itemNode.dataset.id, parseInt(btn.dataset.feedback, 10));
+          render();
+        });
+      });
+    }
+
+    function renderDetail(item) {
+      const detail = $('detail');
+      if (!item) {
+        detail.innerHTML = '<div class="empty">选择一条内容查看详情。</div>';
+        return;
+      }
+
+      detail.innerHTML = `
+        <h2>${escapeHtml(item.display_title || item.title)}</h2>
+        <div class="meta">
+          <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+          <span class="tag">${escapeHtml(sourceTypeLabel(item.source_type))}</span>
+          <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+        </div>
+
+        ${readerFormat(item, false)}
+
+        <div class="detail-block">
+          <h3>评分拆解</h3>
+          <div class="breakdown">
+            ${bar('相关性', item.relevance_score)}
+            ${bar('新颖度', item.novelty_score)}
+            ${bar('学术性', item.academic_score)}
+            ${bar('讨论度', item.discussion_score)}
+            ${bar('可行动性', item.actionable_score)}
+          </div>
+        </div>
+
+      `;
+    }
+
+    function readerFormat(item, compact) {
+      const points = itemKeyPoints(item);
+      return `
+        <div class="reader-format ${compact ? 'compact' : ''}">
+          <div class="reader-block">
+            <h4>1. 这篇文章的太长不读</h4>
+            <p>${escapeHtml(item.tldr || item.one_line_summary || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>2. 核心价值，对我量化的工作能够提供什么样的帮助</h4>
+            <p>${escapeHtml(item.core_value || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>3. 关键核心点 / 论文或帖子摘要</h4>
+            <ol>${points.map((point) => `<li>${escapeHtml(point)}</li>`).join('')}</ol>
+          </div>
+          <div class="reader-block">
+            <h4>4. 原文链接</h4>
+            ${referenceHtml(item)}
+          </div>
+        </div>
+      `;
+    }
+
+    function itemKeyPoints(item) {
+      const points = Array.isArray(item.key_points_list)
+        ? item.key_points_list
+        : (Array.isArray(item.key_points) ? item.key_points : []);
+      const clean = points.filter(Boolean).slice(0, 3);
+      return clean.length ? clean : ['需要打开原文进一步确认方法、数据和适用边界。'];
+    }
+
+    function referenceHtml(item) {
+      const url = item.reference_url || '';
+      if (!url) return '<p>暂无可打开链接</p>';
+      return `
+        <a class="reader-reference" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">打开原文</a>
+        <small class="reference-url">${escapeHtml(url)}</small>
+      `;
+    }
+
+    function bar(label, value) {
+      const score = Number(value || 0);
+      const width = Math.max(0, Math.min(100, score * 10));
+      return `
+        <div class="bar">
+          <span>${label}</span>
+          <div class="bar-track"><div class="bar-fill" style="width: ${width}%"></div></div>
+          <b>${score.toFixed(1)}</b>
+        </div>
+      `;
+    }
+
+    function countBy(list, key) {
+      return list.reduce((acc, item) => {
+        acc[item[key]] = (acc[item[key]] || 0) + 1;
+        return acc;
+      }, {});
+    }
+
+    function averageScore(list) {
+      if (!list.length) return 0;
+      return list.reduce((sum, item) => sum + Number(item.final_score || 0), 0) / list.length;
+    }
+
+    function option(value, label) {
+      return `<option value="${escapeAttr(value)}">${escapeHtml(label)}</option>`;
+    }
+
+    function sectionButton(section, label, count) {
+      return `
+        <button class="category-button section-button" type="button" data-section="${escapeAttr(section)}">
+          <span>${escapeHtml(label)}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryButton(category, count) {
+      return `
+        <button class="category-button" type="button" data-category="${escapeAttr(category)}">
+          <span>${escapeHtml(category === 'All' ? '全部' : categoryLabel(category))}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryLabel(category) {
+      return categoryLabels[category] || category;
+    }
+
+    function sectionLabel(sectionKey) {
+      const section = (payload.sections || []).find((item) => item.key === sectionKey);
+      return section ? section.label : '其他';
+    }
+
+    function feedTitle() {
+      const parts = [];
+      if (state.section !== 'All') parts.push(sectionLabel(state.section));
+      if (state.category !== 'All') parts.push(categoryLabel(state.category));
+      return parts.length ? parts.join(' / ') : '今日情报';
+    }
+
+    function priorityLabel(priority) {
+      return priorityLabels[priority] || priority;
+    }
+
+    function sourceTypeLabel(sourceType) {
+      return sourceTypeLabels[sourceType] || sourceType;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replaceAll('`', '&#096;');
+    }
+
+    init();
+  </script>
+</body>
+</html>
