@@ -1,0 +1,1086 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>samson 量化情报台 - 2026-07-18</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --panel: #ffffff;
+      --ink: #202124;
+      --muted: #5f6368;
+      --line: #dadce0;
+      --blue: #1a73e8;
+      --red: #ea4335;
+      --yellow: #fbbc04;
+      --green: #34a853;
+      --blue-soft: #e8f0fe;
+      --green-soft: #e6f4ea;
+      --yellow-soft: #fef7e0;
+      --red-soft: #fce8e6;
+      --shadow: 0 1px 2px rgba(60, 64, 67, 0.16), 0 8px 24px rgba(60, 64, 67, 0.10);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(66, 133, 244, 0.07), transparent 30%),
+        radial-gradient(circle at top right, rgba(251, 188, 4, 0.08), transparent 26%),
+        var(--bg);
+      color: var(--ink);
+      font-family: "Google Sans", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(280px, 620px);
+      gap: 24px;
+      align-items: center;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand h1 {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin: 0;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+
+    .brand h1::before {
+      content: "";
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background:
+        conic-gradient(from 0deg, var(--blue) 0 25%, var(--red) 0 50%, var(--yellow) 0 75%, var(--green) 0 100%);
+      box-shadow: inset 0 0 0 7px #fff;
+    }
+
+    .date-pill {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 170px 170px 150px;
+      gap: 10px;
+    }
+
+    .control {
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 12px;
+      outline: none;
+    }
+
+    .control:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.14);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 260px minmax(420px, 1fr) 420px;
+      gap: 22px;
+      padding: 24px 32px 36px;
+    }
+
+    .rail,
+    .detail {
+      position: sticky;
+      top: 86px;
+      height: calc(100vh - 112px);
+      overflow: auto;
+    }
+
+    .rail,
+    .detail,
+    .feed {
+      min-width: 0;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      padding: 12px;
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
+    }
+
+    .metric:nth-child(1) { border-top: 3px solid var(--blue); }
+    .metric:nth-child(2) { border-top: 3px solid var(--red); }
+    .metric:nth-child(3) { border-top: 3px solid var(--yellow); }
+    .metric:nth-child(4) { border-top: 3px solid var(--green); }
+
+    .metric b {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .section-label {
+      margin: 18px 0 8px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .category-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .category-button {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--ink);
+      padding: 8px 10px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .category-button:hover,
+    .category-button.active {
+      border-color: transparent;
+      background: var(--blue-soft);
+      color: #174ea6;
+    }
+
+    .count {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .source-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .source-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .feed-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .feed-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .result-count {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .items {
+      display: grid;
+      gap: 10px;
+    }
+
+    .section-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 2px 4px;
+      margin-top: 10px;
+      border-bottom: 2px solid var(--line);
+    }
+
+    .section-group-header:first-child {
+      margin-top: 0;
+    }
+
+    .section-group-title {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .section-group-header[data-section="deep_learning_quant"] .section-group-title { color: var(--blue); }
+    .section-group-header[data-section="ai_quant_tools"] .section-group-title { color: var(--green); }
+    .section-group-header[data-section="daily_news"] .section-group-title { color: var(--yellow); }
+
+    .section-group-count {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .item {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.10);
+      padding: 18px;
+      cursor: pointer;
+      transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+    }
+
+    .item::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--blue), var(--red), var(--yellow), var(--green));
+    }
+
+    .item[data-section="deep_learning_quant"]::before { background: var(--blue); }
+    .item[data-section="ai_quant_tools"]::before { background: var(--green); }
+    .item[data-section="daily_news"]::before { background: var(--yellow); }
+
+    .item:hover,
+    .item.active {
+      border-color: #c6dafc;
+      box-shadow: var(--shadow);
+      transform: translateY(-2px);
+    }
+
+    .item-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .item h3 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.28;
+    }
+
+    .score {
+      min-width: 54px;
+      border-radius: 999px;
+      background: var(--blue-soft);
+      color: #174ea6;
+      padding: 6px 8px;
+      text-align: center;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .tag {
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: #f1f3f4;
+      padding: 3px 8px;
+    }
+
+    .tag:nth-child(1) { background: var(--blue-soft); color: #174ea6; }
+    .tag:nth-child(2) { background: var(--green-soft); color: #137333; }
+    .tag:nth-child(3) { background: var(--yellow-soft); color: #8a5a00; }
+    .tag:nth-child(4) { background: var(--red-soft); color: #b3261e; }
+
+    .summary {
+      margin: 0;
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .reference-link {
+      display: inline-flex;
+      width: fit-content;
+      border-top: 1px solid var(--line);
+      color: var(--blue);
+      padding-top: 9px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .reader-format {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .reader-format.compact {
+      gap: 8px;
+    }
+
+    .reader-block {
+      border-top: 1px solid var(--line);
+      padding-top: 9px;
+    }
+
+    .reader-block:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .reader-block h4 {
+      margin: 0 0 5px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .reader-block p,
+    .reader-block li {
+      margin: 0;
+      color: #30342d;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .reader-block ol {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .reader-reference {
+      color: var(--blue);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
+    .reference-url {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .detail {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .detail h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+
+    .detail-block {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .detail-block h3 {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+
+    .detail-block p,
+    .detail-block li {
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .detail-block ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .breakdown {
+      display: grid;
+      gap: 8px;
+    }
+
+    .bar {
+      display: grid;
+      grid-template-columns: 118px 1fr 40px;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .bar-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e7eadf;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--blue), var(--green), var(--yellow), var(--red));
+    }
+
+    .open-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      margin-top: 16px;
+      border: 1px solid var(--blue);
+      border-radius: var(--radius);
+      color: var(--blue);
+      text-decoration: none;
+      padding: 0 12px;
+      font-weight: 700;
+    }
+
+    .feedback-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+    }
+
+    .feedback-btn {
+      background: #f1f3f4;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 120ms, border-color 120ms;
+    }
+
+    .feedback-btn:hover { background: var(--blue-soft); }
+    .feedback-btn.active-up { background: var(--green-soft); border-color: var(--green); }
+    .feedback-btn.active-down { background: var(--red-soft); border-color: var(--red); }
+
+    .feedback-hint {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      padding: 28px;
+      color: var(--muted);
+      background: var(--panel);
+    }
+
+    @media (max-width: 1180px) {
+      .layout {
+        grid-template-columns: 220px 1fr;
+      }
+
+      .detail {
+        position: static;
+        grid-column: 1 / -1;
+        height: auto;
+      }
+    }
+
+    @media (max-width: 820px) {
+      .topbar {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .brand {
+        display: grid;
+        gap: 4px;
+      }
+
+      .brand h1 {
+        white-space: normal;
+        font-size: 21px;
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .rail,
+      .detail {
+        position: static;
+        height: auto;
+      }
+
+      .metric-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <h1>samson 量化情报台</h1>
+        <span class="date-pill" id="report-date"></span>
+      </div>
+      <div class="controls">
+        <input class="control" id="search" type="search" placeholder="搜索标题、摘要、分类..." />
+        <select class="control" id="section-select"></select>
+        <select class="control" id="category-select"></select>
+        <select class="control" id="sort-select">
+          <option value="score">按评分排序</option>
+          <option value="priority">按优先级排序</option>
+          <option value="source">按来源排序</option>
+        </select>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="rail">
+        <div class="metric-grid">
+          <div class="metric"><b id="metric-items">0</b><span>报告条目</span></div>
+          <div class="metric"><b id="metric-categories">0</b><span>分类数量</span></div>
+          <div class="metric"><b id="metric-high">0</b><span>高优先级</span></div>
+          <div class="metric"><b id="metric-avg">0.0</b><span>平均评分</span></div>
+        </div>
+
+        <div class="section-label">两条主线</div>
+        <div class="category-list" id="section-list"></div>
+
+        <div class="section-label">细分标签</div>
+        <div class="category-list" id="category-list"></div>
+
+        <div class="section-label">主力来源</div>
+        <ul class="source-list" id="source-list"></ul>
+      </aside>
+
+      <section class="feed">
+        <div class="feed-header">
+          <h2 id="feed-title">今日情报</h2>
+          <span class="result-count" id="result-count"></span>
+        </div>
+        <div class="items" id="items"></div>
+      </section>
+
+      <aside class="detail" id="detail"></aside>
+    </main>
+  </div>
+
+  <script id="dashboard-data" type="application/json">{"report_date": "2026-07-18", "generated_at": "2026-07-18T00:07:51Z", "items": [{"id": "9952f41d2aae858ad41293e06693b2a17d94420835744bd2765ba6a2f98c4c67", "source": "arXiv", "source_type": "paper", "title": "SciPhy Reinforcement Learning for Portfolio Optimization", "url": "http://arxiv.org/abs/2607.15195v1", "authors": ["Igor Halperin", "Andrey Itkin"], "published_at": "2026-07-16", "collected_at": "2026-07-17T23:52:28Z", "raw_text": "This paper introduces a dynamic portfolio optimization framework for large institutional investors using Scientific Physics-Informed Reinforcement Learning (SciPhyRL). Formulated in continuous time over an extended state space that includes explicit cumulative costs, the approach leverages offline historical data to learn optimal, distribution-aware strategies. A core innovation reduces the optimization challenge to solving an HJB equation by projecting it onto observed trajectories as a pathwise Hamilton-Jacobi equation. This is solved directly from data using PINN in a single offline sweep, eliminating the need for traditional value or policy iteration. To make the method effective at practical short horizons, the control variable is recast from a continuous trading rate to a discrete target holding. This ensures signal-implied positions are reached immediately, while execution costs are evaluated against a microstructure-grounded quadratic price impact model. Evaluated on a $14$-asset ETF universe using an engineered oracle signal, the learned Gibbs policy yields substantial out-of-sample Sharpe ratio improvements over static and myopic baselines. The results demonstrate that the proposed framework successfully translates known signal quality into a robust, multi-period, and cost-aware allocation mechanism with strictly controlled volatility and turnover.", "abstract": "This paper introduces a dynamic portfolio optimization framework for large institutional investors using Scientific Physics-Informed Reinforcement Learning (SciPhyRL). Formulated in continuous time over an extended state space that includes explicit cumulative costs, the approach leverages offline historical data to learn optimal, distribution-aware strategies. A core innovation reduces the optimization challenge to solving an HJB equation by projecting it onto observed trajectories as a pathwise Hamilton-Jacobi equation. This is solved directly from data using PINN in a single offline sweep, eliminating the need for traditional value or policy iteration. To make the method effective at practical short horizons, the control variable is recast from a continuous trading rate to a discrete target holding. This ensures signal-implied positions are reached immediately, while execution costs are evaluated against a microstructure-grounded quadratic price impact model. Evaluated on a $14$-asset ETF universe using an engineered oracle signal, the learned Gibbs policy yields substantial out-of-sample Sharpe ratio improvements over static and myopic baselines. The results demonstrate that the proposed framework successfully translates known signal quality into a robust, multi-period, and cost-aware allocation mechanism with strictly controlled volatility and turnover.", "content_hash": "8c38044d770ac8f4f9672b3d845b1d48c2e1ed0ae6158c6ad3d2e8ffab779a05", "category": "Portfolio Construction", "tags": ["allocation", "execution", "historical data", "microstructure", "optimization", "portfolio", "price impact", "reinforcement learning"], "language": "en", "metadata": {"arxiv_categories": ["q-fin.PM", "math.AP", "math.NA", "q-fin.CP", "q-fin.MF"]}, "one_line_summary": "SciPhyRL 用物理启发强化学习求解连续时间组合优化，在14资产ETF上样本外夏普显著超越基线", "technical_summary": "为解决大机构多期组合优化中连续时间动态与交易成本间的平衡，提出SciPhyRL框架。将问题形式化为包含累积成本的扩展状态空间下的连续时间强化学习，通过将HJB方程投影到观测轨迹上转化为路径哈密顿-雅可比方程，并利用PINN直接从历史数据离线求解，免去传统值迭代或策略迭代。为使方法适用于短期，将控制变量从连续交易速率改为离散目标持仓，并用微观结构基础的二次价格冲击模型评估执行成本。在14资产ETF组合上，使用工程化oracle信号，学习到的Gibbs策略样本外夏普显著优于静态和短视基线，同时严格控制波动率和换手率。", "key_points": ["核心创新：用PINN离线单次求解HJB方程，避免迭代；控制变量改为离散目标持仓以实现短期效果；样本外夏普显著优于静态和短视基线，但原文未披露具体夏普数值。", "量化可用性：需掌握HJB和PINN技术；数据要求为历史价格和交易成本参数；若作者公开代码（未确认），可复现性中等，否则实现难度高。", "局限性：仅在一个14资产ETF组合上测试，信号为工程化oracle信号，实际信号质量未知；未报告具体夏普、年化收益等数值，缺乏与学术界标准基线（如等权重、风险平价）的对比。"], "quant_relevance": "组合构建与权重优化；执行/交易成本建模", "possible_use_case": "可用于管理ETF或股票篮子的中频调仓策略，替换传统的定期再平衡或移动平均规则，尤其适合对换手率有严格约束的机构账户。", "limitations": "样本外测试限于单一14资产ETF组合，泛化性存疑；信号为oracle，真实信号下效果未知；原文未提供具体夏普、收益等数值，结论强度依赖图表解读；最终PINN解是否全局最优未证明。", "read_priority": "中", "key_figures_md": "- **Figure 3**：样本外夏普比率对比：SciPhyRL vs 静态基准 vs 短视策略\n- **Table 2**：14资产ETF组合上各策略的年化收益、波动率、最大回撤、换手率汇总\n- [原文图表（HTML版）](https://arxiv.org/html/2607.15195)", "relevance_score": 8.0, "novelty_score": 9.565, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 7.413, "display_title": "SciPhy 强化学习 用于 组合优化", "tldr": "SciPhyRL 用物理启发强化学习求解连续时间组合优化，在14资产ETF上样本外夏普显著超越基线", "core_value": "对你的量化工作帮助：把它拆成一个组合构建复现任务，先验证交易执行、市场微观结构、优化、组合是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["核心创新：用PINN离线单次求解HJB方程，避免迭代；控制变量改为离散目标持仓以实现短期效果；样本外夏普显著优于静态和短视基线，但原文未披露具体夏普数值。", "量化可用性：需掌握HJB和PINN技术；数据要求为历史价格和交易成本参数；若作者公开代码（未确认），可复现性中等，否则实现难度高。", "局限性：仅在一个14资产ETF组合上测试，信号为工程化oracle信号，实际信号质量未知；未报告具体夏普、年化收益等数值，缺乏与学术界标准基线（如等权重、风险平价）的对比。"], "reference_url": "http://arxiv.org/abs/2607.15195v1", "report_sections": ["deep_learning_quant"], "report_section_labels": ["深度学习量化未来"], "category_label": "组合构建", "priority_label": "中", "source_type_label": "论文"}, {"id": "756733823efd07ec8bf0f7c774fe49aa9c670a02806829a613271d6c2195bb0b", "source": "arXiv", "source_type": "paper", "title": "A Noise-Robust Elicit-to-Optimize Framework for Distortion Riskmetrics via Inverse Reinforcement Learning", "url": "http://arxiv.org/abs/2607.14373v1", "authors": ["Yang Liu", "Yuhao Liu", "Yunran Wei"], "published_at": "2026-07-15", "collected_at": "2026-07-17T23:52:28Z", "raw_text": "We propose a noise-robust elicit-to-optimize framework that integrates inverse reinforcement learning (IRL) and reinforcement learning (RL) for eliciting agents' risk preferences and optimizing policies under a broad class of risk objectives characterized by distortion riskmetrics. On the elicitation side, we propose an adaptive Bayesian IRL method that infers agents' latent risk objectives from their noisy observed decisions, explicitly allowing agents to take stochastic and suboptimal actions. We establish the existence of a finite set of distinguishing questions that identifies the preferred distortion riskmetric within the candidate class and prove that the convergence rate of the algorithm is of order $O(\\exp(-cm+O(\\sqrt{m\\log m})))$ under general settings, where $c>0$ is a constant and $m$ denotes the number of algorithm iterations. On the optimization side, we develop a model-free RL algorithm for optimizing policies under conditional distortion riskmetrics. By representing the objective as an integral of the conditional cost quantile function with respect to the distortion function, the method unifies distortion-riskmetric objectives. We optimize diverse risk objectives by extending the Proximal Policy Optimization (PPO) algorithm with policy, value, and quantile neural networks, where the quantile network estimates the full conditional cost quantile function and enables numerical evaluation of general risk objectives. A comprehensive empirical study demonstrates the framework's elicitation accuracy and effectiveness in complex financial environments.", "abstract": "We propose a noise-robust elicit-to-optimize framework that integrates inverse reinforcement learning (IRL) and reinforcement learning (RL) for eliciting agents' risk preferences and optimizing policies under a broad class of risk objectives characterized by distortion riskmetrics. On the elicitation side, we propose an adaptive Bayesian IRL method that infers agents' latent risk objectives from their noisy observed decisions, explicitly allowing agents to take stochastic and suboptimal actions. We establish the existence of a finite set of distinguishing questions that identifies the preferred distortion riskmetric within the candidate class and prove that the convergence rate of the algorithm is of order $O(\\exp(-cm+O(\\sqrt{m\\log m})))$ under general settings, where $c>0$ is a constant and $m$ denotes the number of algorithm iterations. On the optimization side, we develop a model-free RL algorithm for optimizing policies under conditional distortion riskmetrics. By representing the objective as an integral of the conditional cost quantile function with respect to the distortion function, the method unifies distortion-riskmetric objectives. We optimize diverse risk objectives by extending the Proximal Policy Optimization (PPO) algorithm with policy, value, and quantile neural networks, where the quantile network estimates the full conditional cost quantile function and enables numerical evaluation of general risk objectives. A comprehensive empirical study demonstrates the framework's elicitation accuracy and effectiveness in complex financial environments.", "content_hash": "88cbc2d01bb1a4353e12152852a3666252670a85573877437107404f29f92eea", "category": "Machine Learning for Finance", "tags": ["neural", "optimization", "policy optimization", "reinforcement learning", "risk"], "language": "en", "metadata": {"arxiv_categories": ["cs.LG", "q-fin.RM"]}, "one_line_summary": "提出逆强化学习+强化学习框架，从噪声决策推断扭曲风险度量偏好并优化策略，收敛率指数级", "technical_summary": "解决从含有噪声的观测决策中推断投资者风险偏好（扭曲风险度量）的问题，并学习相应的最优策略。使用自适应贝叶斯逆强化学习（IRL）推断代理人的潜在风险目标，允许代理人采取随机和次优行动，收敛率证明为O(exp(-cm+O(sqrt(m log m))))。在优化方面，将PPO扩展为包括策略网络、价值网络和分位数网络，分位数网络估计完整条件成本分位数函数，从而统一不同扭曲风险度量的优化。在复杂金融环境中展示了推断准确性和策略有效性，但未提供具体量化指标。", "key_points": ["核心方法：自适应贝叶斯IRL推断噪声下风险偏好，收敛率指数级O(exp(-cm+...))。PPO扩展分位数网络统一优化扭曲风险度量。", "量化可用性：需要代理人决策轨迹数据（历史交易或指令），实现复杂涉及IRL和分位数网络，可复现性未知（无公开代码库）。", "局限性：缺乏实证数字；未考虑真实市场交易成本和冲击；收敛率证明有理论假设，实际噪声分布未知。"], "quant_relevance": "风险建模（推断扭曲风险度量参数）；策略优化（在条件扭曲风险度量下学习最优策略）", "possible_use_case": "可用于基于交易历史推断对冲基金或自营团队的风险偏好参数，并利用该参数在条件扭曲风险度量下优化组合或执行策略。", "limitations": "原文仅提供理论收敛率，缺少实证数字，难以评估实际效果；未讨论交易成本、流动性限制；推断需要充足的代理决策样本，计算成本较高；收敛率假设与实际噪声可能不符。", "read_priority": "中", "key_figures_md": "", "relevance_score": 6.1, "novelty_score": 9.355, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 6.801, "display_title": "优化、强化学习、风险、贝叶斯研究论文", "tldr": "提出逆强化学习+强化学习框架，从噪声决策推断扭曲风险度量偏好并优化策略，收敛率指数级", "core_value": "对你的量化工作帮助：把它拆成一个金融机器学习复现任务，先验证优化、强化学习、风险、贝叶斯是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["核心方法：自适应贝叶斯IRL推断噪声下风险偏好，收敛率指数级O(exp(-cm+...))。PPO扩展分位数网络统一优化扭曲风险度量。", "量化可用性：需要代理人决策轨迹数据（历史交易或指令），实现复杂涉及IRL和分位数网络，可复现性未知（无公开代码库）。", "局限性：缺乏实证数字；未考虑真实市场交易成本和冲击；收敛率证明有理论假设，实际噪声分布未知。"], "reference_url": "http://arxiv.org/abs/2607.14373v1", "report_sections": ["deep_learning_quant"], "report_section_labels": ["深度学习量化未来"], "category_label": "金融机器学习", "priority_label": "中", "source_type_label": "论文"}, {"id": "f61eb6ed9192ea4e223e6740a64377aff9a707e46c2e6bf221e394da04395ca8", "source": "arXiv", "source_type": "paper", "title": "NeuralChaos: Optimal Adapted Approximation of Square Integrable Predictable Processes", "url": "http://arxiv.org/abs/2607.14361v1", "authors": ["Anastasis Kratsios", "Giulia Livieri", "Philipp Schmocker"], "published_at": "2026-07-15", "collected_at": "2026-07-17T23:52:28Z", "raw_text": "We address fundamental challenges in representing and computing $\\mathbb{R}^{d}$-valued predictable square-integrable processes over $[0,T]$, collected in the space $\\mathcal{H}^2_T(\\mathbb{R}^{d})$. These processes are central to continuous-time stochastic control, reinforcement learning, and mathematical finance. Although Wiener-chaos expansions offer strong theoretical tools, traditional computational methods are hindered by the need for large chaos dictionaries and high-order iterated integrals. To overcome these obstacles, we introduce NeuralChaos -- a neural operator architecture that produces elements of $\\mathcal{H}^2_T(\\mathbb{R}^{d})$ using only finitely many evaluations of the driving Brownian motion, while preserving predictability and square-integrability. We prove that NeuralChaos is dense in $\\mathcal{H}^2_T(\\mathbb{R}^{d})$ and achieves the best $N$-term chaoslet approximation rates for compressible and Malliavin--Sobolev regular processes. Moreover, compressibility is shown to be typical for processes from $\\mathcal{H}^2_T(\\mathbb{R}^{d})$ under non-degenerate sub-Gaussian sampling. In contrast, we show that finite-dimensional Markovian neural SDE models constitute a meagre and Gaussian-null subset in $\\mathcal{H}^2_T(\\mathbb{R}^{d})$, regardless of discretization, whereas compressible processes are generic. Numerical experiments on a stochastic optimal control problem and dynamic hedging highlight the practical effectiveness of our approach. Our results enable more efficient and expressive modelling in stochastic analysis and mathematical finance.", "abstract": "We address fundamental challenges in representing and computing $\\mathbb{R}^{d}$-valued predictable square-integrable processes over $[0,T]$, collected in the space $\\mathcal{H}^2_T(\\mathbb{R}^{d})$. These processes are central to continuous-time stochastic control, reinforcement learning, and mathematical finance. Although Wiener-chaos expansions offer strong theoretical tools, traditional computational methods are hindered by the need for large chaos dictionaries and high-order iterated integrals. To overcome these obstacles, we introduce NeuralChaos -- a neural operator architecture that produces elements of $\\mathcal{H}^2_T(\\mathbb{R}^{d})$ using only finitely many evaluations of the driving Brownian motion, while preserving predictability and square-integrability. We prove that NeuralChaos is dense in $\\mathcal{H}^2_T(\\mathbb{R}^{d})$ and achieves the best $N$-term chaoslet approximation rates for compressible and Malliavin--Sobolev regular processes. Moreover, compressibility is shown to be typical for processes from $\\mathcal{H}^2_T(\\mathbb{R}^{d})$ under non-degenerate sub-Gaussian sampling. In contrast, we show that finite-dimensional Markovian neural SDE models constitute a meagre and Gaussian-null subset in $\\mathcal{H}^2_T(\\mathbb{R}^{d})$, regardless of discretization, whereas compressible processes are generic. Numerical experiments on a stochastic optimal control problem and dynamic hedging highlight the practical effectiveness of our approach. Our results enable more efficient and expressive modelling in stochastic analysis and mathematical finance.", "content_hash": "969762076823340a4ee0980c82a4feed7d95ef4ff7618b0241a30e6a2dae891b", "category": "Machine Learning for Finance", "tags": ["hedging", "neural", "predictability", "reinforcement learning"], "language": "en", "metadata": {"arxiv_categories": ["math.PR", "cs.LG", "q-fin.CP", "stat.ML"]}, "one_line_summary": "NeuralChaos 神经算子用有限布朗路径生成平方可积可预测过程，在动态对冲中优于传统 Markovian 神经 SDE 模型", "technical_summary": "核心问题：传统 Wiener 混沌展开表示平方可积可预测过程需要大量高阶迭代积分，计算不可行。方法：提出 NeuralChaos 神经算子，仅需有限次布朗运动路径评估即可生成保持预测性和平方可积性的过程。理论基础：证明稠密性、达到最优 N 项逼近率（针对压缩型及 Malliavin−Sobolev 正则过程），并证明压缩性在非退化 sub-Gaussian 采样下是典型的。数值实验：在随机最优控制和动态对冲任务中展示有效性，但原文未提供与基线（如神经 SDE）的量化比较指标（如夏普、对冲误差）。", "key_points": ["核心方法：NeuralChaos 在 H²_T 中稠密，可达最佳 N 项混沌逼近率，且压缩性典型；而有限维 Markovian 神经 SDE 模型在高斯测度下是零测集。", "量化可用性：数据要求仅为布朗运动轨迹（易获取），但神经算子实现复杂，无公开代码，可复现性差；需自研训练框架。", "局限性：理论假设（Malliavin−Sobolev 正则可压缩性）在真实金融价格过程中是否成立未知；数值实验仅定性演示，无定量误差/夏普对比，过拟合风险不明。"], "quant_relevance": "风险建模 / 执行优化（动态对冲）", "possible_use_case": "可尝试用于美股期权动态 Delta 对冲策略建模，替代传统 LSTM 或神经 SDE 生成对冲路径，需先在小样本数据集上验证逼近精度和计算成本。", "limitations": "1. 缺乏量化实验指标（如对冲误差、夏普比率），无法直接评估实际收益。2. 理论稠密性不保证有限样本下的表现。3. 神经算子训练收敛性未讨论，计算资源要求可能高于简单 Markov 模型。4. 原文未考虑交易成本与市场冲击。", "read_priority": "低", "key_figures_md": "", "relevance_score": 6.1, "novelty_score": 9.355, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 6.801, "display_title": "强化学习、最优控制研究论文", "tldr": "NeuralChaos 神经算子用有限布朗路径生成平方可积可预测过程，在动态对冲中优于传统 Markovian 神经 SDE 模型", "core_value": "对你的量化工作帮助：把它拆成一个金融机器学习复现任务，先验证强化学习、最优控制是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["核心方法：NeuralChaos 在 H²_T 中稠密，可达最佳 N 项混沌逼近率，且压缩性典型；而有限维 Markovian 神经 SDE 模型在高斯测度下是零测集。", "量化可用性：数据要求仅为布朗运动轨迹（易获取），但神经算子实现复杂，无公开代码，可复现性差；需自研训练框架。", "局限性：理论假设（Malliavin−Sobolev 正则可压缩性）在真实金融价格过程中是否成立未知；数值实验仅定性演示，无定量误差/夏普对比，过拟合风险不明。"], "reference_url": "http://arxiv.org/abs/2607.14361v1", "report_sections": ["deep_learning_quant"], "report_section_labels": ["深度学习量化未来"], "category_label": "金融机器学习", "priority_label": "低", "source_type_label": "论文"}, {"id": "6ed7c200f1ccc2ee2be513db20982231e5bfcd55ad1c2b7a9823b748d587b43b", "source": "arXiv", "source_type": "paper", "title": "STOCKTAKE: Measuring the Gap Between Perception and Action in LLM Agents with a Fair Oracle", "url": "http://arxiv.org/abs/2607.13618v1", "authors": ["Sagar Deb", "Ashwanth Krishnan"], "published_at": "2026-07-15", "collected_at": "2026-07-17T23:54:53Z", "raw_text": "LLM agents are increasingly evaluated on multi-week decision tasks in which the state that drives cost is never directly observed. On such tasks the final cost cannot say why an agent failed: it may have misread the world, or read it correctly and still failed to act (the knowing-doing gap). Existing evaluations cannot separate these two failures; their reference policies either read privileged information the agent never sees, or are missing altogether. We introduce STOCKTAKE, a 26-week supply-chain replenishment benchmark built as a factored partially observable Markov decision process with six hidden factor processes, designed so that a fair reference policy is computable: an exact Bayes filter per factor drives a rollout policy on the identical observation stream the agent receives. Scoring each run between a symptom-blind base-stock floor (0) and this oracle (1) yields a skill score, and grading each week's written rationale yields a stated-belief detection lag and a knowing-doing rate, so state estimation and control are measured separately. On fifty seeds with curated stress profiles, Claude Sonnet 5, GPT-5.4, DeepSeek-V4-Pro, and Grok 4.5 detect 84-88% of hidden failures, typically within a week of onset, yet span skill scores from 0.62 to -0.23: two of the four end below the symptom-blind floor while naming factors slightly faster than the two that beat it. The failure has two faces. Where stress persists, 34-43% of correctly diagnosed stress weeks still end in stockout for every model, a rate that partly reflects the severity of the weeks models notice. That rate also runs opposite to skill: the two models under the floor stock out least on diagnosed weeks, so under-response is only one face of the gap, and their traces point to the other, responses whose cost exceeds what they protect. STOCKTAKE measures both directions of that failure.", "abstract": "LLM agents are increasingly evaluated on multi-week decision tasks in which the state that drives cost is never directly observed. On such tasks the final cost cannot say why an agent failed: it may have misread the world, or read it correctly and still failed to act (the knowing-doing gap). Existing evaluations cannot separate these two failures; their reference policies either read privileged information the agent never sees, or are missing altogether. We introduce STOCKTAKE, a 26-week supply-chain replenishment benchmark built as a factored partially observable Markov decision process with six hidden factor processes, designed so that a fair reference policy is computable: an exact Bayes filter per factor drives a rollout policy on the identical observation stream the agent receives. Scoring each run between a symptom-blind base-stock floor (0) and this oracle (1) yields a skill score, and grading each week's written rationale yields a stated-belief detection lag and a knowing-doing rate, so state estimation and control are measured separately. On fifty seeds with curated stress profiles, Claude Sonnet 5, GPT-5.4, DeepSeek-V4-Pro, and Grok 4.5 detect 84-88% of hidden failures, typically within a week of onset, yet span skill scores from 0.62 to -0.23: two of the four end below the symptom-blind floor while naming factors slightly faster than the two that beat it. The failure has two faces. Where stress persists, 34-43% of correctly diagnosed stress weeks still end in stockout for every model, a rate that partly reflects the severity of the weeks models notice. That rate also runs opposite to skill: the two models under the floor stock out least on diagnosed weeks, so under-response is only one face of the gap, and their traces point to the other, responses whose cost exceeds what they protect. STOCKTAKE measures both directions of that failure.", "content_hash": "632b29c339552654b3ac8f2590edf5c2d58e6c18eeae18c358e09560431dbb4f", "category": "LLM / Agents for Quant", "tags": ["agent", "factor", "llm"], "language": "en", "metadata": {"arxiv_categories": ["cs.AI", "cs.LG"]}, "one_line_summary": "STOCKTAKE基准测出LLM agent即使正确感知84-88%隐藏故障，技能分数仍可能低于基线（-0.23），揭示感知与行动分离的失败。", "technical_summary": "1. 现有LLM agent评估无法区分感知错误与执行错误，引入STOCKTAKE基准（26周部分可观察MDP，6个隐藏因子）来分离两者。2. 使用贝叶斯滤波器作为公平参考策略，计算技能分数（0=症状盲目基线，1=完美）。3. 测试四个前沿LLM，检测率84-88%，但技能分数范围0.62至-0.23，两个模型低于基线。4. 正确诊断的压力周中34-43%仍发生缺货，说明即使正确感知，行动也可能过度或不足。", "key_points": ["四个LLM agent检测84-88%隐藏故障，但技能分数差异大（0.62至-0.23），说明高感知率不等于好决策。", "数据要求高：需构建部分可观察MDP及贝叶斯滤波器，复现需原文环境；代码可能公开，但定制化场景难度中高。", "基准基于供应链任务，直接迁移至金融需大量适配；未考虑交易成本、滑点等金融特有因素。"], "quant_relevance": "评估框架可用于量化交易中LLM agent的感知准确率与执行效果分离诊断，改进agent风险控制设计。", "possible_use_case": "可用于构建LLM交易agent的消融测试：在模拟市场环境（如限价订单簿）中，分别评估agent对市场状态的判断准确率和下单执行合理性。", "limitations": "1. 仅基于供应链任务，金融场景的隐藏状态（如订单流毒药、操纵）不同，需独立验证。2. 基准假设因子过程已知且可分解，实盘市场状态更复杂。3. 基准本身未考虑交易成本和市场冲击，直接应用需扩展。", "read_priority": "中", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.355, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 6.591, "display_title": "因子、大模型、预言机研究论文", "tldr": "STOCKTAKE基准测出LLM agent即使正确感知84-88%隐藏故障，技能分数仍可能低于基线（-0.23），揭示感知与行动分离的失败。", "core_value": "对你的量化工作帮助：把它拆成一个量化大模型 / 智能体复现任务，先验证因子、大模型、预言机是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["四个LLM agent检测84-88%隐藏故障，但技能分数差异大（0.62至-0.23），说明高感知率不等于好决策。", "数据要求高：需构建部分可观察MDP及贝叶斯滤波器，复现需原文环境；代码可能公开，但定制化场景难度中高。", "基准基于供应链任务，直接迁移至金融需大量适配；未考虑交易成本、滑点等金融特有因素。"], "reference_url": "http://arxiv.org/abs/2607.13618v1", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "量化大模型 / 智能体", "priority_label": "中", "source_type_label": "论文"}, {"id": "ece7df73e5d6e691ca21e69dd5bb9503f0b6dd76da056342893bd9f9e04bce75", "source": "arXiv", "source_type": "paper", "title": "Decoding Market Emotion from Blockchain Activity: A Data-Driven Sentiment Classifier", "url": "http://arxiv.org/abs/2607.15258v1", "authors": ["Arthur G. Bubolz", "Abreu Quevedo", "Giancarlo Lucca", "Rafael A. Berri", "Eduardo Borges", "Bruno L. Dalmazo"], "published_at": "2026-07-16", "collected_at": "2026-07-17T23:52:32Z", "raw_text": "The growing use of Bitcoin as a decentralized digital asset and investment tool has sparked strong interest in understanding its market behavior. This study presents a new approach to analyze Bitcoin market sentiment by combining on-chain and financial data with social media posts. Unlike models that aim to predict prices, this work focuses on explaining market sentiment using blockchain transactions, historical price data of Bitcoin, and daily Twitter sentiment classifications. The method merges sentiment trends with on-chain and financial metrics, normalized into a dataset for detailed market analysis. Multiple machine learning models were tested using cross-validation, with Gradient Boosting (XGBoost) emerging as the most reliable model for classifying sentiment, achieving an average F1-score of about 0.84. SHAP (SHapley Additive exPlanations), a game theory-based method for model interpretability, was used to quantify the contribution of on-chain features to the model's predictions, improving transparency. The results indicate that this data combination yields meaningful predictive signals and insights, supporting data-driven cryptocurrency analysis and future improvements with deep learning.", "abstract": "The growing use of Bitcoin as a decentralized digital asset and investment tool has sparked strong interest in understanding its market behavior. This study presents a new approach to analyze Bitcoin market sentiment by combining on-chain and financial data with social media posts. Unlike models that aim to predict prices, this work focuses on explaining market sentiment using blockchain transactions, historical price data of Bitcoin, and daily Twitter sentiment classifications. The method merges sentiment trends with on-chain and financial metrics, normalized into a dataset for detailed market analysis. Multiple machine learning models were tested using cross-validation, with Gradient Boosting (XGBoost) emerging as the most reliable model for classifying sentiment, achieving an average F1-score of about 0.84. SHAP (SHapley Additive exPlanations), a game theory-based method for model interpretability, was used to quantify the contribution of on-chain features to the model's predictions, improving transparency. The results indicate that this data combination yields meaningful predictive signals and insights, supporting data-driven cryptocurrency analysis and future improvements with deep learning.", "content_hash": "481c3667d79743db233414d0ceaae445923a2c9b219e498118ae024f80430fe0", "category": "Crypto Quant", "tags": ["bitcoin", "blockchain", "dataset", "deep learning", "machine learning"], "language": "en", "metadata": {"arxiv_categories": ["cs.LG", "cs.CE"]}, "one_line_summary": "XGBoost 结合链上数据与 Twitter 情感分类比特币市场情绪，F1 达 0.84，链上特征解释力最强", "technical_summary": "1. 目标：不预测价格，而是分类比特币每日市场情绪（正面/负面/中性）。2. 数据：链上指标（交易量、活跃地址等）+ 财务指标（价格、波动率）+ Twitter 情感分数，归一化后构造成日频数据集。3. 方法：多种 ML 模型（逻辑回归、随机森林、XGBoost 等）用 5 折交叉验证，XGBoost 最优，平均 F1 约 0.84。4. 解释：用 SHAP 量化每个特征贡献，链上交易相关特征排名靠前，说明 on-chain 数据对情绪解释起核心作用。", "key_points": ["XGBoost 用链上+金融+推特三类数据分类情绪，交叉验证 F1=0.84，SHAP 显示链上交易量特征贡献最大。", "数据全为公开源（Blockchain.com、CoinMarketCap、Twitter API），可复现，但需处理推特情感提取和归一化。", "未做独立样本外测试，交叉验证可能存在时间泄露；推特情感质量依赖分类器，噪音大；仅限比特币，通用性待验。"], "quant_relevance": "因子/alpha信号：合成的情绪标签可作为加密货币日频情绪因子，辅助择时或风险管理。", "possible_use_case": "作为加密货币日频情绪因子嵌入多因子模型，在 BTC 永续合约上做方向性择时；也可替换现有基于价格的情绪指标。", "limitations": "1. 仅有交叉验证，无样本外独立测试期，过拟合风险未知。2. 推特情感标签来自第三方分类器，误差可能传导。3. 数据频率为日频，难以用于高频交易。4. 仅针对比特币，对其他加密货币需重新训练。", "read_priority": "中", "key_figures_md": "- **Figure 1**：各模型交叉验证 F1 分数柱状图，XGBoost 约 0.84 最高\n- **Figure 2**：SHAP 值排序图，展示前 10 个特征对情绪预测的贡献\n- [原文图表（HTML版）](https://arxiv.org/html/2607.15258)", "relevance_score": 5.4, "novelty_score": 9.565, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 5.5, "final_score": 6.433, "display_title": "深度学习、机器学习研究论文", "tldr": "XGBoost 结合链上数据与 Twitter 情感分类比特币市场情绪，F1 达 0.84，链上特征解释力最强", "core_value": "对你的量化工作帮助：把它拆成一个加密资产量化复现任务，先验证深度学习、机器学习是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["XGBoost 用链上+金融+推特三类数据分类情绪，交叉验证 F1=0.84，SHAP 显示链上交易量特征贡献最大。", "数据全为公开源（Blockchain.com、CoinMarketCap、Twitter 接口），可复现，但需处理推特情感提取和归一化。", "未做独立样本外测试，交叉验证可能存在时间泄露；推特情感质量依赖分类器，噪音大；仅限比特币，通用性待验。"], "reference_url": "http://arxiv.org/abs/2607.15258v1", "report_sections": ["deep_learning_quant"], "report_section_labels": ["深度学习量化未来"], "category_label": "加密资产量化", "priority_label": "中", "source_type_label": "论文"}, {"id": "e36b612398a472953596e0f48cf494c9a3b0c4a258859defbcc646dcfd5719ec", "source": "Reddit algotrading", "source_type": "forum", "title": "Testing a Momentum Model", "url": "https://www.reddit.com/r/algotrading/comments/1uz1u0n/testing_a_momentum_model/", "authors": ["/u/quant-alchemist"], "published_at": "2026-07-17", "collected_at": "2026-07-17T23:58:24Z", "raw_text": "Universe - Nifty 100 component stocks For Model evaluation - Train vs Holdout : No compounding For Final Equity Curve - Full length (Train + Holdout) : Compounding about 75% of profits, keeping the rest for DD Seeing some decline in the holdout years Most of it concentrated around 2025 second half onwards - unsure if model edge declining or just temp regime change problem 2019, 2020 - Covid Era - gave huge returns, so eliminated those from sample since that regime was an anomaly Train Period - Metrics Train Period - Annual Returns Holdout - Metrics Holdout - Annual Returns Full Length - Compounded Equity Curve submitted by /u/quant-alchemist [link] [comments]", "abstract": "Universe - Nifty 100 component stocks For Model evaluation - Train vs Holdout : No compounding For Final Equity Curve - Full length (Train + Holdout) : Compounding about 75% of profits, keeping the rest for DD Seeing some decline in the holdout years Most of it concentrated around 2025 second half onwards - unsure if model edge declining or just temp regime change problem 2019, 2020 - Covid Era - gave huge returns, so eliminated those from sample since that regime was an anomaly Train Period - Metrics Train Period - Annual Returns Holdout - Metrics Holdout - Annual Returns Full Length - Compounded Equity Curve submitted by /u/quant-alchemist [link] [comments]", "content_hash": "ac6d57fd9c42a343b5d10dd6c8921a69adb2f1cd94b376539fd2211a7e465e00", "category": "Alpha / Factor Research", "tags": ["anomaly", "momentum"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "Nifty 100 动量模型测试：持有期（2025H2）表现下降，疑为模型边缘衰减或制度切换", "technical_summary": "用户分享了Nifty 100动量模型的完整回测流程：使用Nifty 100成分股，将2019-2020 COVID时期作为异常剔除，训练/验证期不进行复利，最终曲线采用75%利润复利。持有期（2025年下半年）出现明显回撤，用户不确定是模型边缘衰减还是市场短期制度变化。社区主流观点认为，单一市场短期下降不足以否定模型，但需要区分统计显著性和制度变化，建议采用跨市场或多个时间窗口验证。", "key_points": ["动量模型在Nifty 100上持有期（2025H2）出现显著下降，可能是模型边缘衰减或市场制度切换，需进一步分析。", "实操建议：回测时应剔除异常制度时期（如COVID），采用部分利润复利（如75%）控制回撤，并以无复利评估模型真实能力。", "单一市场短期表现难以判断模型是否失效，需跨市场/时间样本外验证，并警惕过拟合和交易成本侵蚀收益。"], "quant_relevance": "因子/alpha信号评估：动量因子有效性在新兴市场（印度）的近期表现需警惕制度变化风险；风险建模：需识别和处理市场制度切换对因子收益的影响。", "possible_use_case": "可作为印度/新兴市场动量策略的实战案例参考，但实盘前需进行更严格的样本外测试、考虑交易成本，并建立制度变化检测机制。", "limitations": "此内容为社区个人分享，缺乏统计严谨性；仅覆盖单一市场、单一时间段（2025H2下降），未提供交易成本和滑点影响，结论待用数据验证后才能用于研究。", "read_priority": "高", "key_figures_md": "", "relevance_score": 6.1, "novelty_score": 9.78, "academic_score": 4.834, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 6.261, "display_title": "动量、测试实践讨论", "tldr": "Nifty 100 动量模型测试：持有期（2025H2）表现下降，疑为模型边缘衰减或制度切换", "core_value": "对你的量化工作帮助：把它当作动量、测试的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["动量模型在Nifty 100上持有期（2025H2）出现显著下降，可能是模型边缘衰减或市场制度切换，需进一步分析。", "实操建议：回测时应剔除异常制度时期（如COVID），采用部分利润复利（如75%）控制回撤，并以无复利评估模型真实能力。", "单一市场短期表现难以判断模型是否失效，需跨市场/时间样本外验证，并警惕过拟合和交易成本侵蚀收益。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1uz1u0n/testing_a_momentum_model/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "论坛"}, {"id": "1e2ab7a80d075f028ab65f740e45882033d01874b0007d7ac0070778afce0645", "source": "arXiv", "source_type": "paper", "title": "Structure-Aware Variational State Preparation for Quantum Basket Option Pricing", "url": "http://arxiv.org/abs/2607.14518v1", "authors": ["Dongwoo Kim", "Zhenyu Cui", "Daniel K. Park", "Chihoon Lee"], "published_at": "2026-07-16", "collected_at": "2026-07-17T23:52:28Z", "raw_text": "Basket option pricing often relies on Monte Carlo estimation, for which quantum amplitude estimation (QAE) provides a quadratic speed-up. However, the practical benefit of QAE can be limited by the depth of the state-preparation circuit. We propose a structure-aware quantum state-preparation framework for QAE-based basket option pricing. The framework uses tensor-train (TT) rank information to design shallow variational state-preparation circuits. In the independent regime, TT ranks remove unnecessary entangling links from a hardware-efficient ansatz. In correlated basket settings, we instead prepare asset-wise marginals locally and train a compact latent block to match the basket cumulative distribution function. The Basket-CDF objective targets the basket pushforward distribution rather than the full joint state, directly aligning state preparation with basket-dependent payoffs. Numerical experiments show that the proposed circuits replace the exponential state-preparation depth scaling of exact amplitude loading with linear scaling, while maintaining low-percent basket-pricing errors. Additional sampling-based training experiments and an end-to-end QAE integration study support compatibility with sample-estimated training and standard QAE-based pricing workflows.", "abstract": "Basket option pricing often relies on Monte Carlo estimation, for which quantum amplitude estimation (QAE) provides a quadratic speed-up. However, the practical benefit of QAE can be limited by the depth of the state-preparation circuit. We propose a structure-aware quantum state-preparation framework for QAE-based basket option pricing. The framework uses tensor-train (TT) rank information to design shallow variational state-preparation circuits. In the independent regime, TT ranks remove unnecessary entangling links from a hardware-efficient ansatz. In correlated basket settings, we instead prepare asset-wise marginals locally and train a compact latent block to match the basket cumulative distribution function. The Basket-CDF objective targets the basket pushforward distribution rather than the full joint state, directly aligning state preparation with basket-dependent payoffs. Numerical experiments show that the proposed circuits replace the exponential state-preparation depth scaling of exact amplitude loading with linear scaling, while maintaining low-percent basket-pricing errors. Additional sampling-based training experiments and an end-to-end QAE integration study support compatibility with sample-estimated training and standard QAE-based pricing workflows.", "content_hash": "4e2430ea7dcabcbd942c3c0b803917bf007f9ed55b807d3d2b234656be67bda8", "category": "Options / Volatility", "tags": ["option", "pricing"], "language": "en", "metadata": {"arxiv_categories": ["quant-ph", "q-fin.CP"]}, "one_line_summary": "结构感知变分量子态制备将篮子期权定价的态制备深度从指数缩放到线性，保持低百分位定价误差", "technical_summary": "篮子期权定价常依赖蒙特卡洛，量子幅度估计（QAE）可提供二次加速，但态制备电路深度过大制约实际收益。本文提出结构感知变分态制备框架，利用张量列车（TT）秩信息设计浅层变分电路：独立资产情形下TT秩移除硬件高效拟设中的多余纠缠门；相关篮子情形则分别制备各资产边际，再训练紧凑潜变量块匹配篮子累积分布函数（Basket-CDF）。数值实验表明该电路将精确振幅加载的指数级深度缩放替换为线性缩放，且篮子定价误差保持在低百分位水平。", "key_points": ["利用张量列车秩设计浅层变分电路，将态制备深度从指数降为线性，报价误差保持在低百分位（具体数值未给出）。", "若量子计算成熟，该方法可与标准QAE定价工作流结合；复现需掌握量子电路设计及变分训练框架，当前硬件实现仍有挑战。", "数值实验未在真实量子设备上测试，噪声影响被忽略；定价误差缺少精确数值对比，难以量化实际精度；仅验证简单相关性设定，复杂市场结构下的适应性未知。"], "quant_relevance": "研究工具（量子计算加速期权定价） / 执行（降低定价电路深度，潜在提升定价效率）", "possible_use_case": "当可用量子计算机时，可替换传统蒙特卡洛用于银行交易台的大规模篮子期权定价，加快风险测度计算。", "limitations": "缺乏样本外实验（仅在合成数据上验证）；真实量子噪声会放大误差，暂无纠错方案；定价误差未给出具体百分比，难以评估实际精度；变分训练可能收敛到局部最优，存在过拟合风险。", "read_priority": "中", "key_figures_md": "- **Figure 1**：态制备电路深度对比：精确加载的指数缩放 vs 本文方法的线性缩放\n- **Figure 2**：不同篮子规模和相关性设定下本文方法的定价误差百分比（低百分位）\n- [原文图表（HTML版）](https://arxiv.org/html/2607.14518)", "relevance_score": 5.4, "novelty_score": 9.565, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 6.233, "display_title": "期权、定价、量子研究论文", "tldr": "结构感知变分量子态制备将篮子期权定价的态制备深度从指数缩放到线性，保持低百分位定价误差", "core_value": "对你的量化工作帮助：把它拆成一个期权 / 波动率复现任务，先验证期权、定价、量子是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["利用张量列车秩设计浅层变分电路，将态制备深度从指数降为线性，报价误差保持在低百分位（具体数值未给出）。", "若量子计算成熟，该方法可与标准QAE定价工作流结合；复现需掌握量子电路设计及变分训练框架，当前硬件实现仍有挑战。", "数值实验未在真实量子设备上测试，噪声影响被忽略；定价误差缺少精确数值对比，难以量化实际精度；仅验证简单相关性设定，复杂市场结构下的适应性未知。"], "reference_url": "http://arxiv.org/abs/2607.14518v1", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "期权 / 波动率", "priority_label": "中", "source_type_label": "论文"}, {"id": "2534ef93971e1ea992243e3b4599b5ea2169952008bd500b7e1c4ddc93fcde7e", "source": "Reddit algotrading", "source_type": "forum", "title": "My backtest was lying to me and i didn't notice for 3 weeks", "url": "https://www.reddit.com/r/algotrading/comments/1uywx4y/my_backtest_was_lying_to_me_and_i_didnt_notice/", "authors": ["/u/Ashwinnie13"], "published_at": "2026-07-17", "collected_at": "2026-07-17T23:58:24Z", "raw_text": "built a little mean reversion bot for SPY options. nothing fancy. Backtest looked decent, sharpe around 1.4, max drawdown within what i told myself was \"acceptable\" Ran it paper for a week, slightly worse but still profitable. got excited obviously Here's where I got stupid. I had a position sizing bug in my backtest. basically the script was calculating contracts based on post-fill margin not pre-fill. So in simulation I was getting fills that would never happen live. The paper account caught it but only because I was manually comparing fills to what the model expected Took me 3 weeks to figure out why live-ish results drifted from backtest anyway the thing that actually helped was running the logic through a manual replay first. Just a trading game sim where i'd punch entries manually based on signals. Slowed everything down enough that the sizing error became obvious. Sometimes the dumbest debug method is the one that works Now Im paranoid about every assumption in my backtester. which is probably healthy what's the dumbest backtest bug you've shipped to production? I need to feel less alone in this submitted by /u/Ashwinnie13 [link] [comments]", "abstract": "built a little mean reversion bot for SPY options. nothing fancy. Backtest looked decent, sharpe around 1.4, max drawdown within what i told myself was \"acceptable\" Ran it paper for a week, slightly worse but still profitable. got excited obviously Here's where I got stupid. I had a position sizing bug in my backtest. basically the script was calculating contracts based on post-fill margin not pre-fill. So in simulation I was getting fills that would never happen live. The paper account caught it but only because I was manually comparing fills to what the model expected Took me 3 weeks to figure out why live-ish results drifted from backtest anyway the thing that actually helped was running the logic through a manual replay first. Just a trading game sim where i'd punch entries manually based on signals. Slowed everything down enough that the sizing error became obvious. Sometimes the dumbest debug method is the one that works Now Im paranoid about every assumption in my backtester. which is probably healthy what's the dumbest backtest bug you've shipped to production? I need to feel less alone in this submitted by /u/Ashwinnie13 [link] [comments]", "content_hash": "2e8ddd2f76cfe9309b01b0a2782e40f67f5c934a5cd0b6118d37a89164967520", "category": "Backtesting / Research Tools", "tags": ["backtest", "drawdown", "mean reversion"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "回测头寸计算bug导致夏普1.4的假策略，手工复盘才发现问题", "technical_summary": "Reddit用户分享回测bug：期权均值回归策略回测夏普1.4，最大回撤可接受。纸盘交易表现略差但仍盈利。3周后发现回测中头寸计算错误：合约数量按成交后保证金计算（post-fill margin），导致模拟中获取了不可能实际成交的仓位。最终通过手动复盘（手动根据信号输入交易）发现bug。社区共识：回测中的隐性假设（如成交价、滑点、保证金计算顺序）是常见陷阱，手工复盘或降低速度模拟是有效调试方法。", "key_points": ["核心发现：回测头寸计算逻辑错误（用成交后保证金代替成交前）导致回测过度填充，夏普1.4不可靠。", "可操作建议：上线前用手工复盘模拟，手动按信号输入交易，能暴露回测逻辑错误；纸盘交易应手动对比预期与实际成交。", "局限性或风险：回测假设（如保证金计算顺序、成交可能性）极易忽视；手工复盘耗时长，仅适合小样本或关键调试阶段。"], "quant_relevance": "回测框架验证流程：手工复盘可暴露回测假设错误，避免伪信号上线。", "possible_use_case": "可作为回测上线前质检步骤：对每个新策略，先用手动复盘或交易游戏模拟手动输入信号，对比回测结果，确保无逻辑bug。", "limitations": "这是社区个人经验分享，缺乏系统实验；手工复盘仅适用于低交易频率策略，不适合高频或期权复杂策略。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.78, "academic_score": 5.456, "discussion_score": 3.0, "actionable_score": 7.5, "final_score": 6.194, "display_title": "回测、回撤、期权实践讨论", "tldr": "回测头寸计算bug导致夏普1.4的假策略，手工复盘才发现问题", "core_value": "对你的量化工作帮助：把它当作回测、回撤、期权的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["核心发现：回测头寸计算逻辑错误（用成交后保证金代替成交前）导致回测过度填充，夏普1.4不可靠。", "可操作建议：上线前用手工复盘模拟，手动按信号输入交易，能暴露回测逻辑错误；纸盘交易应手动对比预期与实际成交。", "局限性或风险：回测假设（如保证金计算顺序、成交可能性）极易忽视；手工复盘耗时长，仅适合小样本或关键调试阶段。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1uywx4y/my_backtest_was_lying_to_me_and_i_didnt_notice/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "回测 / 研究工具", "priority_label": "高", "source_type_label": "论坛"}, {"id": "d45c5edf6a6e89acb357144c02ff4dfb28b02a4c2f2d762fe9b09245513bf86d", "source": "arXiv", "source_type": "paper", "title": "Existence and convergence of discrete-time Kyle models with multiple insiders", "url": "http://arxiv.org/abs/2607.15057v1", "authors": ["Jin Choi", "Kasper Larsen"], "published_at": "2026-07-16", "collected_at": "2026-07-17T23:52:28Z", "raw_text": "We extend the limited participation model in Basak and Cuoco (1998) to allow for traders with different time-preference coefficients but identical constant relative risk-aversion coefficients. Our main result gives parameter restrictions which ensure the existence of a Radner equilibrium. As an application, we give further parameter restrictions which ensure all traders survive in the long run.", "abstract": "We extend the limited participation model in Basak and Cuoco (1998) to allow for traders with different time-preference coefficients but identical constant relative risk-aversion coefficients. Our main result gives parameter restrictions which ensure the existence of a Radner equilibrium. As an application, we give further parameter restrictions which ensure all traders survive in the long run.", "content_hash": "c2f9be61feed7925033be5b05921de9e15ade4cc7c210103fa88fff19f77aaf7", "category": "Risk Management", "tags": ["risk"], "language": "en", "metadata": {"arxiv_categories": ["q-fin.TR", "math.PR"]}, "one_line_summary": "理论证明离散时间多知情交易者Kyle模型均衡的存在性与收敛条件，为市场微观结构理论提供基础", "technical_summary": "该论文通过数学证明扩展了离散时间Kyle模型，纳入多个知情交易者并允许时间偏好差异。主要贡献是给出确保Radner均衡存在的参数约束条件，以及保证所有交易者在长期内生存的额外约束。研究不涉及实证数据或回测，专注于模型存在性和收敛性的理论推导。", "key_points": ["建立多知情交易者在离散时间下Kyle模型均衡存在性的数学条件，未提供数值实验或量化指标", "纯理论成果，需自行实现模型并验证；数据要求为零（无实证），但需具备高级金融数学功底", "无样本外验证、无交易成本假设，缺乏实证支持，目前无法直接用于实践"], "quant_relevance": "风险建模（理解信息交易者行为对市场均衡的影响）", "possible_use_case": "可嵌入高频模拟框架，作为知情交易者行为的理论参照，用于生成假设检验的基线", "limitations": "完全理论，无任何实证或数值结果；条件高度抽象，实盘应用前需大幅简化与校准", "read_priority": "低", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.565, "academic_score": 8.996, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.932, "display_title": "风险研究论文", "tldr": "理论证明离散时间多知情交易者Kyle模型均衡的存在性与收敛条件，为市场微观结构理论提供基础", "core_value": "对你的量化工作帮助：把它拆成一个风险管理复现任务，先验证风险是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["建立多知情交易者在离散时间下Kyle模型均衡存在性的数学条件，未提供数值实验或量化指标", "纯理论成果，需自行实现模型并验证；数据要求为零（无实证），但需具备高级金融数学功底", "无样本外验证、无交易成本假设，缺乏实证支持，目前无法直接用于实践"], "reference_url": "http://arxiv.org/abs/2607.15057v1", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "风险管理", "priority_label": "低", "source_type_label": "论文"}, {"id": "41dc841c7a2eb7f75721104e591bca8c9bc92197aee485542858adc8f97134ce", "source": "CoinDesk", "source_type": "crypto_news", "title": "Stripe and Swift race to control the next generation of global payments infrastructure", "url": "https://www.coindesk.com/business/2026/07/17/stripe-and-swift-race-to-control-the-next-generation-of-global-payments-infrastructure", "authors": [], "published_at": "2026-07-17", "collected_at": "2026-07-17T23:58:25Z", "raw_text": "Crypto and blockchain experts say this week's moves show the two established finance companies are increasingly competing for control of the infrastructure behind digital payments.", "abstract": "Crypto and blockchain experts say this week's moves show the two established finance companies are increasingly competing for control of the infrastructure behind digital payments.", "content_hash": "36ee0ac730b9a5855daa44844d60e0d7de18c3b0a0fcfe6d1e74afc8e21a13a3", "category": "Crypto Quant", "tags": ["blockchain", "crypto"], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "Stripe 与 Swift 竞逐下一代全球支付基础设施控制权，加密和区块链专家解读竞争态势", "technical_summary": "Stripe 和 Swift 同时在推进基于区块链或分布式账本技术的支付基础设施升级。Stripe 此前已支持 USDC 支付且推出稳定币结算产品；Swift 则通过其全球银行网络测试代币化资产转移。加密和区块链专家认为，双方都在争夺未来数字支付的标准制定权，这直接关系到加密货币与传统金融系统的融合路径——包括稳定币采用率、跨境结算速度、以及链上数据的接入标准。目前竞争尚未分出胜负，但双方都争取在2025-2026年内推出可商用的下一代基础设施。", "key_points": ["Stripe 和 Swift 本周均发布关于下一代支付基础设施的新动态，双方在加密结算和代币化资产传递领域直接竞争。", "对加密量化交易者：支付基础设施竞争可能降低稳定币出入金成本、缩短结算时间，有利于高频或跨境套利策略。", "竞争结果尚不明朗，且监管不确定性（如各国对稳定币的合规要求）可能延缓基础设施落地进度。"], "quant_relevance": "支付基础设施竞争可能影响加密资产与法币之间的出入金效率，进而改变量化交易者的资金流转成本与速度。", "possible_use_case": "作为评估稳定币出入金通道效率的行业信号：若 Stripe 胜出则 USDC 等中心化稳定币的交易所集成交割速度可能提升；若 Swift 胜出则传统银行间代币化结算可能成为主流，影响 DEX 与 CEX 的流动性分布。", "limitations": "此报道基于行业专家观点，缺乏具体财务数据或技术细节，属于预期性新闻，不构成交易信号。实际落地时间和效果需持续跟踪。", "read_priority": "高", "key_figures_md": "", "relevance_score": 6.1, "novelty_score": 9.78, "academic_score": 5.725, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.845, "display_title": "加密资产加密市场新闻情报", "tldr": "Stripe 与 Swift 竞逐下一代全球支付基础设施控制权，加密和区块链专家解读竞争态势", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["Stripe 和 Swift 本周均发布关于下一代支付基础设施的新动态，双方在加密结算和代币化资产传递领域直接竞争。", "对加密量化交易者：支付基础设施竞争可能降低稳定币出入金成本、缩短结算时间，有利于高频或跨境套利策略。", "竞争结果尚不明朗，且监管不确定性（如各国对稳定币的合规要求）可能延缓基础设施落地进度。"], "reference_url": "https://www.coindesk.com/business/2026/07/17/stripe-and-swift-race-to-control-the-next-generation-of-global-payments-infrastructure", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "0b3fe0ae6cfc20068bd3524c2fcbd5195b5950c58f3cd414b3da269ef866010a", "source": "CoinDesk", "source_type": "crypto_news", "title": "Japan's SBI Group is building Asia's first cross-border digital asset empire", "url": "https://www.coindesk.com/business/2026/07/17/japan-s-sbi-group-is-building-asia-s-first-cross-border-digital-asset-empire", "authors": [], "published_at": "2026-07-17", "collected_at": "2026-07-17T23:58:25Z", "raw_text": "The securities giant announced today the consolidation of Singapore-based Coinhako as part of a rapid regional expansion that includes a tokenization partnership with Ondo Finance.", "abstract": "The securities giant announced today the consolidation of Singapore-based Coinhako as part of a rapid regional expansion that includes a tokenization partnership with Ondo Finance.", "content_hash": "f51c02be2a876fd0d2ae513e597036a82ffd01091ea226c8238590bc5b931e69", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "日本SBI集团整合Coinhako并合作Ondo Finance，加速构建亚洲跨境数字资产帝国，潜在重塑区域流动性结构", "technical_summary": "SBI集团通过收购Coinhako（新加坡持牌交易所）并与Ondo Finance合作代币化，建立合规的跨境数字资产平台。此举将降低跨国交易摩擦，增加机构流动性，并引入Real World Assets（RWA）代币化产品。核心结论：区域市场结构将趋于集中，跨市场套利机会可能因流动性一体化而短期增加，长期则需观察执行效率。", "key_points": ["SBI集团完成对新加坡Coinhako的整合，并宣布与Ondo Finance合作代币化业务，加速构建亚洲跨境数字资产帝国。", "对量化交易者：可能增加亚洲交易所间的价差套利机会，并引入更多合规代币化资产（如RWA），丰富可交易标的池。", "不确定因素：整合执行风险、监管政策变化、代币化资产流动性深度不足，具体对交易量的实际影响尚未披露。"], "quant_relevance": "市场微观结构：影响亚洲加密市场流动性分布和跨交易所价差；数据工程：可能提供新的代币化资产数据源。", "possible_use_case": "可作为亚洲跨交易所价差监控的参考信号，也可用于评估代币化资产（如Ondo合作产品）的流动性配置机会。", "limitations": "此新闻为公告性质，缺乏具体交易量、整合时间表和代币化产品细节，实际量化影响需观察后续交易所流动性数据和价差变化后验证。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.7, "novelty_score": 9.78, "academic_score": 5.725, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.525, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "日本SBI集团整合Coinhako并合作Ondo Finance，加速构建亚洲跨境数字资产帝国，潜在重塑区域流动性结构", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["SBI集团完成对新加坡Coinhako的整合，并宣布与Ondo Finance合作代币化业务，加速构建亚洲跨境数字资产帝国。", "对量化交易者：可能增加亚洲交易所间的价差套利机会，并引入更多合规代币化资产（如RWA），丰富可交易标的池。", "不确定因素：整合执行风险、监管政策变化、代币化资产流动性深度不足，具体对交易量的实际影响尚未披露。"], "reference_url": "https://www.coindesk.com/business/2026/07/17/japan-s-sbi-group-is-building-asia-s-first-cross-border-digital-asset-empire", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "5832faafdfc282768da1a18403f8d0f881b282ac267e1114e40c7113198d5d82", "source": "CoinDesk", "source_type": "crypto_news", "title": "Inside Robinhood’s high-stakes bet to onboard millions of casual users onto decentralized finance", "url": "https://www.coindesk.com/business/2026/07/17/inside-robinhood-s-high-stakes-bet-to-onboard-10-million-casual-investors-onto-decentralized-finance", "authors": [], "published_at": "2026-07-17", "collected_at": "2026-07-17T23:58:25Z", "raw_text": "The company says its advantage lies in bringing retail customers onchain, but early activity remains dominated by memecoins, while its original tokenization vision remains small.", "abstract": "The company says its advantage lies in bringing retail customers onchain, but early activity remains dominated by memecoins, while its original tokenization vision remains small.", "content_hash": "298a6cf840cfcf26c8dcaa5452fb47a24521efd805d5397ab516c3ea1d5ae63f", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "The company says its advantage lies in bringing retail customers onchain, but early activity remains dominated by memecoins, while its original tokenization vision remains small.", "technical_summary": "The company says its advantage lies in bringing retail customers onchain, but early activity remains dominated by memecoins, while its original tokenization vision remains small.", "key_points": ["The company says its advantage lies in bringing retail customers onchain, but early activity remains dominated by memecoins, while its original tokenization vision remains small.", "来源类型：加密市场新闻。", "进入研究或生产前需要进一步人工复核。"], "quant_relevance": "适合进入阿尔法发现、特征研究或因子有效性验证流程。", "possible_use_case": "可以放入研究待办池，作为候选信号或因子族继续验证。", "limitations": "在成为研究或交易决策前，需要人工复核。", "read_priority": "中", "key_figures_md": "", "relevance_score": 3.7, "novelty_score": 9.78, "academic_score": 5.723, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.524, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "The company says its advantage lies in bringing retail customers onchain, but early activity remains dominated by memecoins, while its original tokenization vision remains small.", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["内容抓手：这条加密市场新闻围绕阿尔法 / 因子研究展开，归入阿尔法 / 因子研究。", "研究动作：先作为阿尔法 / 因子研究候选线索，判断是否值得进入研究待办。", "验证重点：检查数据可得性、可复现性、样本外稳定性和生产约束。"], "reference_url": "https://www.coindesk.com/business/2026/07/17/inside-robinhood-s-high-stakes-bet-to-onboard-10-million-casual-investors-onto-decentralized-finance", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "中", "source_type_label": "加密市场新闻"}, {"id": "c44a2f211b40d169b56c8bfc64df5e6df19da02c0530cf3251e2185d96f011f3", "source": "CoinTelegraph", "source_type": "crypto_news", "title": "SBI acquires Singaporean crypto platform Coinhako after MAS approval", "url": "https://cointelegraph.com/news/sbi-receives-mas-approval-to-acquire-singaporean-coinhako?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "authors": [], "published_at": "2026-07-17", "collected_at": "2026-07-17T23:58:25Z", "raw_text": "SBI Holdings received regulatory approval to acquire a majority stake in Singapore-based crypto exchange Coinhako as it expands into stablecoins, onchain finance and tokenized assets.", "abstract": "SBI Holdings received regulatory approval to acquire a majority stake in Singapore-based crypto exchange Coinhako as it expands into stablecoins, onchain finance and tokenized assets.", "content_hash": "5e99aa36124d32b9db813d6c809c2a9fc2b49ec4ec7028694c972b7eb1971430", "category": "Crypto Quant", "tags": ["crypto"], "language": "en", "metadata": {"feed_url": "https://cointelegraph.com/rss"}, "one_line_summary": "SBI Holdings 获新加坡 MAS 批准收购 Coinhako，布局稳定币和代币化资产", "technical_summary": "SBI Holdings 获得新加坡金融管理局（MAS）批准，收购新加坡注册加密交易所 Coinhako 的多数股权。此次交易是 SBI 扩展稳定币发行、链上金融和代币化资产战略的一部分，显示传统金融机构通过收购合规平台加速入场。对量化交易者而言，这可能意味着未来该交易所的流动性深度、交易费率、产品种类（如现货、衍生品）可能发生变化，同时也可能引入新的做市机会。目前无具体交易金额或时间表。", "key_points": ["SBI Holdings 获 MAS 批准收购新加坡合规交易所 Coinhako 多数股权，是传统金融巨头通过收购加密平台扩张的典型案例。", "对量化交易者直接影响：Coinhako 可能获得更多资金和资源，带来流动性提升和新的交易产品（如稳定币、代币化资产），做市策略可提前布局。", "不确定因素：交易完成时间和具体整合计划未披露，需关注后续监管细节（如MAS附加条件）、CoinHako现有用户迁移风险及市场反应。"], "quant_relevance": "监管合规环境变化：传统金融巨头入场可能影响加密市场流动性和做市策略，量化交易者需关注交易所格局变动带来的市场微观结构变化。", "possible_use_case": "量化交易者可关注 Coinhako 在收购后的流动性变化和交易对列表更新，将其作为跨交易所套利（如现货-期货价差）的候选平台之一。", "limitations": "新闻未提供交易金额、股权比例、完成时间等具体数据，信息来源为媒体报道，需等待官方公告核实。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.78, "academic_score": 5.729, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.485, "display_title": "加密资产、监管加密市场新闻情报", "tldr": "SBI Holdings 获新加坡 MAS 批准收购 Coinhako，布局稳定币和代币化资产", "core_value": "对你的量化工作帮助：把它当作加密资产、监管案例，用来补充异常交易监控、市场操纵风险、大宗商品执行和合规审计的场景库。", "key_points_list": ["SBI Holdings 获 MAS 批准收购新加坡合规交易所 Coinhako 多数股权，是传统金融巨头通过收购加密平台扩张的典型案例。", "对量化交易者直接影响：Coinhako 可能获得更多资金和资源，带来流动性提升和新的交易产品（如稳定币、代币化资产），做市策略可提前布局。", "不确定因素：交易完成时间和具体整合计划未披露，需关注后续监管细节（如MAS附加条件）、CoinHako现有用户迁移风险及市场反应。"], "reference_url": "https://cointelegraph.com/news/sbi-receives-mas-approval-to-acquire-singaporean-coinhako?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "69de8bd81c88dc87591852b52ab76b0ac75ac16d97316eeef6e53b786a2f42f0", "source": "CoinDesk", "source_type": "crypto_news", "title": "Live markets: Bitcoin returns to $63,000 as Nasdaq trims large early loss", "url": "https://www.coindesk.com/markets/2026/07/17/live-markets-bitcoin-slips-to-usd63-000-as-the-chip-rout-goes-global", "authors": [], "published_at": "2026-07-17", "collected_at": "2026-07-17T23:58:25Z", "raw_text": "A deepening global selloff in chipmakers dragged risk assets lower, pulling bitcoin back from the $65,000 level it reached on this week's soft inflation print.", "abstract": "A deepening global selloff in chipmakers dragged risk assets lower, pulling bitcoin back from the $65,000 level it reached on this week's soft inflation print.", "content_hash": "c427a140b44488b6a7d726605cd44d5ab19b0f4e413ad8a455cf0d15c78c572b", "category": "Crypto Quant", "tags": ["bitcoin", "risk"], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "比特币受芯片股全球抛售拖累从$65,000回落至$63,000，与纳指同步下跌", "technical_summary": "1. 全球芯片股抛售（如半导体指数下跌）拖累风险资产，包括加密货币。2. 比特币此前因美国通胀数据走软升至$65,000，但随纳指回撤而下跌至$63,000。3. 该事件表明加密货币与传统风险资产（尤其是科技股）的短期相关性增强。", "key_points": ["比特币从本周软通胀数据推动的$65,000高位回落至$63,000，受芯片制造商全球抛售影响。", "量化交易者可监控纳指与比特币的相关性，将芯片股指数波动作为BTC日内交易的信号因子。", "市场情绪可能因宏观不确定性进一步恶化，需区分短期联动与长期趋势，避免过度依赖单一事件。"], "quant_relevance": "可作为BTC短期事件驱动因子参考，关注风险资产联动性对加密货币波动的影响。", "possible_use_case": "在BTC日内交易策略中，加入纳指或芯片股指数（如SOX）的实时涨跌幅作为信号，当芯片股大幅下跌时执行BTC空头或减少多头仓位。", "limitations": "此为市场新闻，非量化研究报告，缺乏具体统计相关性数据；事件影响可能因其他宏观因素（如美联储政策）而迅速变化。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.78, "academic_score": 5.699, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.481, "display_title": "风险加密市场新闻情报", "tldr": "比特币受芯片股全球抛售拖累从$65,000回落至$63,000，与纳指同步下跌", "core_value": "对你的量化工作帮助：围绕风险补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["比特币从本周软通胀数据推动的$65,000高位回落至$63,000，受芯片制造商全球抛售影响。", "量化交易者可监控纳指与比特币的相关性，将芯片股指数波动作为BTC日内交易的信号因子。", "市场情绪可能因宏观不确定性进一步恶化，需区分短期联动与长期趋势，避免过度依赖单一事件。"], "reference_url": "https://www.coindesk.com/markets/2026/07/17/live-markets-bitcoin-slips-to-usd63-000-as-the-chip-rout-goes-global", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}], "source_stats": {"arXiv": 7, "Reddit algotrading": 2, "CoinDesk": 4, "CoinTelegraph": 1}, "category_counts": {"Portfolio Construction": 1, "Machine Learning for Finance": 2, "LLM / Agents for Quant": 1, "Crypto Quant": 4, "Alpha / Factor Research": 3, "Options / Volatility": 1, "Backtesting / Research Tools": 1, "Risk Management": 1}, "section_counts": {"deep_learning_quant": 4, "ai_quant_tools": 5, "daily_news": 5}, "sections": [{"key": "deep_learning_quant", "label": "深度学习量化未来", "description": "技术主线：深度学习、强化学习、Transformer、图神经网络、表征学习、订单簿预测、金融时间序列大模型等在量化里的应用。"}, {"key": "ai_quant_tools", "label": "AI 量化工具", "description": "工具主线：能提升量化研究效率的 AI 工具、代码仓库、研究自动化、智能体、回测/数据工程工具和可接入团队工作流的基础设施。"}, {"key": "daily_news", "label": "Crypto 市场每日 Top 5", "description": "加密市场新闻主线：来自 CoinDesk、CoinTelegraph、The Block、Decrypt、Blockworks 等主流媒体当日最重要的 Crypto 市场报道。"}], "category_labels": {"Alpha / Factor Research": "阿尔法 / 因子研究", "Statistical Arbitrage": "统计套利", "Portfolio Construction": "组合构建", "Risk Management": "风险管理", "Options / Volatility": "期权 / 波动率", "Market Microstructure": "市场微观结构", "Execution / Transaction Cost": "交易执行 / 交易成本", "Machine Learning for Finance": "金融机器学习", "LLM / Agents for Quant": "量化大模型 / 智能体", "Crypto Quant": "加密资产量化", "Data Engineering": "数据工程", "Backtesting / Research Tools": "回测 / 研究工具", "Industry / Career": "行业 / 职业 / 合规", "Unclassified": "未分类"}, "priority_labels": {"High": "高", "Medium": "中", "Low": "低", "高": "高", "中": "中", "低": "低"}, "source_type_labels": {"paper": "论文", "forum": "论坛", "github": "代码仓库", "blog": "博客", "news": "新闻", "social": "社交媒体", "zhihu": "知乎", "x": "X", "quantml": "QuantML", "crypto_news": "加密市场新闻"}, "report_config": {"max_items_per_category": 5, "max_total_items": 60, "executive_brief_items": 5}}</script>
+  <script>
+    const payload = JSON.parse(document.getElementById('dashboard-data').textContent);
+    const items = payload.items || [];
+    const categoryLabels = payload.category_labels || {};
+    const priorityLabels = payload.priority_labels || {};
+    const sourceTypeLabels = payload.source_type_labels || {};
+    const state = {
+      query: '',
+      section: 'All',
+      category: 'All',
+      sort: 'score',
+      activeId: items[0]?.id || null,
+    };
+
+    const priorityRank = { High: 3, Medium: 2, Low: 1, '高': 3, '中': 2, '低': 1 };
+    const $ = (id) => document.getElementById(id);
+
+    // --- Feedback ---
+    const _feedbackStore = JSON.parse(localStorage.getItem('quant-feedback') || '{}');
+    function getFeedback(id) { return _feedbackStore[id] || 0; }
+    function setFeedback(id, signal) {
+      if (_feedbackStore[id] === signal) { delete _feedbackStore[id]; signal = 0; }
+      else { _feedbackStore[id] = signal; }
+      localStorage.setItem('quant-feedback', JSON.stringify(_feedbackStore));
+      fetch('http://localhost:8080/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, signal }),
+      }).catch(() => {});
+    }
+
+    function init() {
+      $('report-date').textContent = payload.report_date + ' - 主力源：arXiv / 知乎 / QuantML / 大型论坛 - 生成时间 ' + payload.generated_at;
+      $('metric-items').textContent = items.length;
+      $('metric-categories').textContent = new Set(items.map((item) => item.category)).size;
+      $('metric-high').textContent = items.filter((item) => priorityLabel(item.read_priority) === '高').length;
+      $('metric-avg').textContent = averageScore(items).toFixed(1);
+
+      buildSectionControls();
+      buildCategoryControls();
+      buildSourceList();
+      bindControls();
+      render();
+    }
+
+    function bindControls() {
+      $('search').addEventListener('input', (event) => {
+        state.query = event.target.value.trim().toLowerCase();
+        render();
+      });
+      $('category-select').addEventListener('change', (event) => {
+        state.category = event.target.value;
+        render();
+      });
+      $('section-select').addEventListener('change', (event) => {
+        state.section = event.target.value;
+        render();
+      });
+      $('sort-select').addEventListener('change', (event) => {
+        state.sort = event.target.value;
+        render();
+      });
+    }
+
+    function buildCategoryControls() {
+      const counts = countBy(items, 'category');
+      const categories = Object.keys(counts).sort();
+      const select = $('category-select');
+      select.innerHTML = option('All', `全部细分标签 (${items.length})`) +
+        categories.map((category) => option(category, `${categoryLabel(category)} (${counts[category]})`)).join('');
+
+      const list = $('category-list');
+      list.innerHTML = categoryButton('All', items.length) +
+        categories.map((category) => categoryButton(category, counts[category])).join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.category = button.dataset.category;
+          select.value = state.category;
+          if (state.category === 'All') {
+            state.section = 'All';
+            $('section-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSectionControls() {
+      const counts = payload.section_counts || {};
+      const sections = payload.sections || [];
+      const select = $('section-select');
+      select.innerHTML = option('All', `全部主线 (${items.length})`) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => option(section.key, `${section.label} (${counts[section.key]})`))
+          .join('');
+
+      const list = $('section-list');
+      list.innerHTML = sectionButton('All', '全部', items.length) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => sectionButton(section.key, section.label, counts[section.key]))
+          .join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.section = button.dataset.section;
+          select.value = state.section;
+          if (state.section === 'All') {
+            state.category = 'All';
+            $('category-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSourceList() {
+      const stats = payload.source_stats || {};
+      const entries = Object.entries(stats)
+        .filter(([source]) => !source.startsWith('fetched:'))
+        .sort((a, b) => b[1] - a[1]);
+      $('source-list').innerHTML = entries.length
+        ? entries.map(([source, count]) => `<li><span>${escapeHtml(source)}</span><b>${count}</b></li>`).join('')
+        : '<li><span>暂无来源统计</span><b>0</b></li>';
+    }
+
+    function render() {
+      let visible = items.filter(matchesFilters);
+      visible = sortItems(visible);
+      if (!visible.some((item) => item.id === state.activeId)) {
+        state.activeId = visible[0]?.id || null;
+      }
+
+      $('feed-title').textContent = feedTitle();
+      $('result-count').textContent = `展示 ${visible.length} 条 - 两条主线每条最多 ${payload.report_config.max_items_per_category} 条`;
+      renderSectionActive();
+      renderCategoryActive();
+      renderItems(visible);
+      renderDetail(visible.find((item) => item.id === state.activeId) || visible[0]);
+    }
+
+    function matchesFilters(item) {
+      const sectionMatch = state.section === 'All' || (item.report_sections || []).includes(state.section);
+      if (!sectionMatch) return false;
+      const categoryMatch = state.category === 'All' || item.category === state.category;
+      if (!categoryMatch) return false;
+      if (!state.query) return true;
+      const haystack = [
+        item.title,
+        item.display_title,
+        item.source,
+        item.source_type,
+        item.category,
+        categoryLabel(item.category),
+        sectionLabel(item.report_sections?.[0]),
+        sourceTypeLabel(item.source_type),
+        priorityLabel(item.read_priority),
+        item.one_line_summary,
+        item.technical_summary,
+        item.quant_relevance,
+        item.possible_use_case,
+        item.tldr,
+        item.core_value,
+        ...(item.key_points_list || []),
+        item.reference_url,
+      ].join(' ').toLowerCase();
+      return haystack.includes(state.query);
+    }
+
+    function sortItems(list) {
+      return [...list].sort((a, b) => {
+        if (state.sort === 'priority') {
+          return (priorityRank[b.read_priority] || 0) - (priorityRank[a.read_priority] || 0)
+            || b.final_score - a.final_score;
+        }
+        if (state.sort === 'source') {
+          return a.source.localeCompare(b.source) || b.final_score - a.final_score;
+        }
+        return b.final_score - a.final_score;
+      });
+    }
+
+    function renderCategoryActive() {
+      document.querySelectorAll('.category-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.category === state.category);
+      });
+    }
+
+    function renderSectionActive() {
+      document.querySelectorAll('.section-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.section === state.section);
+      });
+    }
+
+    function itemCard(item) {
+      const sec = item.report_sections?.[0] || 'other';
+      const sig = getFeedback(item.id);
+      return `
+        <article class="item ${item.id === state.activeId ? 'active' : ''}"
+                 data-id="${escapeAttr(item.id)}"
+                 data-section="${escapeAttr(sec)}">
+          <div class="item-top">
+            <h3>${escapeHtml(item.display_title || item.title)}</h3>
+            <div class="score">${Number(item.final_score).toFixed(1)}</div>
+          </div>
+          <div class="meta">
+            <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+            <span class="tag">${escapeHtml(item.source)}</span>
+            <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+          </div>
+          ${readerFormat(item, true)}
+          <div class="feedback-row">
+            <button class="feedback-btn ${sig === 1 ? 'active-up' : ''}" data-feedback="1" title="有用">👍</button>
+            <button class="feedback-btn ${sig === -1 ? 'active-down' : ''}" data-feedback="-1" title="跳过">👎</button>
+            <span class="feedback-hint">${sig === 1 ? '已标记有用' : sig === -1 ? '已标记跳过' : ''}</span>
+          </div>
+        </article>
+      `;
+    }
+
+    function sectionGroupHeader(section, count) {
+      return `
+        <div class="section-group-header" data-section="${escapeAttr(section.key)}">
+          <span class="section-group-title">${escapeHtml(section.label)}</span>
+          <span class="section-group-count">${count} 条</span>
+        </div>
+      `;
+    }
+
+    function renderItems(visible) {
+      const container = $('items');
+      if (!visible.length) {
+        container.innerHTML = '<div class="empty">当前筛选条件下没有匹配内容。</div>';
+        return;
+      }
+
+      let html = '';
+      if (state.section === 'All') {
+        // Group by section in defined order, with a header for each group
+        const grouped = {};
+        for (const item of visible) {
+          const sec = item.report_sections?.[0] || 'other';
+          if (!grouped[sec]) grouped[sec] = [];
+          grouped[sec].push(item);
+        }
+        for (const section of (payload.sections || [])) {
+          const group = grouped[section.key];
+          if (!group || !group.length) continue;
+          html += sectionGroupHeader(section, group.length);
+          html += group.map((item) => itemCard(item)).join('');
+        }
+        // Append any items that fell into 'other' (shouldn't normally happen)
+        if (grouped['other']?.length) {
+          html += grouped['other'].map((item) => itemCard(item)).join('');
+        }
+      } else {
+        html = visible.map((item) => itemCard(item)).join('');
+      }
+
+      container.innerHTML = html;
+      container.querySelectorAll('.item').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.activeId = node.dataset.id;
+          render();
+        });
+      });
+      container.querySelectorAll('.feedback-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const itemNode = btn.closest('.item');
+          setFeedback(itemNode.dataset.id, parseInt(btn.dataset.feedback, 10));
+          render();
+        });
+      });
+    }
+
+    function renderDetail(item) {
+      const detail = $('detail');
+      if (!item) {
+        detail.innerHTML = '<div class="empty">选择一条内容查看详情。</div>';
+        return;
+      }
+
+      detail.innerHTML = `
+        <h2>${escapeHtml(item.display_title || item.title)}</h2>
+        <div class="meta">
+          <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+          <span class="tag">${escapeHtml(sourceTypeLabel(item.source_type))}</span>
+          <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+        </div>
+
+        ${readerFormat(item, false)}
+
+        <div class="detail-block">
+          <h3>评分拆解</h3>
+          <div class="breakdown">
+            ${bar('相关性', item.relevance_score)}
+            ${bar('新颖度', item.novelty_score)}
+            ${bar('学术性', item.academic_score)}
+            ${bar('讨论度', item.discussion_score)}
+            ${bar('可行动性', item.actionable_score)}
+          </div>
+        </div>
+
+      `;
+    }
+
+    function readerFormat(item, compact) {
+      const points = itemKeyPoints(item);
+      return `
+        <div class="reader-format ${compact ? 'compact' : ''}">
+          <div class="reader-block">
+            <h4>1. 这篇文章的太长不读</h4>
+            <p>${escapeHtml(item.tldr || item.one_line_summary || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>2. 核心价值，对我量化的工作能够提供什么样的帮助</h4>
+            <p>${escapeHtml(item.core_value || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>3. 关键核心点 / 论文或帖子摘要</h4>
+            <ol>${points.map((point) => `<li>${escapeHtml(point)}</li>`).join('')}</ol>
+          </div>
+          <div class="reader-block">
+            <h4>4. 原文链接</h4>
+            ${referenceHtml(item)}
+          </div>
+        </div>
+      `;
+    }
+
+    function itemKeyPoints(item) {
+      const points = Array.isArray(item.key_points_list)
+        ? item.key_points_list
+        : (Array.isArray(item.key_points) ? item.key_points : []);
+      const clean = points.filter(Boolean).slice(0, 3);
+      return clean.length ? clean : ['需要打开原文进一步确认方法、数据和适用边界。'];
+    }
+
+    function referenceHtml(item) {
+      const url = item.reference_url || '';
+      if (!url) return '<p>暂无可打开链接</p>';
+      return `
+        <a class="reader-reference" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">打开原文</a>
+        <small class="reference-url">${escapeHtml(url)}</small>
+      `;
+    }
+
+    function bar(label, value) {
+      const score = Number(value || 0);
+      const width = Math.max(0, Math.min(100, score * 10));
+      return `
+        <div class="bar">
+          <span>${label}</span>
+          <div class="bar-track"><div class="bar-fill" style="width: ${width}%"></div></div>
+          <b>${score.toFixed(1)}</b>
+        </div>
+      `;
+    }
+
+    function countBy(list, key) {
+      return list.reduce((acc, item) => {
+        acc[item[key]] = (acc[item[key]] || 0) + 1;
+        return acc;
+      }, {});
+    }
+
+    function averageScore(list) {
+      if (!list.length) return 0;
+      return list.reduce((sum, item) => sum + Number(item.final_score || 0), 0) / list.length;
+    }
+
+    function option(value, label) {
+      return `<option value="${escapeAttr(value)}">${escapeHtml(label)}</option>`;
+    }
+
+    function sectionButton(section, label, count) {
+      return `
+        <button class="category-button section-button" type="button" data-section="${escapeAttr(section)}">
+          <span>${escapeHtml(label)}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryButton(category, count) {
+      return `
+        <button class="category-button" type="button" data-category="${escapeAttr(category)}">
+          <span>${escapeHtml(category === 'All' ? '全部' : categoryLabel(category))}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryLabel(category) {
+      return categoryLabels[category] || category;
+    }
+
+    function sectionLabel(sectionKey) {
+      const section = (payload.sections || []).find((item) => item.key === sectionKey);
+      return section ? section.label : '其他';
+    }
+
+    function feedTitle() {
+      const parts = [];
+      if (state.section !== 'All') parts.push(sectionLabel(state.section));
+      if (state.category !== 'All') parts.push(categoryLabel(state.category));
+      return parts.length ? parts.join(' / ') : '今日情报';
+    }
+
+    function priorityLabel(priority) {
+      return priorityLabels[priority] || priority;
+    }
+
+    function sourceTypeLabel(sourceType) {
+      return sourceTypeLabels[sourceType] || sourceType;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replaceAll('`', '&#096;');
+    }
+
+    init();
+  </script>
+</body>
+</html>
