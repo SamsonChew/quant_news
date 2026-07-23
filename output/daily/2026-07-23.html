@@ -1,0 +1,1086 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>samson 量化情报台 - 2026-07-23</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --panel: #ffffff;
+      --ink: #202124;
+      --muted: #5f6368;
+      --line: #dadce0;
+      --blue: #1a73e8;
+      --red: #ea4335;
+      --yellow: #fbbc04;
+      --green: #34a853;
+      --blue-soft: #e8f0fe;
+      --green-soft: #e6f4ea;
+      --yellow-soft: #fef7e0;
+      --red-soft: #fce8e6;
+      --shadow: 0 1px 2px rgba(60, 64, 67, 0.16), 0 8px 24px rgba(60, 64, 67, 0.10);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(66, 133, 244, 0.07), transparent 30%),
+        radial-gradient(circle at top right, rgba(251, 188, 4, 0.08), transparent 26%),
+        var(--bg);
+      color: var(--ink);
+      font-family: "Google Sans", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(280px, 620px);
+      gap: 24px;
+      align-items: center;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand h1 {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin: 0;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+
+    .brand h1::before {
+      content: "";
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background:
+        conic-gradient(from 0deg, var(--blue) 0 25%, var(--red) 0 50%, var(--yellow) 0 75%, var(--green) 0 100%);
+      box-shadow: inset 0 0 0 7px #fff;
+    }
+
+    .date-pill {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 170px 170px 150px;
+      gap: 10px;
+    }
+
+    .control {
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 12px;
+      outline: none;
+    }
+
+    .control:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.14);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 260px minmax(420px, 1fr) 420px;
+      gap: 22px;
+      padding: 24px 32px 36px;
+    }
+
+    .rail,
+    .detail {
+      position: sticky;
+      top: 86px;
+      height: calc(100vh - 112px);
+      overflow: auto;
+    }
+
+    .rail,
+    .detail,
+    .feed {
+      min-width: 0;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      padding: 12px;
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
+    }
+
+    .metric:nth-child(1) { border-top: 3px solid var(--blue); }
+    .metric:nth-child(2) { border-top: 3px solid var(--red); }
+    .metric:nth-child(3) { border-top: 3px solid var(--yellow); }
+    .metric:nth-child(4) { border-top: 3px solid var(--green); }
+
+    .metric b {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .section-label {
+      margin: 18px 0 8px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .category-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .category-button {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--ink);
+      padding: 8px 10px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .category-button:hover,
+    .category-button.active {
+      border-color: transparent;
+      background: var(--blue-soft);
+      color: #174ea6;
+    }
+
+    .count {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .source-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .source-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .feed-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .feed-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .result-count {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .items {
+      display: grid;
+      gap: 10px;
+    }
+
+    .section-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 2px 4px;
+      margin-top: 10px;
+      border-bottom: 2px solid var(--line);
+    }
+
+    .section-group-header:first-child {
+      margin-top: 0;
+    }
+
+    .section-group-title {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .section-group-header[data-section="deep_learning_quant"] .section-group-title { color: var(--blue); }
+    .section-group-header[data-section="ai_quant_tools"] .section-group-title { color: var(--green); }
+    .section-group-header[data-section="daily_news"] .section-group-title { color: var(--yellow); }
+
+    .section-group-count {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .item {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.10);
+      padding: 18px;
+      cursor: pointer;
+      transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+    }
+
+    .item::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--blue), var(--red), var(--yellow), var(--green));
+    }
+
+    .item[data-section="deep_learning_quant"]::before { background: var(--blue); }
+    .item[data-section="ai_quant_tools"]::before { background: var(--green); }
+    .item[data-section="daily_news"]::before { background: var(--yellow); }
+
+    .item:hover,
+    .item.active {
+      border-color: #c6dafc;
+      box-shadow: var(--shadow);
+      transform: translateY(-2px);
+    }
+
+    .item-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .item h3 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.28;
+    }
+
+    .score {
+      min-width: 54px;
+      border-radius: 999px;
+      background: var(--blue-soft);
+      color: #174ea6;
+      padding: 6px 8px;
+      text-align: center;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .tag {
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: #f1f3f4;
+      padding: 3px 8px;
+    }
+
+    .tag:nth-child(1) { background: var(--blue-soft); color: #174ea6; }
+    .tag:nth-child(2) { background: var(--green-soft); color: #137333; }
+    .tag:nth-child(3) { background: var(--yellow-soft); color: #8a5a00; }
+    .tag:nth-child(4) { background: var(--red-soft); color: #b3261e; }
+
+    .summary {
+      margin: 0;
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .reference-link {
+      display: inline-flex;
+      width: fit-content;
+      border-top: 1px solid var(--line);
+      color: var(--blue);
+      padding-top: 9px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .reader-format {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .reader-format.compact {
+      gap: 8px;
+    }
+
+    .reader-block {
+      border-top: 1px solid var(--line);
+      padding-top: 9px;
+    }
+
+    .reader-block:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .reader-block h4 {
+      margin: 0 0 5px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .reader-block p,
+    .reader-block li {
+      margin: 0;
+      color: #30342d;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .reader-block ol {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .reader-reference {
+      color: var(--blue);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
+    .reference-url {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .detail {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .detail h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+
+    .detail-block {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .detail-block h3 {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+
+    .detail-block p,
+    .detail-block li {
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .detail-block ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .breakdown {
+      display: grid;
+      gap: 8px;
+    }
+
+    .bar {
+      display: grid;
+      grid-template-columns: 118px 1fr 40px;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .bar-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e7eadf;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--blue), var(--green), var(--yellow), var(--red));
+    }
+
+    .open-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      margin-top: 16px;
+      border: 1px solid var(--blue);
+      border-radius: var(--radius);
+      color: var(--blue);
+      text-decoration: none;
+      padding: 0 12px;
+      font-weight: 700;
+    }
+
+    .feedback-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+    }
+
+    .feedback-btn {
+      background: #f1f3f4;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 120ms, border-color 120ms;
+    }
+
+    .feedback-btn:hover { background: var(--blue-soft); }
+    .feedback-btn.active-up { background: var(--green-soft); border-color: var(--green); }
+    .feedback-btn.active-down { background: var(--red-soft); border-color: var(--red); }
+
+    .feedback-hint {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      padding: 28px;
+      color: var(--muted);
+      background: var(--panel);
+    }
+
+    @media (max-width: 1180px) {
+      .layout {
+        grid-template-columns: 220px 1fr;
+      }
+
+      .detail {
+        position: static;
+        grid-column: 1 / -1;
+        height: auto;
+      }
+    }
+
+    @media (max-width: 820px) {
+      .topbar {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .brand {
+        display: grid;
+        gap: 4px;
+      }
+
+      .brand h1 {
+        white-space: normal;
+        font-size: 21px;
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .rail,
+      .detail {
+        position: static;
+        height: auto;
+      }
+
+      .metric-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <h1>samson 量化情报台</h1>
+        <span class="date-pill" id="report-date"></span>
+      </div>
+      <div class="controls">
+        <input class="control" id="search" type="search" placeholder="搜索标题、摘要、分类..." />
+        <select class="control" id="section-select"></select>
+        <select class="control" id="category-select"></select>
+        <select class="control" id="sort-select">
+          <option value="score">按评分排序</option>
+          <option value="priority">按优先级排序</option>
+          <option value="source">按来源排序</option>
+        </select>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="rail">
+        <div class="metric-grid">
+          <div class="metric"><b id="metric-items">0</b><span>报告条目</span></div>
+          <div class="metric"><b id="metric-categories">0</b><span>分类数量</span></div>
+          <div class="metric"><b id="metric-high">0</b><span>高优先级</span></div>
+          <div class="metric"><b id="metric-avg">0.0</b><span>平均评分</span></div>
+        </div>
+
+        <div class="section-label">两条主线</div>
+        <div class="category-list" id="section-list"></div>
+
+        <div class="section-label">细分标签</div>
+        <div class="category-list" id="category-list"></div>
+
+        <div class="section-label">主力来源</div>
+        <ul class="source-list" id="source-list"></ul>
+      </aside>
+
+      <section class="feed">
+        <div class="feed-header">
+          <h2 id="feed-title">今日情报</h2>
+          <span class="result-count" id="result-count"></span>
+        </div>
+        <div class="items" id="items"></div>
+      </section>
+
+      <aside class="detail" id="detail"></aside>
+    </main>
+  </div>
+
+  <script id="dashboard-data" type="application/json">{"report_date": "2026-07-23", "generated_at": "2026-07-23T00:19:43Z", "items": [{"id": "36a6832325ae4b7f99432d3bf41f93bebd826cf6e97076b7167540aecddd179e", "source": "arXiv", "source_type": "paper", "title": "Optimizing Regret", "url": "http://arxiv.org/abs/2607.18866v1", "authors": ["Irene Aldridge"], "published_at": "2026-07-21", "collected_at": "2026-07-23T00:00:43Z", "raw_text": "Building on the identity that expected regret equals the covariance between costs and decisions, this paper develops the complete derivative theory of the covariance regret functional. We derive the Gâteaux derivative, showing that the universal steepest-descent direction is the contrarian policy $-(c-\\bar{c})$, while ascent yields momentum. For linear policies $\\hatπ(c) = Ac+b$, the gradient is the cost covariance matrix $Σ_c$, with a zero Hessian implying boundary-optimal solutions such as the minimum-variance portfolio. We extend to constrained optimization, sign-gradient duality between regret minimization and alpha maximization, finite-sample convergence bounds paralleling Thompson Sampling, and gradient-descent algorithms requiring only input observations, with applications to portfolio tilting and LLM-based allocation strategies.", "abstract": "Building on the identity that expected regret equals the covariance between costs and decisions, this paper develops the complete derivative theory of the covariance regret functional. We derive the Gâteaux derivative, showing that the universal steepest-descent direction is the contrarian policy $-(c-\\bar{c})$, while ascent yields momentum. For linear policies $\\hatπ(c) = Ac+b$, the gradient is the cost covariance matrix $Σ_c$, with a zero Hessian implying boundary-optimal solutions such as the minimum-variance portfolio. We extend to constrained optimization, sign-gradient duality between regret minimization and alpha maximization, finite-sample convergence bounds paralleling Thompson Sampling, and gradient-descent algorithms requiring only input observations, with applications to portfolio tilting and LLM-based allocation strategies.", "content_hash": "232c39086bf84447f1ae2c9aa008d449af42e4c6d7c2ad35713151878e29baff", "category": "Portfolio Construction", "tags": ["allocation", "alpha", "derivative", "llm", "momentum", "optimization", "portfolio", "variance"], "language": "en", "metadata": {"arxiv_categories": ["econ.EM", "cs.LG", "stat.ML"]}, "one_line_summary": "协方差后悔泛函导数理论：逆向策略为后悔最小化的最陡下降方向，线性政策下梯度为成本协方差矩阵", "technical_summary": "解决后悔最小化问题。使用协方差后悔泛函的导数理论，推导出Gâteaux导数形式，显示最陡下降方向是逆向策略（成本减去均值），上升方向是动量。对于线性策略，梯度等于成本协方差矩阵，Hessian为零，因此边界最优解即最小方差组合。扩展到约束优化，显示后悔最小化与alpha最大化具有符号梯度对偶性，并提供有限样本收敛界。", "key_points": ["原文缺乏量化指标，结论待复核：核心理论为预期后悔等于成本与决策的协方差，Gâteaux导数显示逆向策略为最陡下降方向。", "量化可用性：方法仅需成本观测数据即可计算梯度，线性策略下梯度退化为成本协方差矩阵，实现简单，可复现数学推导。", "局限性：纯理论推导，缺乏实证验证；未考虑交易成本、市场冲击等现实约束；收敛界类似Thompson Sampling但未给出具体数值。"], "quant_relevance": "为组合构建中的后悔最小化提供数学框架，可用于因子倾斜和风险预算。", "possible_use_case": "可应用于多因子组合的权重调整，利用梯度下降迭代优化组合以降低后悔，或作为LLM分配策略的理论基础。", "limitations": "缺乏实证测试和样本外验证；所有结果基于数学推导，未考虑实际交易约束；收敛界未给出数值范围。", "read_priority": "中", "key_figures_md": "", "relevance_score": 8.0, "novelty_score": 9.565, "academic_score": 9.56, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 7.347, "display_title": "阿尔法、衍生品、大模型、动量研究论文", "tldr": "协方差后悔泛函导数理论：逆向策略为后悔最小化的最陡下降方向，线性政策下梯度为成本协方差矩阵", "core_value": "对你的量化工作帮助：把它拆成一个组合构建复现任务，先验证阿尔法、衍生品、大模型、动量是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["原文缺乏量化指标，结论待复核：核心理论为预期后悔等于成本与决策的协方差，Gâteaux导数显示逆向策略为最陡下降方向。", "量化可用性：方法仅需成本观测数据即可计算梯度，线性策略下梯度退化为成本协方差矩阵，实现简单，可复现数学推导。", "局限性：纯理论推导，缺乏实证验证；未考虑交易成本、市场冲击等现实约束；收敛界类似Thompson Sampling但未给出具体数值。"], "reference_url": "http://arxiv.org/abs/2607.18866v1", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "组合构建", "priority_label": "中", "source_type_label": "论文"}, {"id": "50e9bbfd6bad15d18b841922d6c2af9629c9bf690c5c82ea2ede3ad80a8f1b13", "source": "arXiv", "source_type": "paper", "title": "FinanceComplexQA: Benchmarking Agentic Reasoning on Industrial-grade Financial Documents", "url": "http://arxiv.org/abs/2607.19238v1", "authors": ["Xianfu Cheng", "Shiwei Zhang", "Jiyu Zhao", "Jian Yang", "Xinyuan Wang", "Ming Zhou", "Weixiao Zhou", "Xiangyuan Guan", "Xiang Li", "Zhenhe Wu", "Ziyi Ni", "Zhoujun Li", "Bingjing Xu"], "published_at": "2026-07-21", "collected_at": "2026-07-23T00:00:11Z", "raw_text": "Agentic Reasoning has become a transformative force in financial analysis due to its ability to integrate large-scale information and generate reliable and accurate content. However, when handling complex real-world problems, different agents still show significant performance variation. In this work, we design Finance-LaTeX SKILL, a skill for synthesizing financial documents with complex layouts based on expert knowledge. Using an agent workflow built on this skill, we generate 2,000 professional financial documents along with 6,000 high-quality question-answer pairs. To evaluate the overall capability of agents, we introduce FinanceComplexQA, a comprehensive open-ended generation benchmark for financial documents that closely resembles real-world scenarios. It contains 2,026 deep research tasks targeting 1009 financial documents. FinanceComplexQA has 8 key features: bilingual support; coverage of six mainstream scenarios and seven tasks; expert-level document reasoning questions; deep research of complex layouts; relatively stable and permanent reference answers; and precise evaluation through an Agent-as-a-Judge with multiple evaluation metrics. Using FinanceComplexQA, we conduct a comprehensive evaluation of leading RAG systems and agentic reasoning tools for financial document QA. Through identifying and analyzing failure cases, we provide an in-depth study of their capabilities in numerical computation, multi-hop reasoning, content summarization, and industry analysis.", "abstract": "Agentic Reasoning has become a transformative force in financial analysis due to its ability to integrate large-scale information and generate reliable and accurate content. However, when handling complex real-world problems, different agents still show significant performance variation. In this work, we design Finance-LaTeX SKILL, a skill for synthesizing financial documents with complex layouts based on expert knowledge. Using an agent workflow built on this skill, we generate 2,000 professional financial documents along with 6,000 high-quality question-answer pairs. To evaluate the overall capability of agents, we introduce FinanceComplexQA, a comprehensive open-ended generation benchmark for financial documents that closely resembles real-world scenarios. It contains 2,026 deep research tasks targeting 1009 financial documents. FinanceComplexQA has 8 key features: bilingual support; coverage of six mainstream scenarios and seven tasks; expert-level document reasoning questions; deep research of complex layouts; relatively stable and permanent reference answers; and precise evaluation through an Agent-as-a-Judge with multiple evaluation metrics. Using FinanceComplexQA, we conduct a comprehensive evaluation of leading RAG systems and agentic reasoning tools for financial document QA. Through identifying and analyzing failure cases, we provide an in-depth study of their capabilities in numerical computation, multi-hop reasoning, content summarization, and industry analysis.", "content_hash": "cc43e3dd76c40f590d1b924f5d8183dc907c0ce62dec8073c20a3948fe038f56", "category": "LLM / Agents for Quant", "tags": ["agent", "rag", "reasoning"], "language": "en", "metadata": {"arxiv_categories": ["cs.CE"]}, "one_line_summary": "FinanceComplexQA 基准：合成 2000 份金融文档与 6000 问答对，用 Agent-as-a-Judge 评估 RAG 系统在数值计算和多跳推理上的差距", "technical_summary": "1) 针对金融文档推理场景缺乏高质量基准的问题，设计 Finance‑LaTeX SKILL 合成具有复杂布局的金融文档，生成 2000 份文档及 6000 个问答对。 2) 构建 FinanceComplexQA 基准，包含 2026 个深度研究任务，覆盖六大场景和七类任务（如数值计算、多跳推理、总结）。 3) 采用 Agent-as-a-Judge 自动评估，对多个领先 RAG 系统和 agent 工具进行测评，通过失败案例分析其短板。 4) 发现现有工具在复杂布局下的数值计算和跨表推理准确率较低，但未报告具体的精度或 F1 数值。", "key_points": ["合成 2000 份复杂布局金融文档和 6000 问答对，构建含 2026 个深度研究任务的基准，覆盖六大场景。", "可复现性较高：使用公开可用的 Finance‑LaTeX SKILL 和合成数据生成流程，但 agent 评估依赖私有 API 可能导致结果不易完全重现。", "评估基于合成文档，未在真实金融文档上验证；缺乏数值计算和多跳推理的具体准确率数字，难以量化实际提升空间。"], "quant_relevance": "研究工具 / 工作流提效：为选择用于金融文档自动分析（如研报摘要、表格数据提取）的 agent 或 RAG 系统提供标准化评估框架。", "possible_use_case": "可用于对比不同 agent 或 RAG 系统在提取研报中数值因子、跨表关联信息时的表现，帮助量化团队选择最优工具链。", "limitations": "合成文档可能遗漏真实文档中的印刷噪点、模糊表格等挑战；基准未给出各系统在不同任务上的精确性能指标（如准确率、召回率），结论偏向定性；Agent-as-a-Judge 的评判标准可能引入额外偏差。", "read_priority": "中", "key_figures_md": "- **Figure 1**：FinanceComplexQA 基准构建流程：从专家知识到文档合成再到任务生成\n- **Table 1**：各 RAG 系统和 agent 工具在七类任务上的性能对比（如准确率、F1 等）\n- [原文图表（HTML版）](https://arxiv.org/html/2607.19238)", "relevance_score": 7.3, "novelty_score": 9.565, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 7.203, "display_title": "检索增强生成研究论文", "tldr": "FinanceComplexQA 基准：合成 2000 份金融文档与 6000 问答对，用 Agent-as-a-Judge 评估 RAG 系统在数值计算和多跳推理上的差距", "core_value": "对你的量化工作帮助：把它拆成一个量化大模型 / 智能体复现任务，先验证检索增强生成是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["合成 2000 份复杂布局金融文档和 6000 问答对，构建含 2026 个深度研究任务的基准，覆盖六大场景。", "可复现性较高：使用公开可用的 Finance‑LaTeX SKILL 和合成数据生成流程，但 agent 评估依赖私有 接口 可能导致结果不易完全重现。", "评估基于合成文档，未在真实金融文档上验证；缺乏数值计算和多跳推理的具体准确率数字，难以量化实际提升空间。"], "reference_url": "http://arxiv.org/abs/2607.19238v1", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "量化大模型 / 智能体", "priority_label": "中", "source_type_label": "论文"}, {"id": "2112c829d6d96ae0d48807ef6b05a29c586e4a904cccd7997321efccdcb36c76", "source": "arXiv", "source_type": "paper", "title": "Prediction of bank transaction fraud using TabNet an adaptive deep learning architecture", "url": "http://arxiv.org/abs/2607.18616v1", "authors": ["Prashanth BS", "Manoj Kumar", "Ariful Hoque", "Nasser Al Muraqab", "Immanuel Azaad Moonesar", "Udo Christian Braendle", "Ananth Rao"], "published_at": "2026-07-21", "collected_at": "2026-07-22T23:59:52Z", "raw_text": "The development of online banking has brought about an increase in fraudulent operations, which is a major problem for banks. This study delves into the urgent requirement for interpretable, scalable, and top-notch fraud detection systems by using TabNet, an adaptable deep learning framework, on a Kaggle dataset consisting of actual bank transactions in India. Maximizing operational risk management by improving the accuracy of transaction anomaly detection and ensuring regulatory compliance through transparent models is the goal. We utilize a supervised learning pipeline that incorporates the Synthetic Minority Oversampling Technique (SMOTE) to ensure that classes are balanced. Subsequently, we conduct thorough exploratory data analysis (EDA) to identify patterns of fraud, both during specific times and across behaviors. On this dataset, five different deep learning architectures are tested: DNN, GRU, LSTM, CNN1D, and TabNet. Assessment of predictive performance was carried out using a 3-fold cross-validation framework. With a ROC-AUC of 0.9739 and an accuracy of 97.39 %, TabNet considerably outperformed the competition. The method of sparse feature selection used improved interpretability, generalized better on tabular data, and produced fewer false positives and negatives. Critical insights for operational fraud detection systems and a contribution to the broader literature on explainable AI (XAI) in financial decision-making are offered by the findings. Goals 8 and 16 of the Sustainable Development Agenda are supported by this study, which promotes inclusive economic growth and institutional transparency. Supporting strong, policy-compliant, and interpretable decision-support systems, it also offers practical use for real-time implementation in banking infrastructure.", "abstract": "The development of online banking has brought about an increase in fraudulent operations, which is a major problem for banks. This study delves into the urgent requirement for interpretable, scalable, and top-notch fraud detection systems by using TabNet, an adaptable deep learning framework, on a Kaggle dataset consisting of actual bank transactions in India. Maximizing operational risk management by improving the accuracy of transaction anomaly detection and ensuring regulatory compliance through transparent models is the goal. We utilize a supervised learning pipeline that incorporates the Synthetic Minority Oversampling Technique (SMOTE) to ensure that classes are balanced. Subsequently, we conduct thorough exploratory data analysis (EDA) to identify patterns of fraud, both during specific times and across behaviors. On this dataset, five different deep learning architectures are tested: DNN, GRU, LSTM, CNN1D, and TabNet. Assessment of predictive performance was carried out using a 3-fold cross-validation framework. With a ROC-AUC of 0.9739 and an accuracy of 97.39 %, TabNet considerably outperformed the competition. The method of sparse feature selection used improved interpretability, generalized better on tabular data, and produced fewer false positives and negatives. Critical insights for operational fraud detection systems and a contribution to the broader literature on explainable AI (XAI) in financial decision-making are offered by the findings. Goals 8 and 16 of the Sustainable Development Agenda are supported by this study, which promotes inclusive economic growth and institutional transparency. Supporting strong, policy-compliant, and interpretable decision-support systems, it also offers practical use for real-time implementation in banking infrastructure.", "content_hash": "a2adffbbc72310e13cf031bd1ea53a2ebe5c7002ea4b2ef46e258bf18e8ef90b", "category": "Machine Learning for Finance", "tags": ["anomaly", "dataset", "deep learning", "lstm", "risk"], "language": "en", "metadata": {"arxiv_categories": ["q-fin.GN"]}, "one_line_summary": "TabNet在印度银行交易欺诈检测中ROC-AUC达0.9739，超越DNN/GRU/LSTM/CNN1D基线", "technical_summary": "1. 解决银行交易欺诈检测的准确性和可解释性问题。2. 采用TabNet自适应深度学习框架，结合SMOTE处理类别不平衡，在Kaggle印度银行交易数据集（含真实欺诈样本）上进行3折交叉验证。3. 对比DNN、GRU、LSTM、CNN1D和TabNet，TabNet取得ROC-AUC 0.9739、准确率97.39%，且通过稀疏特征选择提升了可解释性，减少了误报/漏报。", "key_points": ["TabNet在3折交叉验证下ROC-AUC达0.9739，准确率97.39%，明显优于DNN/GRU/LSTM/CNN1D。", "数据为Kaggle公开的印度银行交易数据集，使用SMOTE平衡类别，代码逻辑清晰，可复现性较高。", "仅在单一数据集上测试，缺乏不同银行或跨时间样本外验证；未考虑实时部署延迟和计算成本。"], "quant_relevance": "风险建模：提升交易异常检测精度，降低误报和漏报，直接优化金融风控模块的实时决策。", "possible_use_case": "可作为银行交易系统的实时欺诈检测模型，或作为量化风控因子（交易异常概率）加入多因子模型进行风险调整。", "limitations": "仅在一个Kaggle数据集上测试，样本外泛化能力未知；未包含实际部署的延迟和成本评估；无明确的时序外推验证。", "read_priority": "中", "key_figures_md": "", "relevance_score": 6.1, "novelty_score": 9.565, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 7.5, "final_score": 7.043, "display_title": "深度学习、风险、监管、人工智能研究论文", "tldr": "TabNet在印度银行交易欺诈检测中ROC-AUC达0.9739，超越DNN/GRU/LSTM/CNN1D基线", "core_value": "对你的量化工作帮助：把它当作深度学习、风险、监管、人工智能案例，用来补充异常交易监控、市场操纵风险、大宗商品执行和合规审计的场景库。", "key_points_list": ["TabNet在3折交叉验证下ROC-AUC达0.9739，准确率97.39%，明显优于DNN/GRU/LSTM/CNN1D。", "数据为Kaggle公开的印度银行交易数据集，使用SMOTE平衡类别，代码逻辑清晰，可复现性较高。", "仅在单一数据集上测试，缺乏不同银行或跨时间样本外验证；未考虑实时部署延迟和计算成本。"], "reference_url": "http://arxiv.org/abs/2607.18616v1", "report_sections": ["deep_learning_quant"], "report_section_labels": ["深度学习量化未来"], "category_label": "金融机器学习", "priority_label": "中", "source_type_label": "论文"}, {"id": "f6e418154f5fcd0ad8ace2f6c3061bb3b6fc6687ecd2d503bee7a87a6a3c219f", "source": "Reddit algotrading", "source_type": "forum", "title": "Data provider tier list", "url": "https://www.reddit.com/r/algotrading/comments/1v3l6pd/data_provider_tier_list/", "authors": ["/u/ProjectNo5641"], "published_at": "2026-07-22", "collected_at": "2026-07-23T00:13:26Z", "raw_text": "Since my last tier list did so well I though I'd make a part 2. Just to preface this is my own personal opinions from data providers I have used, I am an undergraduate economics student at Cambridge looking to break into Quant Research next year no need to grill me in the comments below. London Strateigc Edge : Tickdata for all US stocks and options+ economic data for all countries FOR FREE just a massive archive of data. Everyone gets an api key with 50gb of data usage +100 websocket connections. Unfortunately no level 3 data which makes sense as exchanges charge per user who views the data. Databento: If you need Level 3 data this is your place to go, all US exchanges covered + EUREX unfortunately in the 200usd plan live web sockets for l3 data not included. free $125usd credit for signup too Alpaca: $100 for access to all US Exchanges for stocks and options data, includes websocket connections for all stocks and options definitely the best price option out of all the paid providers for websocket connections. Massive: Biggest archive of historical data for US exchanges 20+ years, offers alternative data like credit card reports. Extremely easy to download the data. Free plan is meh. FMP : Access to different exchanges like LSE, EUREX and other niche providers but low quantity of historical tick data. Rithmic: API service offered through brokers like AMP futures, best price for level 3 futures data but slightly more complex to setup straight out of the box. Yahoo Finance: Free historical data for a wide range of assets but London strategic edge providers more detailed data. Tiingo: $30 USD for all US exchanges data , unfortunately 30gb bandwidth limit. EODHD + Alpha vantage + Finnhub: intuitive api to use but just use alpaca + FMP for the same data but a lot cheaper submitted by /u/ProjectNo5641 [link] [comments]", "abstract": "Since my last tier list did so well I though I'd make a part 2. Just to preface this is my own personal opinions from data providers I have used, I am an undergraduate economics student at Cambridge looking to break into Quant Research next year no need to grill me in the comments below. London Strateigc Edge : Tickdata for all US stocks and options+ economic data for all countries FOR FREE just a massive archive of data. Everyone gets an api key with 50gb of data usage +100 websocket connections. Unfortunately no level 3 data which makes sense as exchanges charge per user who views the data. Databento: If you need Level 3 data this is your place to go, all US exchanges covered + EUREX unfortunately in the 200usd plan live web sockets for l3 data not included. free $125usd credit for signup too Alpaca: $100 for access to all US Exchanges for stocks and options data, includes websocket connections for all stocks and options definitely the best price option out of all the paid providers for websocket connections. Massive: Biggest archive of historical data for US exchanges 20+ years, offers alternative data like credit card reports. Extremely easy to download the data. Free plan is meh. FMP : Access to different exchanges like LSE, EUREX and other niche providers but low quantity of historical tick data. Rithmic: API service offered through brokers like AMP futures, best price for level 3 futures data but slightly more complex to setup straight out of the box. Yahoo Finance: Free historical data for a wide range of assets but London strategic edge providers more detailed data. Tiingo: $30 USD for all US exchanges data , unfortunately 30gb bandwidth limit. EODHD + Alpha vantage + Finnhub: intuitive api to use but just use alpaca + FMP for the same data but a lot cheaper submitted by /u/ProjectNo5641 [link] [comments]", "content_hash": "d74f33058411a57cd8f32ed977dc2c6b079af055b7a44d0bb25ead2bc917afa5", "category": "Data Engineering", "tags": ["alpha", "alternative data", "historical data", "option"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "Reddit社区总结美股量化数据提供商等级排行，London Strategic Edge免费50GB+100WS，Alpaca性价比高，Databento适合L3", "technical_summary": "社区用户根据自身经验对主流量化数据提供商进行分级排名。London Strategic Edge被评为免费最优（50GB存储+100websocket连接，覆盖美股/期权/经济数据，但无L3）；Databento是L3数据首选（支持所有美国交易所+EUREX，但$200/月计划不含L3 websocket，赠送$125额度）；Alpaca以$100/月提供全美股票/期权实时websocket，性价比最高；Massive拥有20+年历史数据及另类数据（如信用卡报告），下载简易但免费版一般；FMP覆盖伦敦/欧洲交易所但历史tick数据少；Rithmic通过期货经纪商提供最佳期货L3数据但设置稍复杂；Yahoo Finance免费但不如London Strategic Edge详细；Tiingo($30/月)有30GB带宽限制；EODHD/Alpha Vantage/Finnhub接口直观但不如Alpaca+FMP便宜。", "key_points": ["社区共识：London Strategic Edge是免费美股tick数据的王者，提供50GB存储+100websocket，适合起步阶段；Databento是获取L3数据的唯一推荐付费源。", "可操作建议：预算有限选Alpaca（$100全市场股票+期权ws）；需大量历史数据选Massive（20+年）；期货L3选Rithmic通过AMP期货开户。", "局限性：作者为本科生，经验有限；L3数据需交易所额外收费，免费方案均无；部分提供商数据量或带宽限制（如Tiingo 30GB），选型前需评估实际用量。"], "quant_relevance": "数据工程（数据源选择、成本控制、API集成）", "possible_use_case": "开发美股日频/高频策略时，先用London Strategic Edge免费获取50GB tick数据做回测验证；实盘阶段再按需升级到Alpaca或Databento获取实时L2/L3数据。", "limitations": "社区讨论，仅代表个人观点；缺乏对数据质量（如数据清洗、除权除息处理、延迟等）的系统性评测；部分提供商（如Massive）的免费计划限制未详细说明；未考虑数据合规与交易所授权。", "read_priority": "高", "key_figures_md": "", "relevance_score": 7.5, "novelty_score": 9.78, "academic_score": 5.5, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 6.781, "display_title": "阿尔法、另类数据、期权实践讨论", "tldr": "Reddit社区总结美股量化数据提供商等级排行，London Strategic Edge免费50GB+100WS，Alpaca性价比高，Databento适合L3", "core_value": "对你的量化工作帮助：把它当作阿尔法、另类数据、期权的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["社区共识：London Strategic Edge是免费美股tick数据的王者，提供50GB存储+100websocket，适合起步阶段；Databento是获取L3数据的唯一推荐付费源。", "可操作建议：预算有限选Alpaca（$100全市场股票+期权ws）；需大量历史数据选Massive（20+年）；期货L3选Rithmic通过AMP期货开户。", "局限性：作者为本科生，经验有限；L3数据需交易所额外收费，免费方案均无；部分提供商数据量或带宽限制（如Tiingo 30GB），选型前需评估实际用量。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1v3l6pd/data_provider_tier_list/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "数据工程", "priority_label": "高", "source_type_label": "论坛"}, {"id": "93e1d5166f67f5d78d851081bf816f066a9fec8972e7ea3f0c384a672d5594d6", "source": "Reddit algotrading", "source_type": "forum", "title": "Beating the Market with RSI and SPY Rotation", "url": "https://www.reddit.com/r/algotrading/comments/1v3fmef/beating_the_market_with_rsi_and_spy_rotation/", "authors": ["/u/Expert_CBCD"], "published_at": "2026-07-22", "collected_at": "2026-07-23T00:13:26Z", "raw_text": "Hello again everyone, I want to share another strategy that I've been working on that I thought I would share with you folks to hear your thoughts. The whole strategy is based on using the RSI indicator but instead of using it on the close, using it on the EMA 20 (RSI-EMA). I find that it is much smoother and gives stronger signals across timeframes vs. traditional RSI. A few backtests that I've done also find that the RSI-EMA is a fairly strong modification that produces more consistent wins and better results. I of course wanted to turn this into a trading systems and had played around with various formulas, and entries and exits but believe that I finally found a system that may work well. The set up is as follows. I use a universe of the top 20 companies in the S&P 500 by market cap (data goes back to 1989 and can be found here ; my own backtest is 2010 to present). The tickers used for a current year are based on the top 20 companies from the previous year to avoid any lookahead/survivorship bias. Within a given year, when an equity's RSI-EMA in the top 20 crosses over 30, I buy that stock. If there are multiple crossovers, I buy the one with the lowest RSI (but over 30 as it's crossing over). When there isn't an equity crossing over, capital is shifted into SPY. Exits occur after 10 trading days with all entries/exits happening at the next open. This system also uses 100% of the capital in each trade. That's it! With respect to exits, I tested using an ATR based exit (1.0 in either direction) and an RSI-EMA based exit (when it crosses above 70 or crosses back below 30). I also included a slippage penalty of 5 bps (0.05%). Here are the results based on the various exits (initial capital $100,000; backtest starts in 2010 ): Yearly results: Year SPY B&H 1. Time (10d) 2. RSI Target/Redrop 3. ATR (1.0x) 2010 15.06% 22.85% 17.38% 9.70% 2011 1.89% 4.07% 3.08% -8.03% 2012 15.99% 31.31% 12.03% 2.11% 2013 32.31% -0.49% 0.65% 16.93% 2014 13.46% 34.68% 18.43% -8.65% 2015 1.25% -12.50% -12.84% -17.62% 2016 12.00% 17.88% 13.21% 5.88% 2017 21.70% 21.34% 28.49% 9.28% 2018 -4.56% 24.74% -3.02% -32.06% 2019 31.22% 37.67% 18.69% 29.36% 2020 18.37% 16.11% 22.22% -3.15% 2021 28.75% 10.55% -19.53% 2.38% 2022 -18.17% -31.10% -18.92% -46.60% 2023 26.19% 27.41% 24.82% -7.01% 2024 24.89% 63.29% 86.76% 14.41% 2025 17.72% 20.98% 30.48% -20.81% 2026 10.16% 45.43% 9.36% 126.31% --- --- --- --- --- Avg Return 15.13% 19.66% 15.96% 4.28% Std Dev 12.60% 21.95% 24.52% 37.38% Sharpe 1.20 0.90 0.65 0.11 Strategy Final Net Profit Return Trades Win Rate Avg Ret Avg Hold Worst Trade 1. Fixed 10-Day Time Limit $1,565,613 $1,465,613 1465.61% 231 58.01% 1.00% 10.0d -26.72% 2. RSI > 70 Target (Redrop $625,288 $525,288 525.29% 245 61.22% 0.67% 10.2d -22.03% 3. 1.0x ATR Stop (Pure Intraday) $93,071 -$6,929 -6.93% 37 2.70% 1.47% 105.7d -5.76% What if we experiment with the different number of holdings days? We see that generally 12 - 16 days is the ideal hold time with returns being lower on either side of that range. To minimize slippage and the number of trades, I would likely pivot to 15 trading days instead of 10. Hold Days Trades Win Rate CAGR Final Equity 5 326 54.3% 8.79% $401,551 6 306 54.6% 8.17% $365,193 7 288 53.8% 9.72% $461,591 8 262 55.3% 13.95% $862,307 9 243 54.3% 13.18% $770,630 10 231 58.0% 18.15% $1,565,613 11 220 54.1% 13.75% $837,275 12 206 57.3% 18.59% $1,664,395 13 197 57.4% 17.48% $1,424,912 14 189 58.7% 20.72% $2,231,678 15 183 59.0% 23.10% $3,082,154 16 177 55.9% 19.40% $1,862,937 17 170 54.7% 12.81% $730,494 18 162 54.9% 11.27% $582,300 19 156 57.1% 11.47% $599,320 20 147 58.5% 8.87% $406,290 And that's that! I would love to hear any feedback including criticisms, general thoughts and suggestions to improve. EDIT: WALK-FORWARD TESTING ADDITION To address some of the points about potential overfitting and the drop-off in CAGR between certain days, I decided to do an expanding walk forward test. I find the number of days held from 2010 - 2015 that maximizes profit (ranging from 10 - 20) and then apply that to 2016. I continue expanding the in-sample period (for 2017, the in-sample optimization period is 2010 - 2016, for 2018 2010 - 2017, etc.) until June 30th 2026. Yearly results, with B&H and numerical means/sd/sharpe are below with 2 bps of slippage (changed it when experimenting and don't want to re-do the table factoring in 5 - do what you will with that). Year SPY B&H Walk-Forward OOS # Days Held 2016 12.00% 19.65% 10 2017 21.71% 23.32% 10 2018 -4.57% 24.18% 10 2019 31.22% 42.50% 10 2020 18.33% 18.19% 10 2021 28.73% 11.91% 10 2022 -18.18% 0.56% 15 2023 26.18% 8.62% 15 2024 24.89% 60.41% 15 2025 17.72% 23.11% 10 2026 (YTD) 10.31% 59.79% 15 --- --- --- Avg Return 15.30% 26.57% Std Dev 13.52% 19.16% Sharpe 1.13 1.39 Walk forward testing actually improves upon my initial results and - numerically - produces a Sharpe that is actually higher than that of SPY. Though odds are if I converted all this to CAGR we may see an underperforming sharpe. submitted by /u/Expert_CBCD [link] [comments]", "abstract": "Hello again everyone, I want to share another strategy that I've been working on that I thought I would share with you folks to hear your thoughts. The whole strategy is based on using the RSI indicator but instead of using it on the close, using it on the EMA 20 (RSI-EMA). I find that it is much smoother and gives stronger signals across timeframes vs. traditional RSI. A few backtests that I've done also find that the RSI-EMA is a fairly strong modification that produces more consistent wins and better results. I of course wanted to turn this into a trading systems and had played around with various formulas, and entries and exits but believe that I finally found a system that may work well. The set up is as follows. I use a universe of the top 20 companies in the S&P 500 by market cap (data goes back to 1989 and can be found here ; my own backtest is 2010 to present). The tickers used for a current year are based on the top 20 companies from the previous year to avoid any lookahead/survivorship bias. Within a given year, when an equity's RSI-EMA in the top 20 crosses over 30, I buy that stock. If there are multiple crossovers, I buy the one with the lowest RSI (but over 30 as it's crossing over). When there isn't an equity crossing over, capital is shifted into SPY. Exits occur after 10 trading days with all entries/exits happening at the next open. This system also uses 100% of the capital in each trade. That's it! With respect to exits, I tested using an ATR based exit (1.0 in either direction) and an RSI-EMA based exit (when it crosses above 70 or crosses back below 30). I also included a slippage penalty of 5 bps (0.05%). Here are the results based on the various exits (initial capital $100,000; backtest starts in 2010 ): Yearly results: Year SPY B&H 1. Time (10d) 2. RSI Target/Redrop 3. ATR (1.0x) 2010 15.06% 22.85% 17.38% 9.70% 2011 1.89% 4.07% 3.08% -8.03% 2012 15.99% 31.31% 12.03% 2.11% 2013 32.31% -0.49% 0.65% 16.93% 2014 13.46% 34.68% 18.43% -8.65% 2015 1.25% -12.50% -12.84% -17.62% 2016 12.00% 17.88% 13.21% 5.88% 2017 21.70% 21.34% 28.49% 9.28% 2018 -4.56% 24.74% -3.02% -32.06% 2019 31.22% 37.67% 18.69% 29.36% 2020 18.37% 16.11% 22.22% -3.15% 2021 28.75% 10.55% -19.53% 2.38% 2022 -18.17% -31.10% -18.92% -46.60% 2023 26.19% 27.41% 24.82% -7.01% 2024 24.89% 63.29% 86.76% 14.41% 2025 17.72% 20.98% 30.48% -20.81% 2026 10.16% 45.43% 9.36% 126.31% --- --- --- --- --- Avg Return 15.13% 19.66% 15.96% 4.28% Std Dev 12.60% 21.95% 24.52% 37.38% Sharpe 1.20 0.90 0.65 0.11 Strategy Final Net Profit Return Trades Win Rate Avg Ret Avg Hold Worst Trade 1. Fixed 10-Day Time Limit $1,565,613 $1,465,613 1465.61% 231 58.01% 1.00% 10.0d -26.72% 2. RSI > 70 Target (Redrop $625,288 $525,288 525.29% 245 61.22% 0.67% 10.2d -22.03% 3. 1.0x ATR Stop (Pure Intraday) $93,071 -$6,929 -6.93% 37 2.70% 1.47% 105.7d -5.76% What if we experiment with the different number of holdings days? We see that generally 12 - 16 days is the ideal hold time with returns being lower on either side of that range. To minimize slippage and the number of trades, I would likely pivot to 15 trading days instead of 10. Hold Days Trades Win Rate CAGR Final Equity 5 326 54.3% 8.79% $401,551 6 306 54.6% 8.17% $365,193 7 288 53.8% 9.72% $461,591 8 262 55.3% 13.95% $862,307 9 243 54.3% 13.18% $770,630 10 231 58.0% 18.15% $1,565,613 11 220 54.1% 13.75% $837,275 12 206 57.3% 18.59% $1,664,395 13 197 57.4% 17.48% $1,424,912 14 189 58.7% 20.72% $2,231,678 15 183 59.0% 23.10% $3,082,154 16 177 55.9% 19.40% $1,862,937 17 170 54.7% 12.81% $730,494 18 162 54.9% 11.27% $582,300 19 156 57.1% 11.47% $599,320 20 147 58.5% 8.87% $406,290 And that's that! I would love to hear any feedback including criticisms, general thoughts and suggestions to improve. EDIT: WALK-FORWARD TESTING ADDITION To address some of the points about potential overfitting and the drop-off in CAGR between certain days, I decided to do an expanding walk forward test. I find the number of days held from 2010 - 2015 that maximizes profit (ranging from 10 - 20) and then apply that to 2016. I continue expanding the in-sample period (for 2017, the in-sample optimization period is 2010 - 2016, for 2018 2010 - 2017, etc.) until June 30th 2026. Yearly results, with B&H and numerical means/sd/sharpe are below with 2 bps of slippage (changed it when experimenting and don't want to re-do the table factoring in 5 - do what you will with that). Year SPY B&H Walk-Forward OOS # Days Held 2016 12.00% 19.65% 10 2017 21.71% 23.32% 10 2018 -4.57% 24.18% 10 2019 31.22% 42.50% 10 2020 18.33% 18.19% 10 2021 28.73% 11.91% 10 2022 -18.18% 0.56% 15 2023 26.18% 8.62% 15 2024 24.89% 60.41% 15 2025 17.72% 23.11% 10 2026 (YTD) 10.31% 59.79% 15 --- --- --- Avg Return 15.30% 26.57% Std Dev 13.52% 19.16% Sharpe 1.13 1.39 Walk forward testing actually improves upon my initial results and - numerically - produces a Sharpe that is actually higher than that of SPY. Though odds are if I converted all this to CAGR we may see an underperforming sharpe. submitted by /u/Expert_CBCD [link] [comments]", "content_hash": "f1db72b02ea5399b6b601a8d8b1d4259b18067050e972710948cf900be62ea7c", "category": "Portfolio Construction", "tags": ["backtest", "optimization", "slippage"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "基于RSI-EMA和SPY轮动的动量策略，在2010–2026年回测中年化收益23.1%", "technical_summary": "1. 解决传统RSI信号噪声大、不稳定的问题。2. 方法：对EMA20计算RSI（RSI-EMA），在标普500前20大市值股中，当某只股票RSI-EMA上穿30时买入（如果有多个，选RSI最低但>30的），无信号时持有SPY；持有15个交易日，下一个开盘进出。3. 核心结论：2010–2026回测中，15日持有期策略年化23.1%（SPY 15.13%），夏普1.20，最大回撤未给出但可见个别年份负收益；行走前向测试（2016–2026）年化26.57%，夏普1.39，但样本外年份波动大。", "key_points": ["RSI-EMA（在EMA20上计算RSI）比传统RSI更平滑，信号更一致，在15日持有期下策略年化23.1%，超越SPY买入持有。", "策略可复现：使用标普前20市值股票（每年更新避免幸存偏差），RSI-EMA上穿30入场，15天固定持有，SPY轮动，5bps滑点成本。", "回测存在过拟合风险：持有天数优化从10天调到15天，且行走前向测试在2022、2023、2026年表现不稳定，实盘可能因交易成本和市场环境变化大幅下降。"], "quant_relevance": "因子/ alpha信号，以及组合构建。提供了一个基于改进RSI的动量因子和轮动框架。", "possible_use_case": "可作为A股或美股日频轮动策略的候选，先用RSI-EMA信号在全市场或前100市值股票中筛选，再叠加SPY/现金轮动进行回测验证。", "limitations": "1. 回测区间仅2010–2026，包含2020年后的强牛市场，样本外表现未知。2. 未考虑交易成本（仅5bps滑点）、冲击成本、融券约束。3. 持有期优化（10→15天）可能存在过拟合，行走前向测试样本量有限（11年）。4. 最大回撤未给出，但在2015、2021、2022年份有明显亏损。5. 仅前20大市值股，容量受限。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.78, "academic_score": 5.5, "discussion_score": 3.0, "actionable_score": 7.5, "final_score": 6.201, "display_title": "回测、优化、滑点、测试实践讨论", "tldr": "基于RSI-EMA和SPY轮动的动量策略，在2010–2026年回测中年化收益23.1%", "core_value": "对你的量化工作帮助：把它当作回测、优化、滑点、测试的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["RSI-EMA（在EMA20上计算RSI）比传统RSI更平滑，信号更一致，在15日持有期下策略年化23.1%，超越SPY买入持有。", "策略可复现：使用标普前20市值股票（每年更新避免幸存偏差），RSI-EMA上穿30入场，15天固定持有，SPY轮动，5bps滑点成本。", "回测存在过拟合风险：持有天数优化从10天调到15天，且行走前向测试在2022、2023、2026年表现不稳定，实盘可能因交易成本和市场环境变化大幅下降。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1v3fmef/beating_the_market_with_rsi_and_spy_rotation/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "组合构建", "priority_label": "高", "source_type_label": "论坛"}, {"id": "b55c3e7014e2a02a94eb0b415d3e5c6a5d672a6969cbd148573596b46c6894dc", "source": "Reddit algotrading", "source_type": "forum", "title": "Is there a tool that connects prediction markets to your stock portfolio?", "url": "https://www.reddit.com/r/algotrading/comments/1v3bdfi/is_there_a_tool_that_connects_prediction_markets/", "authors": ["/u/No_Syrup_4068"], "published_at": "2026-07-22", "collected_at": "2026-07-23T00:13:26Z", "raw_text": "The more I think about prediction markets, the more useful they seem as real-time probability engines for events such as elections, wars, regulation, tariffs, and broader geopolitical risks. Is there already a tool where you can upload your stock portfolio and automatically identify relevant Polymarket or Kalshi markets? For example: Which prediction markets are most relevant to my holdings? Are current probabilities creating headwinds or tailwinds for my portfolio? Which stocks have the highest exposure to a specific event? How would my portfolio react if the market-implied probability changed significantly? Essentially, I am looking for a portfolio risk dashboard powered by prediction-market data. Does anything like this already exist? And would you actually use it? EDIT - Found Oracle Markts here via my ChatGPT \"research\" and user comment: https://oraclemarkets.io/portfolio submitted by /u/No_Syrup_4068 [link] [comments]", "abstract": "The more I think about prediction markets, the more useful they seem as real-time probability engines for events such as elections, wars, regulation, tariffs, and broader geopolitical risks. Is there already a tool where you can upload your stock portfolio and automatically identify relevant Polymarket or Kalshi markets? For example: Which prediction markets are most relevant to my holdings? Are current probabilities creating headwinds or tailwinds for my portfolio? Which stocks have the highest exposure to a specific event? How would my portfolio react if the market-implied probability changed significantly? Essentially, I am looking for a portfolio risk dashboard powered by prediction-market data. Does anything like this already exist? And would you actually use it? EDIT - Found Oracle Markts here via my ChatGPT \"research\" and user comment: https://oraclemarkets.io/portfolio submitted by /u/No_Syrup_4068 [link] [comments]", "content_hash": "edd61db55e4a91b02687af901d42f3f425ec61efcd0745c1d28c95c15ce2de75", "category": "Portfolio Construction", "tags": ["exposure", "market data", "portfolio", "risk"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "社区讨论：搭建预测市场驱动的股票组合风险仪表盘，发现现有工具 OracleMarkts", "technical_summary": "社区核心讨论：用户发现预测市场（如Polymarket、Kalshi）提供事件实时概率（选举、战争、关税等），希望工具能自动分析持仓与这些事件的关联，量化概率变化对组合的影响。用户通过搜索找到了OracleMarkts.io这个工具，可上传组合并识别最相关的预测市场，展示当前概率造成的顺风/逆风。社区参与者认为这是新型风险管理思路，但工具尚未广泛验证。", "key_points": ["社区共识：预测市场可为股票组合提供宏观事件实时概率，有潜力作为非传统风险因子。", "具体工具推荐：OracleMarkts.io可上传组合并自动匹配Polymarket/Kalshi市场，评估事件暴露。", "风险与局限：工具数据来源单一（仅两个预测市场），事件关联映射算法未公开，需独立验证其有效性。"], "quant_relevance": "组合构建与风险建模：利用预测市场概率作为宏观事件的风险因子，实时评估组合尾部风险暴露。", "possible_use_case": "可用于量化研究中的事件风险对冲：将OracleMarkts集成到组合仪表盘，监控关键宏观事件概率突变时自动计算敞口，辅助调整期权或期货头寸。", "limitations": "工具依赖预测市场流动性（小事件可能无效）；事件与股票关联映射可能不准确；这是社区早期体验，缺乏严格回测证据。", "read_priority": "高", "key_figures_md": "", "relevance_score": 5.6, "novelty_score": 9.78, "academic_score": 5.171, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 6.162, "display_title": "市场数据、组合、风险、预言机实践讨论", "tldr": "社区讨论：搭建预测市场驱动的股票组合风险仪表盘，发现现有工具 OracleMarkts", "core_value": "对你的量化工作帮助：把它当作市场数据、组合、风险、预言机的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["社区共识：预测市场可为股票组合提供宏观事件实时概率，有潜力作为非传统风险因子。", "具体工具推荐：OracleMarkts.io可上传组合并自动匹配Polymarket/Kalshi市场，评估事件暴露。", "风险与局限：工具数据来源单一（仅两个预测市场），事件关联映射算法未公开，需独立验证其有效性。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1v3bdfi/is_there_a_tool_that_connects_prediction_markets/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "组合构建", "priority_label": "高", "source_type_label": "论坛"}, {"id": "b2ce7d9ba550bab24f4e41fb8994fbe4e961e88236a80a00794b98eb824bbaa3", "source": "CoinTelegraph", "source_type": "crypto_news", "title": "S&P launches blockchain fundamentals index for digital assets", "url": "https://cointelegraph.com/news/sp-launches-blockchain-fundamentals-index-digital-assets?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "authors": [], "published_at": "2026-07-22", "collected_at": "2026-07-23T00:13:27Z", "raw_text": "The benchmark tracks blockchain networks using protocol revenue, offering an alternative to traditional market capitalization-weighted crypto indexes.", "abstract": "The benchmark tracks blockchain networks using protocol revenue, offering an alternative to traditional market capitalization-weighted crypto indexes.", "content_hash": "895a8e88029be0ccbfa4d58ee3bf54f81db3df02b2ac3e1fbaebc5bce5e4802e", "category": "Crypto Quant", "tags": ["blockchain", "crypto"], "language": "en", "metadata": {"feed_url": "https://cointelegraph.com/rss"}, "one_line_summary": "S&P 推出基于协议收入的区块链基本面指数，为数字资产提供非市值加权基准", "technical_summary": "1. 传统加密货币指数（如市值加权）可能过度反映投机情绪，标普推出基本面指数尝试以协议收入作为权重构建基准。2. 指数覆盖区块链网络（如以太坊、Solana），权重由协议收入（而非市值）决定。3. 该指数为量化研究者提供了新的基准标尺，可用于评估策略的相对表现或作为风险因子的代理变量。", "key_points": ["标普推出区块链基本面指数，基于协议收入而非市值加权，提供新基准。", "量化交易者可将其作为数字资产组合的业绩基准，或用于多因子模型。", "指数历史短，协议收入数据可能滞后，需验证其与中国市场相关性。"], "quant_relevance": "组合构建：提供非市值加权的数字资产基准，可用于主动管理、风险归因及因子分析。", "possible_use_case": "可作为数字资产组合的业绩基准，或用于多因子选币模型中替代市值权重。", "limitations": "指数成分基于协议收入数据，可能存在数据延迟、样本偏差及透明度问题；历史表现不足，需实盘验证其与收益的相关性。", "read_priority": "高", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.78, "academic_score": 5.688, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.629, "display_title": "加密资产加密市场新闻情报", "tldr": "S&P 推出基于协议收入的区块链基本面指数，为数字资产提供非市值加权基准", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["标普推出区块链基本面指数，基于协议收入而非市值加权，提供新基准。", "量化交易者可将其作为数字资产组合的业绩基准，或用于多因子模型。", "指数历史短，协议收入数据可能滞后，需验证其与中国市场相关性。"], "reference_url": "https://cointelegraph.com/news/sp-launches-blockchain-fundamentals-index-digital-assets?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "ef13722633f266d796bbf65b1e236e3bad76fa0886a576ed2a149c43c325d2a9", "source": "CoinTelegraph", "source_type": "crypto_news", "title": "Digital Chamber sues Illinois officials over new state 0.2% crypto tax", "url": "https://cointelegraph.com/news/digital-chamber-lawsuit-illinois-crypto-tax?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "authors": [], "published_at": "2026-07-22", "collected_at": "2026-07-23T00:13:27Z", "raw_text": "The group alleged that the tax signed into law in June “discriminates against people who transact in digital assets“ and should be blocked from implementation and enforcement.", "abstract": "The group alleged that the tax signed into law in June “discriminates against people who transact in digital assets“ and should be blocked from implementation and enforcement.", "content_hash": "20b818f26fb2178105ae0176192e6f2332acf77509b00daadc504cbd733bceb5", "category": "Crypto Quant", "tags": ["crypto"], "language": "en", "metadata": {"feed_url": "https://cointelegraph.com/rss"}, "one_line_summary": "Digital Chamber 起诉伊利诺伊州 0.2% 加密交易税，指控歧视数字资产交易者", "technical_summary": "伊利诺伊州于 6 月签署法律，对数字资产交易征收 0.2% 税。Digital Chamber 起诉称此项税收歧视数字资产交易者，要求法院阻止实施。若该税实施，所有在伊利诺伊州的加密交易将增加 0.2% 成本，影响价差、套利利润和执行策略。目前诉讼阶段，结果不确定。", "key_points": ["伊利诺伊州对数字资产交易征收 0.2% 税，Digital Chamber 提起诉讼要求禁止执行", "量化交易者在伊利诺伊州交易需额外承担 0.2% 成本，影响高频做市、跨交易所套利的净收益", "诉讼结果未知，若败诉可能导致其他州效仿，增加全美加密交易成本；目前信息来源单一（CoinTelegraph）"], "quant_relevance": "监管/税收政策直接影响交易成本与策略盈利能力，尤其影响高频与套利策略的净收益", "possible_use_case": "可作为 BTC/ETH 交易策略中地域成本溢价因子，在接入伊利诺伊州交易所或托管节点时考虑额外 0.2% 滑点补偿", "limitations": "尚未有法院裁决或实际执法案例；诉讼进展可能改变税政，信息来源为媒体摘要，缺乏官方法律文件细节", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.2, "novelty_score": 9.78, "academic_score": 5.719, "discussion_score": 2.0, "actionable_score": 5.5, "final_score": 5.474, "display_title": "加密资产加密市场新闻情报", "tldr": "Digital Chamber 起诉伊利诺伊州 0.2% 加密交易税，指控歧视数字资产交易者", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["伊利诺伊州对数字资产交易征收 0.2% 税，Digital Chamber 提起诉讼要求禁止执行", "量化交易者在伊利诺伊州交易需额外承担 0.2% 成本，影响高频做市、跨交易所套利的净收益", "诉讼结果未知，若败诉可能导致其他州效仿，增加全美加密交易成本；目前信息来源单一（CoinTelegraph）"], "reference_url": "https://cointelegraph.com/news/digital-chamber-lawsuit-illinois-crypto-tax?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "16824668bf32e4b9be4843e206efb901baac8cf1f3a643a79ada34dd6c336281", "source": "The Block", "source_type": "crypto_news", "title": "Benchmark lowers Coinbase earnings estimates but says Clarity Act could eclipse weak second quarter", "url": "https://www.theblock.co/post/409390/benchmark-lowers-coinbase-earnings-estimates-clarity-act-eclipse-weak-quarter?utm_source=rss&utm_medium=rss", "authors": [], "published_at": "2026-07-22", "collected_at": "2026-07-23T00:13:27Z", "raw_text": "Coinbase trading activity stabilized in June after crypto spot volumes slumped throughout most of the quarter.", "abstract": "Coinbase trading activity stabilized in June after crypto spot volumes slumped throughout most of the quarter.", "content_hash": "3c172202063ec724d7e1c7d61bdde5d990a6b778ae69cd219a9c4dc59eaf646a", "category": "Crypto Quant", "tags": ["crypto"], "language": "en", "metadata": {"feed_url": "https://www.theblock.co/rss.xml"}, "one_line_summary": "Benchmark下调Coinbase盈利预期，但Clarity法案有望抵消Q2现货交易量下滑的负面冲击", "technical_summary": "Benchmark分析师因加密现货交易量在Q2多数时间下降，下调Coinbase盈利预期。但指出Clarity Act（提供监管明确性的法案）有望为行业带来利好，可能抵消疲弱Q2的影响。6月交易量已现企稳迹象，说明最差时段或许已过。", "key_points": ["Benchmark因Q2加密现货交易量大幅下滑下调Coinbase盈利预期，但6月交易活动已稳定。", "量化交易者可关注Clarity Act进展，其通过可能提升合规交易所估值并降低政策风险溢价。", "新闻缺乏具体交易量变动数值，且Clarity Act立法存在不确定性，需验证数据后纳入模型。"], "quant_relevance": "影响加密交易所股票定价因子及加密资产市场情绪指标，可能改变短期波动率预测模型中的新闻权重。", "possible_use_case": "可作为加密交易所股票（如COIN）的短期事件驱动因子，或作为加密市场流动性改善的先行信号。", "limitations": "新闻来源单一（The Block），缺乏具体交易量数字；监管法案进程不确定，存在政治风险。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.78, "academic_score": 5.638, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.472, "display_title": "加密资产加密市场新闻情报", "tldr": "Benchmark下调Coinbase盈利预期，但Clarity法案有望抵消Q2现货交易量下滑的负面冲击", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["Benchmark因Q2加密现货交易量大幅下滑下调Coinbase盈利预期，但6月交易活动已稳定。", "量化交易者可关注Clarity Act进展，其通过可能提升合规交易所估值并降低政策风险溢价。", "新闻缺乏具体交易量变动数值，且Clarity Act立法存在不确定性，需验证数据后纳入模型。"], "reference_url": "https://www.theblock.co/post/409390/benchmark-lowers-coinbase-earnings-estimates-clarity-act-eclipse-weak-quarter?utm_source=rss&utm_medium=rss", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "edf9a8c89a99eb6c61da289e96c80ec55cb4a861403c266779a768ae61ac0d86", "source": "CoinTelegraph", "source_type": "crypto_news", "title": "The digital euro: Surveillance money, or a better alternative to cash?", "url": "https://cointelegraph.com/magazine/what-is-the-digital-euro-all-you-need-to-know-about-europes-cbdc?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "authors": [], "published_at": "2026-07-22", "collected_at": "2026-07-23T00:13:27Z", "raw_text": "Proponents of the digital euro say its a better alternative to cash that’s fully backed by the ECB. But critics argue it could provide the EU with too much power over its citizens.", "abstract": "Proponents of the digital euro say its a better alternative to cash that’s fully backed by the ECB. But critics argue it could provide the EU with too much power over its citizens.", "content_hash": "7bc97eab8f59add83820c8243a99573a6ab286a4a9cc3f9e700a6bcf3637fcf8", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://cointelegraph.com/rss"}, "one_line_summary": "数字欧元推行引发监控与自由权衡讨论，对加密市场的稳定币格局或产生间接冲击", "technical_summary": "1. 数字欧元是欧洲央行计划推出的零售央行数字货币（CBDC），与现金1:1兑换，完全由央行背书。2. 支持者认为它比现金更安全、便捷（可离线支付），并提升金融包容性。3. 批评者担忧欧洲央行可监控所有交易，侵犯隐私；还可能削弱商业银行存款基础。4. 目前仍在法律和技术讨论阶段，未确定发行时间表。", "key_points": ["数字欧元本质是欧洲央行背书的数字货币，计划替代现金部分功能，与稳定币/加密货币形成竞争。", "对加密量化交易者：若数字欧元落地，欧元区稳定币（如EURT、EUROC）需求可能下降，需调整相关交易对流动性监控模型。", "当前仅停留在政策辩论，缺乏技术实现细节和发行时间表，监管落地节奏存在高度不确定性。"], "quant_relevance": "监管动态：数字欧元的落地可能影响欧元区稳定币需求，改变加密货币交易对和流动性分布。", "possible_use_case": "可作为欧元区稳定币流动性风险的宏观信号参考，在监测稳定币交易对时加入数字欧元政策事件因子。", "limitations": "这是政策讨论新闻，缺乏具体实验数据或量化结论。信息来自单一媒体，需结合ECB官方公告确认。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 5.725, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.315, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "数字欧元推行引发监控与自由权衡讨论，对加密市场的稳定币格局或产生间接冲击", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["数字欧元本质是欧洲央行背书的数字货币，计划替代现金部分功能，与稳定币/加密货币形成竞争。", "对加密量化交易者：若数字欧元落地，欧元区稳定币（如EURT、EUROC）需求可能下降，需调整相关交易对流动性监控模型。", "当前仅停留在政策辩论，缺乏技术实现细节和发行时间表，监管落地节奏存在高度不确定性。"], "reference_url": "https://cointelegraph.com/magazine/what-is-the-digital-euro-all-you-need-to-know-about-europes-cbdc?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "f8b8e292578d3b02ae078a50c3d8c7205091265c732cc0f4f3cac558b1571158", "source": "CoinTelegraph", "source_type": "crypto_news", "title": "BitGo, OTC Markets plan tokenized securities access for broker-dealers", "url": "https://cointelegraph.com/news/bitgo-otc-markets-tokenized-securities-broker-dealers?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "authors": [], "published_at": "2026-07-22", "collected_at": "2026-07-23T00:13:27Z", "raw_text": "The proposed alliance would enable more than 150 broker-dealers to trade and settle digital asset securities through OTC Link ATS using BitGo’s custody infrastructure.", "abstract": "The proposed alliance would enable more than 150 broker-dealers to trade and settle digital asset securities through OTC Link ATS using BitGo’s custody infrastructure.", "content_hash": "b732553c7c7db972b7e04ffe0ff6153c979f6eff9ff67c16e999e8ac544e099f", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://cointelegraph.com/rss"}, "one_line_summary": "BitGo与OTC Markets合作计划，让150多家经纪商通过OTC Link ATS交易代币化证券", "technical_summary": "BitGo（托管）与OTC Markets（交易平台）计划联合，允许150多家经纪交易商在OTC Link ATS上交易和结算数字资产证券，利用BitGo的托管基础设施。该计划旨在连接传统金融市场与代币化证券，但目前仍处于提议阶段，具体实施时间未公布。", "key_points": ["BitGo与OTC Markets计划让150+经纪商通过OTC Link ATS交易代币化证券，使用BitGo托管。", "对量化交易者：可能带来新交易品种和流动性，可提前关注相关代币交易量变化。", "计划尚未落实，监管和结算细节待定，存在落地延迟或失败风险。"], "quant_relevance": "可能增加代币化证券的流动性和交易渠道，直接影响加密量化交易者的做市、套利及品种选择。", "possible_use_case": "加密量化交易者可将其作为市场结构变化信号，提前布局代币化证券相关做市或套利策略。", "limitations": "计划尚未落地，具体执行时间和监管审批不确定；原文为CoinTelegraph报道，需交叉验证。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 5.709, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.312, "display_title": "券商加密市场新闻情报", "tldr": "BitGo与OTC Markets合作计划，让150多家经纪商通过OTC Link ATS交易代币化证券", "core_value": "对你的量化工作帮助：围绕券商补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["BitGo与OTC Markets计划让150+经纪商通过OTC Link ATS交易代币化证券，使用BitGo托管。", "对量化交易者：可能带来新交易品种和流动性，可提前关注相关代币交易量变化。", "计划尚未落实，监管和结算细节待定，存在落地延迟或失败风险。"], "reference_url": "https://cointelegraph.com/news/bitgo-otc-markets-tokenized-securities-broker-dealers?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "加密市场新闻"}], "source_stats": {"arXiv": 3, "Reddit algotrading": 3, "CoinTelegraph": 4, "The Block": 1}, "category_counts": {"Portfolio Construction": 3, "LLM / Agents for Quant": 1, "Machine Learning for Finance": 1, "Data Engineering": 1, "Crypto Quant": 3, "Alpha / Factor Research": 2}, "section_counts": {"ai_quant_tools": 5, "deep_learning_quant": 1, "daily_news": 5}, "sections": [{"key": "deep_learning_quant", "label": "深度学习量化未来", "description": "技术主线：深度学习、强化学习、Transformer、图神经网络、表征学习、订单簿预测、金融时间序列大模型等在量化里的应用。"}, {"key": "ai_quant_tools", "label": "AI 量化工具", "description": "工具主线：能提升量化研究效率的 AI 工具、代码仓库、研究自动化、智能体、回测/数据工程工具和可接入团队工作流的基础设施。"}, {"key": "daily_news", "label": "Crypto 市场每日 Top 5", "description": "加密市场新闻主线：来自 CoinDesk、CoinTelegraph、The Block、Decrypt、Blockworks 等主流媒体当日最重要的 Crypto 市场报道。"}], "category_labels": {"Alpha / Factor Research": "阿尔法 / 因子研究", "Statistical Arbitrage": "统计套利", "Portfolio Construction": "组合构建", "Risk Management": "风险管理", "Options / Volatility": "期权 / 波动率", "Market Microstructure": "市场微观结构", "Execution / Transaction Cost": "交易执行 / 交易成本", "Machine Learning for Finance": "金融机器学习", "LLM / Agents for Quant": "量化大模型 / 智能体", "Crypto Quant": "加密资产量化", "Data Engineering": "数据工程", "Backtesting / Research Tools": "回测 / 研究工具", "Industry / Career": "行业 / 职业 / 合规", "Unclassified": "未分类"}, "priority_labels": {"High": "高", "Medium": "中", "Low": "低", "高": "高", "中": "中", "低": "低"}, "source_type_labels": {"paper": "论文", "forum": "论坛", "github": "代码仓库", "blog": "博客", "news": "新闻", "social": "社交媒体", "zhihu": "知乎", "x": "X", "quantml": "QuantML", "crypto_news": "加密市场新闻"}, "report_config": {"max_items_per_category": 5, "max_total_items": 60, "executive_brief_items": 5}}</script>
+  <script>
+    const payload = JSON.parse(document.getElementById('dashboard-data').textContent);
+    const items = payload.items || [];
+    const categoryLabels = payload.category_labels || {};
+    const priorityLabels = payload.priority_labels || {};
+    const sourceTypeLabels = payload.source_type_labels || {};
+    const state = {
+      query: '',
+      section: 'All',
+      category: 'All',
+      sort: 'score',
+      activeId: items[0]?.id || null,
+    };
+
+    const priorityRank = { High: 3, Medium: 2, Low: 1, '高': 3, '中': 2, '低': 1 };
+    const $ = (id) => document.getElementById(id);
+
+    // --- Feedback ---
+    const _feedbackStore = JSON.parse(localStorage.getItem('quant-feedback') || '{}');
+    function getFeedback(id) { return _feedbackStore[id] || 0; }
+    function setFeedback(id, signal) {
+      if (_feedbackStore[id] === signal) { delete _feedbackStore[id]; signal = 0; }
+      else { _feedbackStore[id] = signal; }
+      localStorage.setItem('quant-feedback', JSON.stringify(_feedbackStore));
+      fetch('http://localhost:8080/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, signal }),
+      }).catch(() => {});
+    }
+
+    function init() {
+      $('report-date').textContent = payload.report_date + ' - 主力源：arXiv / 知乎 / QuantML / 大型论坛 - 生成时间 ' + payload.generated_at;
+      $('metric-items').textContent = items.length;
+      $('metric-categories').textContent = new Set(items.map((item) => item.category)).size;
+      $('metric-high').textContent = items.filter((item) => priorityLabel(item.read_priority) === '高').length;
+      $('metric-avg').textContent = averageScore(items).toFixed(1);
+
+      buildSectionControls();
+      buildCategoryControls();
+      buildSourceList();
+      bindControls();
+      render();
+    }
+
+    function bindControls() {
+      $('search').addEventListener('input', (event) => {
+        state.query = event.target.value.trim().toLowerCase();
+        render();
+      });
+      $('category-select').addEventListener('change', (event) => {
+        state.category = event.target.value;
+        render();
+      });
+      $('section-select').addEventListener('change', (event) => {
+        state.section = event.target.value;
+        render();
+      });
+      $('sort-select').addEventListener('change', (event) => {
+        state.sort = event.target.value;
+        render();
+      });
+    }
+
+    function buildCategoryControls() {
+      const counts = countBy(items, 'category');
+      const categories = Object.keys(counts).sort();
+      const select = $('category-select');
+      select.innerHTML = option('All', `全部细分标签 (${items.length})`) +
+        categories.map((category) => option(category, `${categoryLabel(category)} (${counts[category]})`)).join('');
+
+      const list = $('category-list');
+      list.innerHTML = categoryButton('All', items.length) +
+        categories.map((category) => categoryButton(category, counts[category])).join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.category = button.dataset.category;
+          select.value = state.category;
+          if (state.category === 'All') {
+            state.section = 'All';
+            $('section-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSectionControls() {
+      const counts = payload.section_counts || {};
+      const sections = payload.sections || [];
+      const select = $('section-select');
+      select.innerHTML = option('All', `全部主线 (${items.length})`) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => option(section.key, `${section.label} (${counts[section.key]})`))
+          .join('');
+
+      const list = $('section-list');
+      list.innerHTML = sectionButton('All', '全部', items.length) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => sectionButton(section.key, section.label, counts[section.key]))
+          .join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.section = button.dataset.section;
+          select.value = state.section;
+          if (state.section === 'All') {
+            state.category = 'All';
+            $('category-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSourceList() {
+      const stats = payload.source_stats || {};
+      const entries = Object.entries(stats)
+        .filter(([source]) => !source.startsWith('fetched:'))
+        .sort((a, b) => b[1] - a[1]);
+      $('source-list').innerHTML = entries.length
+        ? entries.map(([source, count]) => `<li><span>${escapeHtml(source)}</span><b>${count}</b></li>`).join('')
+        : '<li><span>暂无来源统计</span><b>0</b></li>';
+    }
+
+    function render() {
+      let visible = items.filter(matchesFilters);
+      visible = sortItems(visible);
+      if (!visible.some((item) => item.id === state.activeId)) {
+        state.activeId = visible[0]?.id || null;
+      }
+
+      $('feed-title').textContent = feedTitle();
+      $('result-count').textContent = `展示 ${visible.length} 条 - 两条主线每条最多 ${payload.report_config.max_items_per_category} 条`;
+      renderSectionActive();
+      renderCategoryActive();
+      renderItems(visible);
+      renderDetail(visible.find((item) => item.id === state.activeId) || visible[0]);
+    }
+
+    function matchesFilters(item) {
+      const sectionMatch = state.section === 'All' || (item.report_sections || []).includes(state.section);
+      if (!sectionMatch) return false;
+      const categoryMatch = state.category === 'All' || item.category === state.category;
+      if (!categoryMatch) return false;
+      if (!state.query) return true;
+      const haystack = [
+        item.title,
+        item.display_title,
+        item.source,
+        item.source_type,
+        item.category,
+        categoryLabel(item.category),
+        sectionLabel(item.report_sections?.[0]),
+        sourceTypeLabel(item.source_type),
+        priorityLabel(item.read_priority),
+        item.one_line_summary,
+        item.technical_summary,
+        item.quant_relevance,
+        item.possible_use_case,
+        item.tldr,
+        item.core_value,
+        ...(item.key_points_list || []),
+        item.reference_url,
+      ].join(' ').toLowerCase();
+      return haystack.includes(state.query);
+    }
+
+    function sortItems(list) {
+      return [...list].sort((a, b) => {
+        if (state.sort === 'priority') {
+          return (priorityRank[b.read_priority] || 0) - (priorityRank[a.read_priority] || 0)
+            || b.final_score - a.final_score;
+        }
+        if (state.sort === 'source') {
+          return a.source.localeCompare(b.source) || b.final_score - a.final_score;
+        }
+        return b.final_score - a.final_score;
+      });
+    }
+
+    function renderCategoryActive() {
+      document.querySelectorAll('.category-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.category === state.category);
+      });
+    }
+
+    function renderSectionActive() {
+      document.querySelectorAll('.section-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.section === state.section);
+      });
+    }
+
+    function itemCard(item) {
+      const sec = item.report_sections?.[0] || 'other';
+      const sig = getFeedback(item.id);
+      return `
+        <article class="item ${item.id === state.activeId ? 'active' : ''}"
+                 data-id="${escapeAttr(item.id)}"
+                 data-section="${escapeAttr(sec)}">
+          <div class="item-top">
+            <h3>${escapeHtml(item.display_title || item.title)}</h3>
+            <div class="score">${Number(item.final_score).toFixed(1)}</div>
+          </div>
+          <div class="meta">
+            <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+            <span class="tag">${escapeHtml(item.source)}</span>
+            <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+          </div>
+          ${readerFormat(item, true)}
+          <div class="feedback-row">
+            <button class="feedback-btn ${sig === 1 ? 'active-up' : ''}" data-feedback="1" title="有用">👍</button>
+            <button class="feedback-btn ${sig === -1 ? 'active-down' : ''}" data-feedback="-1" title="跳过">👎</button>
+            <span class="feedback-hint">${sig === 1 ? '已标记有用' : sig === -1 ? '已标记跳过' : ''}</span>
+          </div>
+        </article>
+      `;
+    }
+
+    function sectionGroupHeader(section, count) {
+      return `
+        <div class="section-group-header" data-section="${escapeAttr(section.key)}">
+          <span class="section-group-title">${escapeHtml(section.label)}</span>
+          <span class="section-group-count">${count} 条</span>
+        </div>
+      `;
+    }
+
+    function renderItems(visible) {
+      const container = $('items');
+      if (!visible.length) {
+        container.innerHTML = '<div class="empty">当前筛选条件下没有匹配内容。</div>';
+        return;
+      }
+
+      let html = '';
+      if (state.section === 'All') {
+        // Group by section in defined order, with a header for each group
+        const grouped = {};
+        for (const item of visible) {
+          const sec = item.report_sections?.[0] || 'other';
+          if (!grouped[sec]) grouped[sec] = [];
+          grouped[sec].push(item);
+        }
+        for (const section of (payload.sections || [])) {
+          const group = grouped[section.key];
+          if (!group || !group.length) continue;
+          html += sectionGroupHeader(section, group.length);
+          html += group.map((item) => itemCard(item)).join('');
+        }
+        // Append any items that fell into 'other' (shouldn't normally happen)
+        if (grouped['other']?.length) {
+          html += grouped['other'].map((item) => itemCard(item)).join('');
+        }
+      } else {
+        html = visible.map((item) => itemCard(item)).join('');
+      }
+
+      container.innerHTML = html;
+      container.querySelectorAll('.item').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.activeId = node.dataset.id;
+          render();
+        });
+      });
+      container.querySelectorAll('.feedback-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const itemNode = btn.closest('.item');
+          setFeedback(itemNode.dataset.id, parseInt(btn.dataset.feedback, 10));
+          render();
+        });
+      });
+    }
+
+    function renderDetail(item) {
+      const detail = $('detail');
+      if (!item) {
+        detail.innerHTML = '<div class="empty">选择一条内容查看详情。</div>';
+        return;
+      }
+
+      detail.innerHTML = `
+        <h2>${escapeHtml(item.display_title || item.title)}</h2>
+        <div class="meta">
+          <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+          <span class="tag">${escapeHtml(sourceTypeLabel(item.source_type))}</span>
+          <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+        </div>
+
+        ${readerFormat(item, false)}
+
+        <div class="detail-block">
+          <h3>评分拆解</h3>
+          <div class="breakdown">
+            ${bar('相关性', item.relevance_score)}
+            ${bar('新颖度', item.novelty_score)}
+            ${bar('学术性', item.academic_score)}
+            ${bar('讨论度', item.discussion_score)}
+            ${bar('可行动性', item.actionable_score)}
+          </div>
+        </div>
+
+      `;
+    }
+
+    function readerFormat(item, compact) {
+      const points = itemKeyPoints(item);
+      return `
+        <div class="reader-format ${compact ? 'compact' : ''}">
+          <div class="reader-block">
+            <h4>1. 这篇文章的太长不读</h4>
+            <p>${escapeHtml(item.tldr || item.one_line_summary || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>2. 核心价值，对我量化的工作能够提供什么样的帮助</h4>
+            <p>${escapeHtml(item.core_value || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>3. 关键核心点 / 论文或帖子摘要</h4>
+            <ol>${points.map((point) => `<li>${escapeHtml(point)}</li>`).join('')}</ol>
+          </div>
+          <div class="reader-block">
+            <h4>4. 原文链接</h4>
+            ${referenceHtml(item)}
+          </div>
+        </div>
+      `;
+    }
+
+    function itemKeyPoints(item) {
+      const points = Array.isArray(item.key_points_list)
+        ? item.key_points_list
+        : (Array.isArray(item.key_points) ? item.key_points : []);
+      const clean = points.filter(Boolean).slice(0, 3);
+      return clean.length ? clean : ['需要打开原文进一步确认方法、数据和适用边界。'];
+    }
+
+    function referenceHtml(item) {
+      const url = item.reference_url || '';
+      if (!url) return '<p>暂无可打开链接</p>';
+      return `
+        <a class="reader-reference" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">打开原文</a>
+        <small class="reference-url">${escapeHtml(url)}</small>
+      `;
+    }
+
+    function bar(label, value) {
+      const score = Number(value || 0);
+      const width = Math.max(0, Math.min(100, score * 10));
+      return `
+        <div class="bar">
+          <span>${label}</span>
+          <div class="bar-track"><div class="bar-fill" style="width: ${width}%"></div></div>
+          <b>${score.toFixed(1)}</b>
+        </div>
+      `;
+    }
+
+    function countBy(list, key) {
+      return list.reduce((acc, item) => {
+        acc[item[key]] = (acc[item[key]] || 0) + 1;
+        return acc;
+      }, {});
+    }
+
+    function averageScore(list) {
+      if (!list.length) return 0;
+      return list.reduce((sum, item) => sum + Number(item.final_score || 0), 0) / list.length;
+    }
+
+    function option(value, label) {
+      return `<option value="${escapeAttr(value)}">${escapeHtml(label)}</option>`;
+    }
+
+    function sectionButton(section, label, count) {
+      return `
+        <button class="category-button section-button" type="button" data-section="${escapeAttr(section)}">
+          <span>${escapeHtml(label)}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryButton(category, count) {
+      return `
+        <button class="category-button" type="button" data-category="${escapeAttr(category)}">
+          <span>${escapeHtml(category === 'All' ? '全部' : categoryLabel(category))}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryLabel(category) {
+      return categoryLabels[category] || category;
+    }
+
+    function sectionLabel(sectionKey) {
+      const section = (payload.sections || []).find((item) => item.key === sectionKey);
+      return section ? section.label : '其他';
+    }
+
+    function feedTitle() {
+      const parts = [];
+      if (state.section !== 'All') parts.push(sectionLabel(state.section));
+      if (state.category !== 'All') parts.push(categoryLabel(state.category));
+      return parts.length ? parts.join(' / ') : '今日情报';
+    }
+
+    function priorityLabel(priority) {
+      return priorityLabels[priority] || priority;
+    }
+
+    function sourceTypeLabel(sourceType) {
+      return sourceTypeLabels[sourceType] || sourceType;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replaceAll('`', '&#096;');
+    }
+
+    init();
+  </script>
+</body>
+</html>
