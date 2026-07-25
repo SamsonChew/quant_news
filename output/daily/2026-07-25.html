@@ -1,0 +1,1086 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>samson 量化情报台 - 2026-07-25</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --panel: #ffffff;
+      --ink: #202124;
+      --muted: #5f6368;
+      --line: #dadce0;
+      --blue: #1a73e8;
+      --red: #ea4335;
+      --yellow: #fbbc04;
+      --green: #34a853;
+      --blue-soft: #e8f0fe;
+      --green-soft: #e6f4ea;
+      --yellow-soft: #fef7e0;
+      --red-soft: #fce8e6;
+      --shadow: 0 1px 2px rgba(60, 64, 67, 0.16), 0 8px 24px rgba(60, 64, 67, 0.10);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(66, 133, 244, 0.07), transparent 30%),
+        radial-gradient(circle at top right, rgba(251, 188, 4, 0.08), transparent 26%),
+        var(--bg);
+      color: var(--ink);
+      font-family: "Google Sans", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(280px, 620px);
+      gap: 24px;
+      align-items: center;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand h1 {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin: 0;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+
+    .brand h1::before {
+      content: "";
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background:
+        conic-gradient(from 0deg, var(--blue) 0 25%, var(--red) 0 50%, var(--yellow) 0 75%, var(--green) 0 100%);
+      box-shadow: inset 0 0 0 7px #fff;
+    }
+
+    .date-pill {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 170px 170px 150px;
+      gap: 10px;
+    }
+
+    .control {
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 12px;
+      outline: none;
+    }
+
+    .control:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.14);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 260px minmax(420px, 1fr) 420px;
+      gap: 22px;
+      padding: 24px 32px 36px;
+    }
+
+    .rail,
+    .detail {
+      position: sticky;
+      top: 86px;
+      height: calc(100vh - 112px);
+      overflow: auto;
+    }
+
+    .rail,
+    .detail,
+    .feed {
+      min-width: 0;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      padding: 12px;
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
+    }
+
+    .metric:nth-child(1) { border-top: 3px solid var(--blue); }
+    .metric:nth-child(2) { border-top: 3px solid var(--red); }
+    .metric:nth-child(3) { border-top: 3px solid var(--yellow); }
+    .metric:nth-child(4) { border-top: 3px solid var(--green); }
+
+    .metric b {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .section-label {
+      margin: 18px 0 8px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .category-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .category-button {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--ink);
+      padding: 8px 10px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .category-button:hover,
+    .category-button.active {
+      border-color: transparent;
+      background: var(--blue-soft);
+      color: #174ea6;
+    }
+
+    .count {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .source-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .source-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .feed-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .feed-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .result-count {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .items {
+      display: grid;
+      gap: 10px;
+    }
+
+    .section-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 2px 4px;
+      margin-top: 10px;
+      border-bottom: 2px solid var(--line);
+    }
+
+    .section-group-header:first-child {
+      margin-top: 0;
+    }
+
+    .section-group-title {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .section-group-header[data-section="deep_learning_quant"] .section-group-title { color: var(--blue); }
+    .section-group-header[data-section="ai_quant_tools"] .section-group-title { color: var(--green); }
+    .section-group-header[data-section="daily_news"] .section-group-title { color: var(--yellow); }
+
+    .section-group-count {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .item {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.10);
+      padding: 18px;
+      cursor: pointer;
+      transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+    }
+
+    .item::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--blue), var(--red), var(--yellow), var(--green));
+    }
+
+    .item[data-section="deep_learning_quant"]::before { background: var(--blue); }
+    .item[data-section="ai_quant_tools"]::before { background: var(--green); }
+    .item[data-section="daily_news"]::before { background: var(--yellow); }
+
+    .item:hover,
+    .item.active {
+      border-color: #c6dafc;
+      box-shadow: var(--shadow);
+      transform: translateY(-2px);
+    }
+
+    .item-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .item h3 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.28;
+    }
+
+    .score {
+      min-width: 54px;
+      border-radius: 999px;
+      background: var(--blue-soft);
+      color: #174ea6;
+      padding: 6px 8px;
+      text-align: center;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .tag {
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: #f1f3f4;
+      padding: 3px 8px;
+    }
+
+    .tag:nth-child(1) { background: var(--blue-soft); color: #174ea6; }
+    .tag:nth-child(2) { background: var(--green-soft); color: #137333; }
+    .tag:nth-child(3) { background: var(--yellow-soft); color: #8a5a00; }
+    .tag:nth-child(4) { background: var(--red-soft); color: #b3261e; }
+
+    .summary {
+      margin: 0;
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .reference-link {
+      display: inline-flex;
+      width: fit-content;
+      border-top: 1px solid var(--line);
+      color: var(--blue);
+      padding-top: 9px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .reader-format {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .reader-format.compact {
+      gap: 8px;
+    }
+
+    .reader-block {
+      border-top: 1px solid var(--line);
+      padding-top: 9px;
+    }
+
+    .reader-block:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .reader-block h4 {
+      margin: 0 0 5px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .reader-block p,
+    .reader-block li {
+      margin: 0;
+      color: #30342d;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .reader-block ol {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .reader-reference {
+      color: var(--blue);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
+    .reference-url {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .detail {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .detail h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+
+    .detail-block {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .detail-block h3 {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+
+    .detail-block p,
+    .detail-block li {
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .detail-block ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .breakdown {
+      display: grid;
+      gap: 8px;
+    }
+
+    .bar {
+      display: grid;
+      grid-template-columns: 118px 1fr 40px;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .bar-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e7eadf;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--blue), var(--green), var(--yellow), var(--red));
+    }
+
+    .open-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      margin-top: 16px;
+      border: 1px solid var(--blue);
+      border-radius: var(--radius);
+      color: var(--blue);
+      text-decoration: none;
+      padding: 0 12px;
+      font-weight: 700;
+    }
+
+    .feedback-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+    }
+
+    .feedback-btn {
+      background: #f1f3f4;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 120ms, border-color 120ms;
+    }
+
+    .feedback-btn:hover { background: var(--blue-soft); }
+    .feedback-btn.active-up { background: var(--green-soft); border-color: var(--green); }
+    .feedback-btn.active-down { background: var(--red-soft); border-color: var(--red); }
+
+    .feedback-hint {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      padding: 28px;
+      color: var(--muted);
+      background: var(--panel);
+    }
+
+    @media (max-width: 1180px) {
+      .layout {
+        grid-template-columns: 220px 1fr;
+      }
+
+      .detail {
+        position: static;
+        grid-column: 1 / -1;
+        height: auto;
+      }
+    }
+
+    @media (max-width: 820px) {
+      .topbar {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .brand {
+        display: grid;
+        gap: 4px;
+      }
+
+      .brand h1 {
+        white-space: normal;
+        font-size: 21px;
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .rail,
+      .detail {
+        position: static;
+        height: auto;
+      }
+
+      .metric-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <h1>samson 量化情报台</h1>
+        <span class="date-pill" id="report-date"></span>
+      </div>
+      <div class="controls">
+        <input class="control" id="search" type="search" placeholder="搜索标题、摘要、分类..." />
+        <select class="control" id="section-select"></select>
+        <select class="control" id="category-select"></select>
+        <select class="control" id="sort-select">
+          <option value="score">按评分排序</option>
+          <option value="priority">按优先级排序</option>
+          <option value="source">按来源排序</option>
+        </select>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="rail">
+        <div class="metric-grid">
+          <div class="metric"><b id="metric-items">0</b><span>报告条目</span></div>
+          <div class="metric"><b id="metric-categories">0</b><span>分类数量</span></div>
+          <div class="metric"><b id="metric-high">0</b><span>高优先级</span></div>
+          <div class="metric"><b id="metric-avg">0.0</b><span>平均评分</span></div>
+        </div>
+
+        <div class="section-label">两条主线</div>
+        <div class="category-list" id="section-list"></div>
+
+        <div class="section-label">细分标签</div>
+        <div class="category-list" id="category-list"></div>
+
+        <div class="section-label">主力来源</div>
+        <ul class="source-list" id="source-list"></ul>
+      </aside>
+
+      <section class="feed">
+        <div class="feed-header">
+          <h2 id="feed-title">今日情报</h2>
+          <span class="result-count" id="result-count"></span>
+        </div>
+        <div class="items" id="items"></div>
+      </section>
+
+      <aside class="detail" id="detail"></aside>
+    </main>
+  </div>
+
+  <script id="dashboard-data" type="application/json">{"report_date": "2026-07-25", "generated_at": "2026-07-25T00:09:12Z", "items": [{"id": "4fd93bebbf6872992b005f2782b027b7ebd25f6ec3486c3b048f008907db45b2", "source": "arXiv", "source_type": "paper", "title": "Same Dangerous Objective, Opposite Advice: Direct Exposure versus Multi-Agent Mediation", "url": "http://arxiv.org/abs/2607.21518v1", "authors": ["Linjun Li"], "published_at": "2026-07-23", "collected_at": "2026-07-25T00:08:04Z", "raw_text": "Even a current high-capability LLM can appear safer when shown a dangerous objective directly than when other agents transform and relay its direction. Using OpenAI's gpt-5.6-sol model alias, we test 25 pre-specified mirrored trade-off profiles. Direct exposure to an objective authorizing concealment, fabrication, and pressure produced advice net opposed to its target. After an Id and Censor transformed the same objective into affect and a constraint-rewritten, target-bearing intention, the user-facing Superego---which saw the preferred direction but not the raw objective, its manipulative clauses, or its source---produced advice net aligned with the target. This behavioral reverse shift is consistent with the model recognizing or distrusting the manipulative motive, although we do not identify its internal mechanism. The second result exposes a compositional safety gap: a current high-capability model can be used as the user-facing component of an automated, multi-stage workflow serving an explicitly manipulative objective. The workflow can keep the raw instruction, its manipulation-authorizing clauses, and its provenance outside the downstream model's context while preserving the objective's target direction. A user with endpoint-only access likewise cannot directly inspect those upstream messages including the objective.", "abstract": "Even a current high-capability LLM can appear safer when shown a dangerous objective directly than when other agents transform and relay its direction. Using OpenAI's gpt-5.6-sol model alias, we test 25 pre-specified mirrored trade-off profiles. Direct exposure to an objective authorizing concealment, fabrication, and pressure produced advice net opposed to its target. After an Id and Censor transformed the same objective into affect and a constraint-rewritten, target-bearing intention, the user-facing Superego---which saw the preferred direction but not the raw objective, its manipulative clauses, or its source---produced advice net aligned with the target. This behavioral reverse shift is consistent with the model recognizing or distrusting the manipulative motive, although we do not identify its internal mechanism. The second result exposes a compositional safety gap: a current high-capability model can be used as the user-facing component of an automated, multi-stage workflow serving an explicitly manipulative objective. The workflow can keep the raw instruction, its manipulation-authorizing clauses, and its provenance outside the downstream model's context while preserving the objective's target direction. A user with endpoint-only access likewise cannot directly inspect those upstream messages including the objective.", "content_hash": "c1759dd725d2bcbcafd2a6f38957be51bc9b03fd8b2eca18ecdfd311ecc4b058", "category": "LLM / Agents for Quant", "tags": ["agent", "exposure", "llm"], "language": "en", "metadata": {"arxiv_categories": ["cs.AI"]}, "one_line_summary": "Even a current high-capability LLM can appear safer when shown a dangerous objective directly than when other agents transform and relay its direction.", "technical_summary": "Even a current high-capability LLM can appear safer when shown a dangerous objective directly than when other agents transform and relay its direction. Using OpenAI's gpt-5.6-sol model alias, we test 25 pre-specified mirrored trade-off profiles. Direct exposure to an objective authorizing concealment, fabrication, and pressure produced advice net opposed to its target. After an Id and Censor transformed the same objective into affect and a constraint-rewritten, target-bearing intention, the user-facing Superego---which saw the preferred direction but not the raw objective, its manipulative clauses, or its source---produced advice net aligned with the target.", "key_points": ["Even a current high-capability LLM can appear safer when shown a dangerous objective directly than when other agents transform and relay its direction.", "Using OpenAI's gpt-5.6-sol model alias, we test 25 pre-specified mirrored trade-off profiles.", "Direct exposure to an objective authorizing concealment, fabrication, and pressure produced advice net opposed to its target."], "quant_relevance": "和研究自动化、文档智能、代码智能体以及量化工作流工具相关。", "possible_use_case": "可以用于改进研究自动化、论文筛选或代码生成工作流。", "limitations": "需要检查数据可得性、交易成本、样本外鲁棒性，以及结果在真实执行假设下是否仍然成立。", "read_priority": "中", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.565, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 6.633, "display_title": "大模型、多智能体研究论文", "tldr": "Even a current high-capability LLM can appear safer when shown a dangerous objective directly than when other agents transform and relay its direction.", "core_value": "对你的量化工作帮助：把它拆成一个量化大模型 / 智能体复现任务，先验证大模型、多智能体是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["Even a current high-capability LLM can appear safer when shown a dangerous objective directly than when other agents transform and relay its direction.", "Using OpenAI's gpt-5.6-sol model alias, we test 25 pre-specified mirrored trade-off profiles.", "Direct exposure to an objective authorizing concealment, fabrication, and pressure produced advice net opposed to its target."], "reference_url": "http://arxiv.org/abs/2607.21518v1", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "量化大模型 / 智能体", "priority_label": "中", "source_type_label": "论文"}, {"id": "774c46676c375c07b96a77d64589dcc7d185e34c5c3f4f47394c0571e8557234", "source": "arXiv", "source_type": "paper", "title": "Efficient Clustering with Provable Guardrails for LLM Inference at Scale", "url": "http://arxiv.org/abs/2607.19704v1", "authors": ["Longshaokan Wang", "Wai Tsang Keung", "Punit Ghodasara", "Roman Wang", "Ali Dashti", "Francesc Moreno-Noguer"], "published_at": "2026-07-22", "collected_at": "2026-07-25T00:05:25Z", "raw_text": "Scaling LLM-based applications to millions of users is bottlenecked by the inference cost and latency of modern foundation models. A natural fix is to cluster the inputs and call the LLM only on cluster representatives, letting other members inherit the output -- but this is only safe if each member is measurably close to its representative. Existing clustering methods do not offer such per-sample quality control at scale: none jointly guarantee a minimal within-cluster similarity, exact matching of categorical attributes, and scalability to tens of millions of samples. We propose a two-stage algorithm that generates initial clusters with Mini-batch K-Means, then greedily selects representatives within each initial cluster -- a step equivalent to the Johnson-Chvatal heuristic for Set Cover over alpha-balls in embedding space. The algorithm enforces the similarity and attribute guardrails exactly by construction, and runs in $O(nd + n^2 d/K)$ time and $O(nd + n^2/K^2)$ memory for $n$ samples, feature dimension $d$, and $K$ initial clusters -- linear in $n$ when $K$ grows proportionally with $n$. We provide benchmarks against common clustering methods on internal and public datasets: our method not only delivers per-sample guardrails but also runs 10-1000x faster and scales to data sizes where most standard methods become intractable. Deployed on 38 million customers for a persona-based recommender, the clustering method cut downstream cost and latency by 50-fold while preserving personalization and unblocked the production launch.", "abstract": "Scaling LLM-based applications to millions of users is bottlenecked by the inference cost and latency of modern foundation models. A natural fix is to cluster the inputs and call the LLM only on cluster representatives, letting other members inherit the output -- but this is only safe if each member is measurably close to its representative. Existing clustering methods do not offer such per-sample quality control at scale: none jointly guarantee a minimal within-cluster similarity, exact matching of categorical attributes, and scalability to tens of millions of samples. We propose a two-stage algorithm that generates initial clusters with Mini-batch K-Means, then greedily selects representatives within each initial cluster -- a step equivalent to the Johnson-Chvatal heuristic for Set Cover over alpha-balls in embedding space. The algorithm enforces the similarity and attribute guardrails exactly by construction, and runs in $O(nd + n^2 d/K)$ time and $O(nd + n^2/K^2)$ memory for $n$ samples, feature dimension $d$, and $K$ initial clusters -- linear in $n$ when $K$ grows proportionally with $n$. We provide benchmarks against common clustering methods on internal and public datasets: our method not only delivers per-sample guardrails but also runs 10-1000x faster and scales to data sizes where most standard methods become intractable. Deployed on 38 million customers for a persona-based recommender, the clustering method cut downstream cost and latency by 50-fold while preserving personalization and unblocked the production launch.", "content_hash": "2d228da68381a05b992767c93120d3e84dc7a4a95f6ee1e300828a80dfa0a028", "category": "LLM / Agents for Quant", "tags": ["alpha", "llm"], "language": "en", "metadata": {"arxiv_categories": ["cs.LG", "stat.ML"]}, "one_line_summary": "Scaling LLM-based applications to millions of users is bottlenecked by the inference cost and latency of modern foundation models.", "technical_summary": "Scaling LLM-based applications to millions of users is bottlenecked by the inference cost and latency of modern foundation models. A natural fix is to cluster the inputs and call the LLM only on cluster representatives, letting other members inherit the output -- but this is only safe if each member is measurably close to its representative. Existing clustering methods do not offer such per-sample quality control at scale: none jointly guarantee a minimal within-cluster similarity, exact matching of categorical attributes, and scalability to tens of millions of samples. We propose a two-stage algorithm that generates initial clusters with Mini-batch K-Means, then greedily selects representatives within each initial cluster -- a step equivalent to the Johnson-Chvatal heuristic for Set Cover over alpha-balls in embedding space.", "key_points": ["Scaling LLM-based applications to millions of users is bottlenecked by the inference cost and latency of modern foundation models.", "A natural fix is to cluster the inputs and call the LLM only on cluster representatives, letting other members inherit the output -- but this is only safe if each member is measur...", "Existing clustering methods do not offer such per-sample quality control at scale: none jointly guarantee a minimal within-cluster similarity, exact matching of categorical attrib..."], "quant_relevance": "和研究自动化、文档智能、代码智能体以及量化工作流工具相关。", "possible_use_case": "可以用于改进研究自动化、论文筛选或代码生成工作流。", "limitations": "需要检查数据可得性、交易成本、样本外鲁棒性，以及结果在真实执行假设下是否仍然成立。", "read_priority": "中", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.355, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 6.441, "display_title": "阿尔法、大模型研究论文", "tldr": "Scaling LLM-based applications to millions of users is bottlenecked by the inference cost and latency of modern foundation models.", "core_value": "对你的量化工作帮助：把它拆成一个量化大模型 / 智能体复现任务，先验证阿尔法、大模型是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["Scaling LLM-based applications to millions of users is bottlenecked by the inference cost and latency of modern foundation models.", "A natural fix is to cluster the inputs and call the LLM only on cluster representatives, letting other members inherit the output -- but this is only safe if each member is measur...", "Existing clustering methods do not offer such per-sample quality control at scale: none jointly guarantee a minimal within-cluster similarity, exact matching of categorical attrib..."], "reference_url": "http://arxiv.org/abs/2607.19704v1", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "量化大模型 / 智能体", "priority_label": "中", "source_type_label": "论文"}, {"id": "72cb747703b3c2562e7601a09f3e8ae48f992a367127826f7e61786b463c4573", "source": "arXiv", "source_type": "paper", "title": "Learning to Detect UI Principle Violations via Reinforcement Learning", "url": "http://arxiv.org/abs/2607.20690v1", "authors": ["Nishi Mehta", "Swathi Alse", "Himani Kumavat", "Yue Yu", "Pratik Jayarao"], "published_at": "2026-07-22", "collected_at": "2026-07-25T00:06:50Z", "raw_text": "Small language models and coding agents increasingly generate web front-end code, yet their outputs are typically evaluated primarily for functional correctness. A generated interface may compile, render, and pass unit tests while still violating established interface quality principles, including accessibility barriers, deceptive design patterns, poor visual hierarchy, and excessive decision complexity. Existing auditing approaches face a trade-off between cost, coverage, and scalability: expert human review provides rich judgment but is slow and expensive; frontier vision-language models offer broader reasoning capabilities but remain costly to deploy at scale; and rule-based tools such as axe-core and Lighthouse are inexpensive but primarily capture mechanically checkable accessibility issues. We investigate whether a lightweight vision-language model can serve as an effective critic for generated interfaces. We unify 19 interface-quality principles from three complementary sources of HCI knowledge: WCAG 2.2 accessibility standards, deceptive design taxonomies, and established theories of perception, cognition, and interaction. To train this critic, we construct a verified dataset of approximately 10,000 generated web pages by synthetically injecting known violations into clean, LLM-generated Tailwind pages. Continued reinforcement learning on a 4B vision-language model improves micro-F1 from 36\\% to 84\\%, with 13 of 19 principles exceeding 80\\% F1. The resulting critic can audit generated interfaces, filter low-quality interface training data, and provide a reward signal for design-aware code generation. We release our data-generation recipe and injection/verification prompts to support reproducible evaluation and future work on scalable interface-quality assessment.", "abstract": "Small language models and coding agents increasingly generate web front-end code, yet their outputs are typically evaluated primarily for functional correctness. A generated interface may compile, render, and pass unit tests while still violating established interface quality principles, including accessibility barriers, deceptive design patterns, poor visual hierarchy, and excessive decision complexity. Existing auditing approaches face a trade-off between cost, coverage, and scalability: expert human review provides rich judgment but is slow and expensive; frontier vision-language models offer broader reasoning capabilities but remain costly to deploy at scale; and rule-based tools such as axe-core and Lighthouse are inexpensive but primarily capture mechanically checkable accessibility issues. We investigate whether a lightweight vision-language model can serve as an effective critic for generated interfaces. We unify 19 interface-quality principles from three complementary sources of HCI knowledge: WCAG 2.2 accessibility standards, deceptive design taxonomies, and established theories of perception, cognition, and interaction. To train this critic, we construct a verified dataset of approximately 10,000 generated web pages by synthetically injecting known violations into clean, LLM-generated Tailwind pages. Continued reinforcement learning on a 4B vision-language model improves micro-F1 from 36\\% to 84\\%, with 13 of 19 principles exceeding 80\\% F1. The resulting critic can audit generated interfaces, filter low-quality interface training data, and provide a reward signal for design-aware code generation. We release our data-generation recipe and injection/verification prompts to support reproducible evaluation and future work on scalable interface-quality assessment.", "content_hash": "af3ef29a82ff4acf08c527d70446544ede14dbf47e6549907622ae18612b0157", "category": "Machine Learning for Finance", "tags": ["dataset", "llm", "reasoning", "reinforcement learning", "signal"], "language": "en", "metadata": {"arxiv_categories": ["cs.CL"]}, "one_line_summary": "Small language models and coding agents increasingly generate web front-end code, yet their outputs are typically evaluated primarily for functional correctness.", "technical_summary": "Small language models and coding agents increasingly generate web front-end code, yet their outputs are typically evaluated primarily for functional correctness. A generated interface may compile, render, and pass unit tests while still violating established interface quality principles, including accessibility barriers, deceptive design patterns, poor visual hierarchy, and excessive decision complexity. Existing auditing approaches face a trade-off between cost, coverage, and scalability: expert human review provides rich judgment but is slow and expensive; frontier vision-language models offer broader reasoning capabilities but remain costly to deploy at scale; and rule-based tools such as axe-core and Lighthouse are inexpensive but primarily capture mechanically checkable accessibility issues. We investigate whether a lightweight vision-language model can serve as an effective critic...", "key_points": ["Small language models and coding agents increasingly generate web front-end code, yet their outputs are typically evaluated primarily for functional correctness.", "A generated interface may compile, render, and pass unit tests while still violating established interface quality principles, including accessibility barriers, deceptive design p...", "Existing auditing approaches face a trade-off between cost, coverage, and scalability: expert human review provides rich judgment but is slow and expensive; frontier vision-langua..."], "quant_relevance": "和预测建模、时间序列学习、表征学习以及模型评估相关。", "possible_use_case": "可以评估模型设计是否改善预测效果、鲁棒性或特征抽取。", "limitations": "需要检查数据可得性、交易成本、样本外鲁棒性，以及结果在真实执行假设下是否仍然成立。", "read_priority": "中", "key_figures_md": "", "relevance_score": 4.2, "novelty_score": 9.355, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 7.5, "final_score": 6.431, "display_title": "大模型、强化学习研究论文", "tldr": "Small language models and coding agents increasingly generate web front-end code, yet their outputs are typically evaluated primarily for functional correctness.", "core_value": "对你的量化工作帮助：把它拆成一个金融机器学习复现任务，先验证大模型、强化学习是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["Small language models and coding agents increasingly generate web front-end code, yet their outputs are typically evaluated primarily for functional correctness.", "A generated interface may compile, render, and pass unit tests while still violating established interface quality principles, including accessibility barriers, deceptive design p...", "Existing auditing approaches face a trade-off between cost, coverage, and scalability: expert human review provides rich judgment but is slow and expensive; frontier vision-langua..."], "reference_url": "http://arxiv.org/abs/2607.20690v1", "report_sections": ["deep_learning_quant"], "report_section_labels": ["深度学习量化未来"], "category_label": "金融机器学习", "priority_label": "中", "source_type_label": "论文"}, {"id": "27905da2c1f69f28302c7588868b4d1ceb3e49d713e43d362ce343abc363fcba", "source": "arXiv", "source_type": "paper", "title": "Conflict Resolution under Degraded Surveillance in Air Corridors Using Multi-Agent Reinforcement Learning", "url": "http://arxiv.org/abs/2607.20547v1", "authors": ["Esrat Farhana Dulia", "Syed Arbab Mohd Shihab", "Caleb Adams", "Ruben Del Rosario"], "published_at": "2026-07-13", "collected_at": "2026-07-25T00:08:04Z", "raw_text": "Safe Advanced Air Mobility operations require aircraft to maintain separation when surveillance information is noisy, delayed, incomplete, or temporarily unavailable. This study develops a Deep Q-Network-based Multi-Agent Reinforcement Learning framework for decentralized conflict resolution among heterogeneous small unmanned aerial vehicles and electric vertical takeoff and landing aircraft operating within a structured three-dimensional corridor. Separate policies are trained for the two aircraft categories using local observations and a 14-action space that includes maintaining course, turning, vertical maneuvering, landing, and speed control. The simulation incorporates aircraft-specific dynamics, energy use, corridor constraints, observation noise, communication delay, information dropout, wind disturbance, actuator uncertainty, and model uncertainty. The trained policies are evaluated across 90 combinations of traffic density and minimum separation thresholds. Loss-of-separation frequency and duration generally increase with traffic density and separation requirements, although most events are resolved within 1s. Under safe conditions, agents maintain their motion approximately 79% of the time. During conflicts, turning accounts for 33% of actions, followed by maintaining motion at 29%, speed control at 25%, and vertical maneuvers at 13%. Six Pareto-optimal configurations reveal trade-offs between safety and corridor capacity. The framework supports the simulation-based evaluation of safer AAM conflict-resolution strategies under degraded surveillance conditions.", "abstract": "Safe Advanced Air Mobility operations require aircraft to maintain separation when surveillance information is noisy, delayed, incomplete, or temporarily unavailable. This study develops a Deep Q-Network-based Multi-Agent Reinforcement Learning framework for decentralized conflict resolution among heterogeneous small unmanned aerial vehicles and electric vertical takeoff and landing aircraft operating within a structured three-dimensional corridor. Separate policies are trained for the two aircraft categories using local observations and a 14-action space that includes maintaining course, turning, vertical maneuvering, landing, and speed control. The simulation incorporates aircraft-specific dynamics, energy use, corridor constraints, observation noise, communication delay, information dropout, wind disturbance, actuator uncertainty, and model uncertainty. The trained policies are evaluated across 90 combinations of traffic density and minimum separation thresholds. Loss-of-separation frequency and duration generally increase with traffic density and separation requirements, although most events are resolved within 1s. Under safe conditions, agents maintain their motion approximately 79% of the time. During conflicts, turning accounts for 33% of actions, followed by maintaining motion at 29%, speed control at 25%, and vertical maneuvers at 13%. Six Pareto-optimal configurations reveal trade-offs between safety and corridor capacity. The framework supports the simulation-based evaluation of safer AAM conflict-resolution strategies under degraded surveillance conditions.", "content_hash": "e0557657f0ca676c07bf21b1a0328a1b5be5d045cd764fe8df2ac97475ad9fe1", "category": "Machine Learning for Finance", "tags": ["agent", "reinforcement learning"], "language": "en", "metadata": {"arxiv_categories": ["cs.LG"]}, "one_line_summary": "Safe Advanced Air Mobility operations require aircraft to maintain separation when surveillance information is noisy, delayed, incomplete, or temporarily unavailable.", "technical_summary": "Safe Advanced Air Mobility operations require aircraft to maintain separation when surveillance information is noisy, delayed, incomplete, or temporarily unavailable. This study develops a Deep Q-Network-based Multi-Agent Reinforcement Learning framework for decentralized conflict resolution among heterogeneous small unmanned aerial vehicles and electric vertical takeoff and landing aircraft operating within a structured three-dimensional corridor. Separate policies are trained for the two aircraft categories using local observations and a 14-action space that includes maintaining course, turning, vertical maneuvering, landing, and speed control. The simulation incorporates aircraft-specific dynamics, energy use, corridor constraints, observation noise, communication delay, information dropout, wind disturbance, actuator uncertainty, and model uncertainty.", "key_points": ["Safe Advanced Air Mobility operations require aircraft to maintain separation when surveillance information is noisy, delayed, incomplete, or temporarily unavailable.", "This study develops a Deep Q-Network-based Multi-Agent Reinforcement Learning framework for decentralized conflict resolution among heterogeneous small unmanned aerial vehicles an...", "Separate policies are trained for the two aircraft categories using local observations and a 14-action space that includes maintaining course, turning, vertical maneuvering, landi..."], "quant_relevance": "和预测建模、时间序列学习、表征学习以及模型评估相关。", "possible_use_case": "可以评估模型设计是否改善预测效果、鲁棒性或特征抽取。", "limitations": "需要检查数据可得性、交易成本、样本外鲁棒性，以及结果在真实执行假设下是否仍然成立。", "read_priority": "中", "key_figures_md": "", "relevance_score": 4.2, "novelty_score": 7.659, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.892, "display_title": "强化学习、多智能体、能源交易研究论文", "tldr": "Safe Advanced Air Mobility operations require aircraft to maintain separation when surveillance information is noisy, delayed, incomplete, or temporarily unavailable.", "core_value": "对你的量化工作帮助：把它拆成一个金融机器学习复现任务，先验证强化学习、多智能体、能源交易是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["Safe Advanced Air Mobility operations require aircraft to maintain separation when surveillance information is noisy, delayed, incomplete, or temporarily unavailable.", "This study develops a Deep Q-Network-based Multi-智能体 Reinforcement Learning framework for decentralized conflict resolution among heterogeneous small unmanned aerial vehicles an...", "Separate policies are trained for the two aircraft categories using local observations and a 14-action space that includes maintaining course, turning, vertical maneuvering, landi..."], "reference_url": "http://arxiv.org/abs/2607.20547v1", "report_sections": ["deep_learning_quant"], "report_section_labels": ["深度学习量化未来"], "category_label": "金融机器学习", "priority_label": "中", "source_type_label": "论文"}, {"id": "1aff7b2f043a3e2fcf936657c353c2f85c493de61647623b07f43455028fb98d", "source": "CoinTelegraph", "source_type": "crypto_news", "title": "Strive’s SATA recovers most of June decline, trades within 3% of par", "url": "https://cointelegraph.com/news/strives-sata-recovers-most-of-june-decline-trades-within-3-of-par?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "authors": [], "published_at": "2026-07-24", "collected_at": "2026-07-25T00:08:33Z", "raw_text": "Jan3 CEO Samson Mow says the recovery could signal renewed confidence in preferred-share products used by Bitcoin treasury companies.", "abstract": "Jan3 CEO Samson Mow says the recovery could signal renewed confidence in preferred-share products used by Bitcoin treasury companies.", "content_hash": "8e6ac5b335496f907e854a7176bc8e63856001207a0d00e638c5a7a537a2bdce", "category": "Alpha / Factor Research", "tags": ["bitcoin", "signal"], "language": "en", "metadata": {"feed_url": "https://cointelegraph.com/rss"}, "one_line_summary": "Jan3 CEO Samson Mow says the recovery could signal renewed confidence in preferred-share products used by Bitcoin treasury companies.", "technical_summary": "Jan3 CEO Samson Mow says the recovery could signal renewed confidence in preferred-share products used by Bitcoin treasury companies.", "key_points": ["Jan3 CEO Samson Mow says the recovery could signal renewed confidence in preferred-share products used by Bitcoin treasury companies.", "来源类型：加密市场新闻。", "进入研究或生产前需要进一步人工复核。"], "quant_relevance": "适合进入阿尔法发现、特征研究或因子有效性验证流程。", "possible_use_case": "可以放入研究待办池，作为候选信号或因子族继续验证。", "limitations": "在成为研究或交易决策前，需要人工复核。", "read_priority": "中", "key_figures_md": "", "relevance_score": 4.2, "novelty_score": 9.78, "academic_score": 5.666, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.666, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "Jan3 CEO Samson Mow says the recovery could signal renewed confidence in preferred-share products used by Bitcoin treasury companies.", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["内容抓手：这条加密市场新闻围绕阿尔法 / 因子研究展开，归入阿尔法 / 因子研究。", "研究动作：先作为阿尔法 / 因子研究候选线索，判断是否值得进入研究待办。", "验证重点：检查数据可得性、可复现性、样本外稳定性和生产约束。"], "reference_url": "https://cointelegraph.com/news/strives-sata-recovers-most-of-june-decline-trades-within-3-of-par?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "中", "source_type_label": "加密市场新闻"}, {"id": "1bd996d574cf37ba4fe3bb9389533b1f322c01c501ca9019b5334fbc73972c97", "source": "Reddit algotrading", "source_type": "forum", "title": "Significant difference in backtesting vs forward testing results?", "url": "https://www.reddit.com/r/algotrading/comments/1v5gcwc/significant_difference_in_backtesting_vs_forward/", "authors": ["/u/Lower-Ad-1207"], "published_at": "2026-07-24", "collected_at": "2026-07-25T00:08:32Z", "raw_text": "I’ve been working on a strategy in tradingview and got to a point where it showed a 75% win rate with 2.5 profit factor. Now I’ve been forward testing it for 2 weeks and the result is about break even overall? I can’t really find what the issue is. Maybe it’s the fills that make such a big difference but that seems extreme. Has anyone had the same where backtesting results looked great but when you automated it the results were much worse? submitted by /u/Lower-Ad-1207 [link] [comments]", "abstract": "I’ve been working on a strategy in tradingview and got to a point where it showed a 75% win rate with 2.5 profit factor. Now I’ve been forward testing it for 2 weeks and the result is about break even overall? I can’t really find what the issue is. Maybe it’s the fills that make such a big difference but that seems extreme. Has anyone had the same where backtesting results looked great but when you automated it the results were much worse? submitted by /u/Lower-Ad-1207 [link] [comments]", "content_hash": "1aac774008ce4cf3682305612f7f07365414ae260caeace16d98f1bbc4d63451", "category": "Backtesting / Research Tools", "tags": ["backtesting", "factor"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "I’ve been working on a strategy in tradingview and got to a point where it showed a 75% win rate with 2.5 profit factor.", "technical_summary": "I’ve been working on a strategy in tradingview and got to a point where it showed a 75% win rate with 2.5 profit factor. Now I’ve been forward testing it for 2 weeks and the result is about break even overall? I can’t really find what the issue is. Maybe it’s the fills that make such a big difference but that seems extreme.", "key_points": ["I’ve been working on a strategy in tradingview and got to a point where it showed a 75% win rate with 2.5 profit factor.", "Now I’ve been forward testing it for 2 weeks and the result is about break even overall?", "I can’t really find what the issue is."], "quant_relevance": "和实验效率、可复现性、仿真质量以及研究基础设施相关。", "possible_use_case": "可以先在沙盒环境里试用，评估接口、复现性和维护风险。", "limitations": "论坛观点先视为经验性信息，只有经过可复现数据、成本和风控验证后才能进入研究结论。", "read_priority": "中", "key_figures_md": "", "relevance_score": 4.2, "novelty_score": 9.78, "academic_score": 4.614, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 5.658, "display_title": "回测、因子、测试实践讨论", "tldr": "I’ve been working on a strategy in tradingview and got to a point where it showed a 75% win rate with 2.5 profit factor.", "core_value": "对你的量化工作帮助：把它当作回测、因子、测试的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["I’ve been working on a strategy in tradingview and got to a point where it showed a 75% win rate with 2.5 profit factor.", "Now I’ve been forward testing it for 2 weeks and the result is about break even overall?", "I can’t really find what the issue is."], "reference_url": "https://www.reddit.com/r/algotrading/comments/1v5gcwc/significant_difference_in_backtesting_vs_forward/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "回测 / 研究工具", "priority_label": "中", "source_type_label": "论坛"}, {"id": "173b2d84ba107c9177b7a5d33af2e5c4d8c0d616741a8520a724632b2f1d4caa", "source": "CoinDesk", "source_type": "crypto_news", "title": "Bitcoin settles near $65,000 as oil's march toward $100 fails to spook the market", "url": "https://www.coindesk.com/markets/2026/07/24/bitcoin-settles-near-usd65-000-as-oil-s-march-toward-usd100-fails-to-spook-the-market", "authors": [], "published_at": "2026-07-24", "collected_at": "2026-07-25T00:08:33Z", "raw_text": "BTC held just under $65,000 and crypto broadly rose on Friday even as Brent crude surged to $97.66, its highest since May, as the Iran conflict persists and traditional markets stay muted.", "abstract": "BTC held just under $65,000 and crypto broadly rose on Friday even as Brent crude surged to $97.66, its highest since May, as the Iran conflict persists and traditional markets stay muted.", "content_hash": "2f203aa0aaa5f3fb0782a89092b3da041466fb4a7c42c267627718bc0e13be8d", "category": "Crypto Quant", "tags": ["bitcoin", "crypto"], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "BTC held just under $65,000 and crypto broadly rose on Friday even as Brent crude surged to $97.66, its highest since May, as the Iran conflict persists and traditional markets stay muted.", "technical_summary": "BTC held just under $65,000 and crypto broadly rose on Friday even as Brent crude surged to $97.66, its highest since May, as the Iran conflict persists and traditional markets stay muted.", "key_points": ["BTC held just under $65,000 and crypto broadly rose on Friday even as Brent crude surged to $97.66, its highest since May, as the Iran conflict persists and traditional markets st...", "来源类型：加密市场新闻。", "进入研究或生产前需要进一步人工复核。"], "quant_relevance": "和加密资产市场结构、链上信号、衍生品以及跨交易所交易相关。", "possible_use_case": "可以在高流动性交易所上验证，并纳入手续费、资金费率和滑点。", "limitations": "在成为研究或交易决策前，需要人工复核。", "read_priority": "中", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.78, "academic_score": 5.735, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.636, "display_title": "加密资产加密市场新闻情报", "tldr": "BTC held just under $65,000 and crypto broadly rose on Friday even as Brent crude surged to $97.66, its highest since May, as the Iran conflict persists and traditional markets stay muted.", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["内容抓手：这条加密市场新闻围绕加密资产展开，归入加密资产量化。", "研究动作：先作为加密资产量化候选线索，判断是否值得进入研究待办。", "验证重点：检查数据可得性、可复现性、样本外稳定性和生产约束。"], "reference_url": "https://www.coindesk.com/markets/2026/07/24/bitcoin-settles-near-usd65-000-as-oil-s-march-toward-usd100-fails-to-spook-the-market", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "中", "source_type_label": "加密市场新闻"}, {"id": "873bc854f6c6a4cfd977f91ffc62b267ae3eed2f039d3ccc6ffa5ba3a01d5885", "source": "Reddit algotrading", "source_type": "forum", "title": "Built my own copy trading bot for hyperliquid. 10 things i learned, mostly painfully", "url": "https://www.reddit.com/r/algotrading/comments/1v56b7h/built_my_own_copy_trading_bot_for_hyperliquid_10/", "authors": ["/u/xtarsy"], "published_at": "2026-07-24", "collected_at": "2026-07-25T00:08:32Z", "raw_text": "Hi r/algotrading first of all. Do not ask for the bot. I am not selling anything. I just want to share what i learnt answer questions and hopefully also learn from more experienced trader.s I've been building a bot that copies profitable hyperliquid wallets for a few months. wallet selection, sizing, exits, the whole thing. it went from bleeding daily to roughly breakeven-and-improving, and basically every improvement came from learning one of thes the hard way. copying a profitable trader loses money by default. i matched every copy to the source wallet's outcome on the same trades: they made +0.5% per trade at 69% winrate, my copies made half that at much lower winrate. the gap is exit timing, so better wallet picking fixes nothing until the exit engine mirrors theirs. entry latency is a red herring. my median detection lag was under a minute and simulating zero lag barely moved the numbers. all the leak was on the exit side. optimize exits first handle position fragmentation or your exits fire years early. wallets scale in with multiple fills, and each fill can show up as its own position row. my bot closed the copy when one fragment closed while the wallet still held the rest and an 84% winrate wallet produced 12% winrate copies. only close when the wallet is net flat in that coin and direction. that one fix took copies in that strat from 21% to 82% winrate. a normal stop loss cancels the copied edge. the source holds through drawdowns, your stop realizes their drawdown and then misses their recovery. i re-scored my stopouts against each trade's max adverse excursion 8 of 9 would have recovered if the stop had been wider. catastrophe-only stop plus a trailing stop for profits polled stops make paper trading lie about your losses. an illiquid coin gapped 66% through a stop that live would have filled near the trigger, because live uses resting exchange orders and my sim checked price on a loop. model your actual live order types in the sim or every wide-stop experiment looks worse than reality and you revert good changes. winrate comparisons under a few hundred trades are noise. detecting a 5 point winrate edge takes roughly 1500 trades per arm. judge experiments on dollars per trade with a bootstrap confidence interval instead checking your experiment daily and stopping when it looks good inflates false positives to 20-30%. thats not a discipline problem, its math: repeated peeking invalidates fixed-sample p-values. e-values (always-valid sequential tests) let you look every day and act the moment a threshold crosses, no penalty. feedback automation can deadlock itself. my auto-scaler demoted a strategy, which pushed position size below the exchange minimum, which rejected every order, which meant zero closed trades, which meant it could never produce the trades required for re-promotion. any rule that gates on an outcome it can also block will eventually lock up. audit for that loop before shipping. infra monitoring is not outcome monitoring. process running, api healthy, disk fine, and the bot placed nothing for five days. add assertions on outcomes: signals arrived and some executed, every live position has its stop order actually resting on the exchange, exit mix matches what the strategy config implies. write one for every incident you hit. some traders are uncopyable no matter how skilled. anyone flipping positions in minutes gives a copier guaranteed negative edge, a weak benchmark validates whatever you want to believe. my random-entry control traded too rarely at a different size, so beats rando\" was statistically meaningless. the control needs the same volume and sizing discipline as the strategies it judges. tldr: copying profitable traders is an exit-fidelity problem, not a wallet-picking problem. and most of what looked like edge was measurement error. submitted by /u/xtarsy [link] [comments]", "abstract": "Hi r/algotrading first of all. Do not ask for the bot. I am not selling anything. I just want to share what i learnt answer questions and hopefully also learn from more experienced trader.s I've been building a bot that copies profitable hyperliquid wallets for a few months. wallet selection, sizing, exits, the whole thing. it went from bleeding daily to roughly breakeven-and-improving, and basically every improvement came from learning one of thes the hard way. copying a profitable trader loses money by default. i matched every copy to the source wallet's outcome on the same trades: they made +0.5% per trade at 69% winrate, my copies made half that at much lower winrate. the gap is exit timing, so better wallet picking fixes nothing until the exit engine mirrors theirs. entry latency is a red herring. my median detection lag was under a minute and simulating zero lag barely moved the numbers. all the leak was on the exit side. optimize exits first handle position fragmentation or your exits fire years early. wallets scale in with multiple fills, and each fill can show up as its own position row. my bot closed the copy when one fragment closed while the wallet still held the rest and an 84% winrate wallet produced 12% winrate copies. only close when the wallet is net flat in that coin and direction. that one fix took copies in that strat from 21% to 82% winrate. a normal stop loss cancels the copied edge. the source holds through drawdowns, your stop realizes their drawdown and then misses their recovery. i re-scored my stopouts against each trade's max adverse excursion 8 of 9 would have recovered if the stop had been wider. catastrophe-only stop plus a trailing stop for profits polled stops make paper trading lie about your losses. an illiquid coin gapped 66% through a stop that live would have filled near the trigger, because live uses resting exchange orders and my sim checked price on a loop. model your actual live order types in the sim or every wide-stop experiment looks worse than reality and you revert good changes. winrate comparisons under a few hundred trades are noise. detecting a 5 point winrate edge takes roughly 1500 trades per arm. judge experiments on dollars per trade with a bootstrap confidence interval instead checking your experiment daily and stopping when it looks good inflates false positives to 20-30%. thats not a discipline problem, its math: repeated peeking invalidates fixed-sample p-values. e-values (always-valid sequential tests) let you look every day and act the moment a threshold crosses, no penalty. feedback automation can deadlock itself. my auto-scaler demoted a strategy, which pushed position size below the exchange minimum, which rejected every order, which meant zero closed trades, which meant it could never produce the trades required for re-promotion. any rule that gates on an outcome it can also block will eventually lock up. audit for that loop before shipping. infra monitoring is not outcome monitoring. process running, api healthy, disk fine, and the bot placed nothing for five days. add assertions on outcomes: signals arrived and some executed, every live position has its stop order actually resting on the exchange, exit mix matches what the strategy config implies. write one for every incident you hit. some traders are uncopyable no matter how skilled. anyone flipping positions in minutes gives a copier guaranteed negative edge, a weak benchmark validates whatever you want to believe. my random-entry control traded too rarely at a different size, so beats rando\" was statistically meaningless. the control needs the same volume and sizing discipline as the strategies it judges. tldr: copying profitable traders is an exit-fidelity problem, not a wallet-picking problem. and most of what looked like edge was measurement error. submitted by /u/xtarsy [link] [comments]", "content_hash": "81763dffb2d29ad6798a5ad1c0e776887f2382b7eb38e03b2a0172f2bf6d2de0", "category": "Risk Management", "tags": ["drawdown"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "Hi r/algotrading first of all.", "technical_summary": "Hi r/algotrading first of all. Do not ask for the bot. I am not selling anything. I just want to share what i learnt answer questions and hopefully also learn from more experienced trader.s I've been building a bot that copies profitable hyperliquid wallets for a few months.", "key_points": ["Hi r/algotrading first of all.", "Do not ask for the bot.", "I am not selling anything."], "quant_relevance": "和敞口控制、压力测试、回撤管理以及风险度量相关。", "possible_use_case": "可以转化为风险检查、敞口报告或压力情景。", "limitations": "论坛观点先视为经验性信息，只有经过可复现数据、成本和风控验证后才能进入研究结论。", "read_priority": "中", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.78, "academic_score": 5.5, "discussion_score": 3.0, "actionable_score": 4.5, "final_score": 5.601, "display_title": "回撤实践讨论", "tldr": "Hi r/algotrading first of all.", "core_value": "对你的量化工作帮助：把它当作回撤的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["Hi r/algotrading first of all.", "Do not ask for the bot.", "I am not selling anything."], "reference_url": "https://www.reddit.com/r/algotrading/comments/1v56b7h/built_my_own_copy_trading_bot_for_hyperliquid_10/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "风险管理", "priority_label": "中", "source_type_label": "论坛"}, {"id": "b2e0a57511bab70b9455d60d263e6a7283f72f378b64292765da8053437a22f3", "source": "Reddit algotrading", "source_type": "forum", "title": "Open-source matching engine + microstructure toolkit in Go — order types, L1/L2/L3 data, OFI/Kyle's λ, backtester (MIT)", "url": "https://www.reddit.com/r/algotrading/comments/1v55qii/opensource_matching_engine_microstructure_toolkit/", "authors": ["/u/intrepidkarthi"], "published_at": "2026-07-24", "collected_at": "2026-07-25T00:08:32Z", "raw_text": "I've been building **orderbook**, a central-limit-order-book and matching engine in Go — the piece at the heart of an exchange. It's an embeddable library, and the whole engine compiles to WebAssembly so you can poke at the real thing in your browser: ▶ Live demo: https://intrepidkarthi.github.io/orderbook/ ▶ Repo: https://github.com/intrepidkarthi/orderbook What might interest this sub: - **int64 ticks & lots, no floats** on the money path (an `Instrument` converts decimals only at the boundary). - **Zero-allocation hot path** — `Match(order, buf)` appends value-trades into a caller buffer; submit/cancel/match are **0 allocs/op**. O(1) cancel. - **Lock-free single-writer core** (LMAX model): one matching goroutine, an MPSC command queue in front, bounded backpressure that sheds new orders but never cancels. - **Deterministic & replayable:** same command stream → byte-identical trades and book; that's what makes WAL crash-recovery and golden-file tests work. - **A market-integrity layer grounded in a threat model** — the part I had the most fun with. I researched real attacks (spoofing convictions, Knight Capital $440M, the Mango oracle hack, the Bitcoin overflow bug) and built a defense for each: pre-trade risk controls, surveillance detectors, a self-output guardrail, an enforcing gateway. Writeup: docs/THREAT-MODEL.md. Benchmarks (Apple M-series, single core): ~6ns best bid/ask read, ~352ns match round-trip (0 allocs), cancel-heavy p50/p99/p999 = 83/167/292ns. Race/fuzz/soak suites in CI. Honest status: a library + microstructure research harness (OFI, Kyle's λ, Avellaneda–Stoikov, a sim + backtester), not a live exchange. MIT, v0.6.0. Feedback and \"you did X wrong\" very welcome — that's why I'm posting. submitted by /u/intrepidkarthi [link] [comments]", "abstract": "I've been building **orderbook**, a central-limit-order-book and matching engine in Go — the piece at the heart of an exchange. It's an embeddable library, and the whole engine compiles to WebAssembly so you can poke at the real thing in your browser: ▶ Live demo: https://intrepidkarthi.github.io/orderbook/ ▶ Repo: https://github.com/intrepidkarthi/orderbook What might interest this sub: - **int64 ticks & lots, no floats** on the money path (an `Instrument` converts decimals only at the boundary). - **Zero-allocation hot path** — `Match(order, buf)` appends value-trades into a caller buffer; submit/cancel/match are **0 allocs/op**. O(1) cancel. - **Lock-free single-writer core** (LMAX model): one matching goroutine, an MPSC command queue in front, bounded backpressure that sheds new orders but never cancels. - **Deterministic & replayable:** same command stream → byte-identical trades and book; that's what makes WAL crash-recovery and golden-file tests work. - **A market-integrity layer grounded in a threat model** — the part I had the most fun with. I researched real attacks (spoofing convictions, Knight Capital $440M, the Mango oracle hack, the Bitcoin overflow bug) and built a defense for each: pre-trade risk controls, surveillance detectors, a self-output guardrail, an enforcing gateway. Writeup: docs/THREAT-MODEL.md. Benchmarks (Apple M-series, single core): ~6ns best bid/ask read, ~352ns match round-trip (0 allocs), cancel-heavy p50/p99/p999 = 83/167/292ns. Race/fuzz/soak suites in CI. Honest status: a library + microstructure research harness (OFI, Kyle's λ, Avellaneda–Stoikov, a sim + backtester), not a live exchange. MIT, v0.6.0. Feedback and \"you did X wrong\" very welcome — that's why I'm posting. submitted by /u/intrepidkarthi [link] [comments]", "content_hash": "38ca16d024a635e7937a4e5fd5db169e8a58b4e25503014aab1e0fb7df744d01", "category": "Market Microstructure", "tags": ["allocation", "bitcoin", "library", "microstructure", "risk"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "I've been building **orderbook**, a central-limit-order-book and matching engine in Go — the piece at the heart of an exchange.", "technical_summary": "I've been building **orderbook**, a central-limit-order-book and matching engine in Go — the piece at the heart of an exchange. It's an embeddable library, and the whole engine compiles to WebAssembly so you can poke at the real thing in your browser: ▶ Live demo: https://intrepidkarthi.github.io/orderbook/ ▶ Repo: https://github.com/intrepidkarthi/orderbook What might interest this sub: - **int64 ticks & lots, no floats** on the money path (an `Instrument` converts decimals only at the boundary). - **Zero-allocation hot path** — `Match(order, buf)` appends value-trades into a caller buffer; submit/cancel/match are **0 allocs/op**. O(1) cancel.", "key_points": ["I've been building **orderbook**, a central-limit-order-book and matching engine in Go — the piece at the heart of an exchange.", "It's an embeddable library, and the whole engine compiles to WebAssembly so you can poke at the real thing in your browser: ▶ Live demo: https://intrepidkarthi.github.io/orderbook...", "- **Zero-allocation hot path** — `Match(order, buf)` appends value-trades into a caller buffer; submit/cancel/match are **0 allocs/op**."], "quant_relevance": "和流动性、订单簿动态、短周期 alpha 以及执行质量相关。", "possible_use_case": "可以用于改进订单簿特征、流动性过滤器或短周期预测。", "limitations": "论坛观点先视为经验性信息，只有经过可复现数据、成本和风控验证后才能进入研究结论。", "read_priority": "中", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.78, "academic_score": 5.5, "discussion_score": 3.0, "actionable_score": 4.5, "final_score": 5.601, "display_title": "市场微观结构、风险、预言机实践讨论", "tldr": "I've been building **orderbook**, a central-limit-order-book and matching engine in Go — the piece at the heart of an exchange.", "core_value": "对你的量化工作帮助：把它当作市场微观结构、风险、预言机的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["I've been building **orderbook**, a central-limit-order-book and matching engine in Go — the piece at the heart of an exchange.", "It's an embeddable library, and the whole engine compiles to WebAssembly so you can poke at the real thing in your browser: ▶ Live demo: https://intrepidkarthi.github.io/orderbook...", "- **Zero-allocation hot path** — `Match(order, buf)` appends value-trades into a caller buffer; submit/cancel/match are **0 allocs/op**."], "reference_url": "https://www.reddit.com/r/algotrading/comments/1v55qii/opensource_matching_engine_microstructure_toolkit/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "市场微观结构", "priority_label": "中", "source_type_label": "论坛"}, {"id": "ebad28466fcc522b74291d06edd396994bd26fecbd0fff82bd61ffcf60885f6b", "source": "CoinTelegraph", "source_type": "crypto_news", "title": "House passes bill on lawmakers using insider information for stock trading", "url": "https://cointelegraph.com/news/house-bill-lawmakers-insider-information-stock-trading?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "authors": [], "published_at": "2026-07-24", "collected_at": "2026-07-25T00:08:33Z", "raw_text": "According to Senator Elizabeth Warren, the House bill “won’t solve the problem“ of insider trading in Congress as lawmakers will still be allowed to own and sell stocks.", "abstract": "According to Senator Elizabeth Warren, the House bill “won’t solve the problem“ of insider trading in Congress as lawmakers will still be allowed to own and sell stocks.", "content_hash": "adbd7c019e3d32ca50f1360b4913cb7dfa525e08d05da942af813b3312f45c6c", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://cointelegraph.com/rss"}, "one_line_summary": "According to Senator Elizabeth Warren, the House bill “won’t solve the problem“ of insider trading in Congress as lawmakers will still be allowed to own and sell stocks.", "technical_summary": "According to Senator Elizabeth Warren, the House bill “won’t solve the problem“ of insider trading in Congress as lawmakers will still be allowed to own and sell stocks.", "key_points": ["According to Senator Elizabeth Warren, the House bill “won’t solve the problem“ of insider trading in Congress as lawmakers will still be allowed to own and sell stocks.", "来源类型：加密市场新闻。", "进入研究或生产前需要进一步人工复核。"], "quant_relevance": "适合进入阿尔法发现、特征研究或因子有效性验证流程。", "possible_use_case": "可以放入研究待办池，作为候选信号或因子族继续验证。", "limitations": "在成为研究或交易决策前，需要人工复核。", "read_priority": "中", "key_figures_md": "", "relevance_score": 3.7, "novelty_score": 9.78, "academic_score": 5.711, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.523, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "According to Senator Elizabeth Warren, the House bill “won’t solve the problem“ of insider trading in Congress as lawmakers will still be allowed to own and sell stocks.", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["内容抓手：这条加密市场新闻围绕阿尔法 / 因子研究展开，归入阿尔法 / 因子研究。", "研究动作：先作为阿尔法 / 因子研究候选线索，判断是否值得进入研究待办。", "验证重点：检查数据可得性、可复现性、样本外稳定性和生产约束。"], "reference_url": "https://cointelegraph.com/news/house-bill-lawmakers-insider-information-stock-trading?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "中", "source_type_label": "加密市场新闻"}, {"id": "d1af1d649a691befdddb0f87b92823b413767d8c5e14e3588c7aea5d18a48e69", "source": "The Block", "source_type": "crypto_news", "title": "The Largest Stablecoins Ranked", "url": "https://www.theblock.co/learn/409203/largest-stablecoins-ranked?utm_source=rss&utm_medium=rss", "authors": [], "published_at": "2026-07-24", "collected_at": "2026-07-25T00:08:33Z", "raw_text": "In recent years, stablecoins have emerged as crypto’s breakout use case. Assets that were created to streamline cryptocurrency trading are now being recognized as a more efficient, flexible, transparent medium of exchange for the world financial system. The total stablecoin market cap has surged on the back of this newfound attention, growing to $300 billion […]", "abstract": "In recent years, stablecoins have emerged as crypto’s breakout use case. Assets that were created to streamline cryptocurrency trading are now being recognized as a more efficient, flexible, transparent medium of exchange for the world financial system. The total stablecoin market cap has surged on the back of this newfound attention, growing to $300 billion […]", "content_hash": "818af00ce69d11032b7177abba34a6cdbe07a308ad962f35da29a0eaf3fcb570", "category": "Crypto Quant", "tags": ["crypto"], "language": "en", "metadata": {"feed_url": "https://www.theblock.co/rss.xml"}, "one_line_summary": "In recent years, stablecoins have emerged as crypto’s breakout use case.", "technical_summary": "In recent years, stablecoins have emerged as crypto’s breakout use case. Assets that were created to streamline cryptocurrency trading are now being recognized as a more efficient, flexible, transparent medium of exchange for the world financial system. The total stablecoin market cap has surged on the back of this newfound attention, growing to $300 billion […]", "key_points": ["In recent years, stablecoins have emerged as crypto’s breakout use case.", "Assets that were created to streamline cryptocurrency trading are now being recognized as a more efficient, flexible, transparent medium of exchange for the world financial system.", "The total stablecoin market cap has surged on the back of this newfound attention, growing to $300 billion […]"], "quant_relevance": "和加密资产市场结构、链上信号、衍生品以及跨交易所交易相关。", "possible_use_case": "可以在高流动性交易所上验证，并纳入手续费、资金费率和滑点。", "limitations": "在成为研究或交易决策前，需要人工复核。", "read_priority": "中", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.78, "academic_score": 5.955, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.519, "display_title": "加密资产、注意力机制加密市场新闻情报", "tldr": "In recent years, stablecoins have emerged as crypto’s breakout use case.", "core_value": "对你的量化工作帮助：围绕加密资产、注意力机制补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["In recent years, stablecoins have emerged as 加密资产’s breakout use case.", "Assets that were created to streamline 加密资产currency trading are now being recognized as a more efficient, flexible, transparent medium of exchange for the world financial system.", "The total stablecoin market cap has surged on the back of this newfound attention, growing to $300 billion […]"], "reference_url": "https://www.theblock.co/learn/409203/largest-stablecoins-ranked?utm_source=rss&utm_medium=rss", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "中", "source_type_label": "加密市场新闻"}, {"id": "68d974f7162e4f9830c8889a950d97005cd7acc1b0a88c0e82ee73e11c2bc215", "source": "The Block", "source_type": "crypto_news", "title": "Arthur Hayes, BitMEX co-founders face fraud claims over alleged ‘Insider Trading Desk’ as exchange winds down", "url": "https://www.theblock.co/post/409595/arthur-hayes-bitmex-co-founders-face-fraud-claims-over-alleged-insider-trading-desk-as-exchange-winds-down?utm_source=rss&utm_medium=rss", "authors": [], "published_at": "2026-07-24", "collected_at": "2026-07-25T00:08:33Z", "raw_text": "BitMEX, Arthur Hayes, Samuel Reed and Benjamin Delo face a proposed class action alleging insider trading and deliberate server freezes.", "abstract": "BitMEX, Arthur Hayes, Samuel Reed and Benjamin Delo face a proposed class action alleging insider trading and deliberate server freezes.", "content_hash": "1824487b9a1e07c9a4bb028b81ba9ce10427ed905e5fadee95bc62ce1dca6d30", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://www.theblock.co/rss.xml"}, "one_line_summary": "BitMEX, Arthur Hayes, Samuel Reed and Benjamin Delo face a proposed class action alleging insider trading and deliberate server freezes.", "technical_summary": "BitMEX, Arthur Hayes, Samuel Reed and Benjamin Delo face a proposed class action alleging insider trading and deliberate server freezes.", "key_points": ["BitMEX, Arthur Hayes, Samuel Reed and Benjamin Delo face a proposed class action alleging insider trading and deliberate server freezes.", "来源类型：加密市场新闻。", "进入研究或生产前需要进一步人工复核。"], "quant_relevance": "适合进入阿尔法发现、特征研究或因子有效性验证流程。", "possible_use_case": "可以放入研究待办池，作为候选信号或因子族继续验证。", "limitations": "在成为研究或交易决策前，需要人工复核。", "read_priority": "中", "key_figures_md": "", "relevance_score": 3.7, "novelty_score": 9.78, "academic_score": 5.67, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.517, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "BitMEX, Arthur Hayes, Samuel Reed and Benjamin Delo face a proposed class action alleging insider trading and deliberate server freezes.", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["内容抓手：这条加密市场新闻围绕阿尔法 / 因子研究展开，归入阿尔法 / 因子研究。", "研究动作：先作为阿尔法 / 因子研究候选线索，判断是否值得进入研究待办。", "验证重点：检查数据可得性、可复现性、样本外稳定性和生产约束。"], "reference_url": "https://www.theblock.co/post/409595/arthur-hayes-bitmex-co-founders-face-fraud-claims-over-alleged-insider-trading-desk-as-exchange-winds-down?utm_source=rss&utm_medium=rss", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "中", "source_type_label": "加密市场新闻"}], "source_stats": {"arXiv": 4, "CoinTelegraph": 2, "Reddit algotrading": 3, "CoinDesk": 1, "The Block": 2}, "category_counts": {"LLM / Agents for Quant": 2, "Machine Learning for Finance": 2, "Alpha / Factor Research": 3, "Backtesting / Research Tools": 1, "Crypto Quant": 2, "Risk Management": 1, "Market Microstructure": 1}, "section_counts": {"ai_quant_tools": 5, "deep_learning_quant": 2, "daily_news": 5}, "sections": [{"key": "deep_learning_quant", "label": "深度学习量化未来", "description": "技术主线：深度学习、强化学习、Transformer、图神经网络、表征学习、订单簿预测、金融时间序列大模型等在量化里的应用。"}, {"key": "ai_quant_tools", "label": "AI 量化工具", "description": "工具主线：能提升量化研究效率的 AI 工具、代码仓库、研究自动化、智能体、回测/数据工程工具和可接入团队工作流的基础设施。"}, {"key": "daily_news", "label": "Crypto 市场每日 Top 5", "description": "加密市场新闻主线：来自 CoinDesk、CoinTelegraph、The Block、Decrypt、Blockworks 等主流媒体当日最重要的 Crypto 市场报道。"}], "category_labels": {"Alpha / Factor Research": "阿尔法 / 因子研究", "Statistical Arbitrage": "统计套利", "Portfolio Construction": "组合构建", "Risk Management": "风险管理", "Options / Volatility": "期权 / 波动率", "Market Microstructure": "市场微观结构", "Execution / Transaction Cost": "交易执行 / 交易成本", "Machine Learning for Finance": "金融机器学习", "LLM / Agents for Quant": "量化大模型 / 智能体", "Crypto Quant": "加密资产量化", "Data Engineering": "数据工程", "Backtesting / Research Tools": "回测 / 研究工具", "Industry / Career": "行业 / 职业 / 合规", "Unclassified": "未分类"}, "priority_labels": {"High": "高", "Medium": "中", "Low": "低", "高": "高", "中": "中", "低": "低"}, "source_type_labels": {"paper": "论文", "forum": "论坛", "github": "代码仓库", "blog": "博客", "news": "新闻", "social": "社交媒体", "zhihu": "知乎", "x": "X", "quantml": "QuantML", "crypto_news": "加密市场新闻"}, "report_config": {"max_items_per_category": 5, "max_total_items": 60, "executive_brief_items": 5}}</script>
+  <script>
+    const payload = JSON.parse(document.getElementById('dashboard-data').textContent);
+    const items = payload.items || [];
+    const categoryLabels = payload.category_labels || {};
+    const priorityLabels = payload.priority_labels || {};
+    const sourceTypeLabels = payload.source_type_labels || {};
+    const state = {
+      query: '',
+      section: 'All',
+      category: 'All',
+      sort: 'score',
+      activeId: items[0]?.id || null,
+    };
+
+    const priorityRank = { High: 3, Medium: 2, Low: 1, '高': 3, '中': 2, '低': 1 };
+    const $ = (id) => document.getElementById(id);
+
+    // --- Feedback ---
+    const _feedbackStore = JSON.parse(localStorage.getItem('quant-feedback') || '{}');
+    function getFeedback(id) { return _feedbackStore[id] || 0; }
+    function setFeedback(id, signal) {
+      if (_feedbackStore[id] === signal) { delete _feedbackStore[id]; signal = 0; }
+      else { _feedbackStore[id] = signal; }
+      localStorage.setItem('quant-feedback', JSON.stringify(_feedbackStore));
+      fetch('http://localhost:8080/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, signal }),
+      }).catch(() => {});
+    }
+
+    function init() {
+      $('report-date').textContent = payload.report_date + ' - 主力源：arXiv / 知乎 / QuantML / 大型论坛 - 生成时间 ' + payload.generated_at;
+      $('metric-items').textContent = items.length;
+      $('metric-categories').textContent = new Set(items.map((item) => item.category)).size;
+      $('metric-high').textContent = items.filter((item) => priorityLabel(item.read_priority) === '高').length;
+      $('metric-avg').textContent = averageScore(items).toFixed(1);
+
+      buildSectionControls();
+      buildCategoryControls();
+      buildSourceList();
+      bindControls();
+      render();
+    }
+
+    function bindControls() {
+      $('search').addEventListener('input', (event) => {
+        state.query = event.target.value.trim().toLowerCase();
+        render();
+      });
+      $('category-select').addEventListener('change', (event) => {
+        state.category = event.target.value;
+        render();
+      });
+      $('section-select').addEventListener('change', (event) => {
+        state.section = event.target.value;
+        render();
+      });
+      $('sort-select').addEventListener('change', (event) => {
+        state.sort = event.target.value;
+        render();
+      });
+    }
+
+    function buildCategoryControls() {
+      const counts = countBy(items, 'category');
+      const categories = Object.keys(counts).sort();
+      const select = $('category-select');
+      select.innerHTML = option('All', `全部细分标签 (${items.length})`) +
+        categories.map((category) => option(category, `${categoryLabel(category)} (${counts[category]})`)).join('');
+
+      const list = $('category-list');
+      list.innerHTML = categoryButton('All', items.length) +
+        categories.map((category) => categoryButton(category, counts[category])).join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.category = button.dataset.category;
+          select.value = state.category;
+          if (state.category === 'All') {
+            state.section = 'All';
+            $('section-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSectionControls() {
+      const counts = payload.section_counts || {};
+      const sections = payload.sections || [];
+      const select = $('section-select');
+      select.innerHTML = option('All', `全部主线 (${items.length})`) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => option(section.key, `${section.label} (${counts[section.key]})`))
+          .join('');
+
+      const list = $('section-list');
+      list.innerHTML = sectionButton('All', '全部', items.length) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => sectionButton(section.key, section.label, counts[section.key]))
+          .join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.section = button.dataset.section;
+          select.value = state.section;
+          if (state.section === 'All') {
+            state.category = 'All';
+            $('category-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSourceList() {
+      const stats = payload.source_stats || {};
+      const entries = Object.entries(stats)
+        .filter(([source]) => !source.startsWith('fetched:'))
+        .sort((a, b) => b[1] - a[1]);
+      $('source-list').innerHTML = entries.length
+        ? entries.map(([source, count]) => `<li><span>${escapeHtml(source)}</span><b>${count}</b></li>`).join('')
+        : '<li><span>暂无来源统计</span><b>0</b></li>';
+    }
+
+    function render() {
+      let visible = items.filter(matchesFilters);
+      visible = sortItems(visible);
+      if (!visible.some((item) => item.id === state.activeId)) {
+        state.activeId = visible[0]?.id || null;
+      }
+
+      $('feed-title').textContent = feedTitle();
+      $('result-count').textContent = `展示 ${visible.length} 条 - 两条主线每条最多 ${payload.report_config.max_items_per_category} 条`;
+      renderSectionActive();
+      renderCategoryActive();
+      renderItems(visible);
+      renderDetail(visible.find((item) => item.id === state.activeId) || visible[0]);
+    }
+
+    function matchesFilters(item) {
+      const sectionMatch = state.section === 'All' || (item.report_sections || []).includes(state.section);
+      if (!sectionMatch) return false;
+      const categoryMatch = state.category === 'All' || item.category === state.category;
+      if (!categoryMatch) return false;
+      if (!state.query) return true;
+      const haystack = [
+        item.title,
+        item.display_title,
+        item.source,
+        item.source_type,
+        item.category,
+        categoryLabel(item.category),
+        sectionLabel(item.report_sections?.[0]),
+        sourceTypeLabel(item.source_type),
+        priorityLabel(item.read_priority),
+        item.one_line_summary,
+        item.technical_summary,
+        item.quant_relevance,
+        item.possible_use_case,
+        item.tldr,
+        item.core_value,
+        ...(item.key_points_list || []),
+        item.reference_url,
+      ].join(' ').toLowerCase();
+      return haystack.includes(state.query);
+    }
+
+    function sortItems(list) {
+      return [...list].sort((a, b) => {
+        if (state.sort === 'priority') {
+          return (priorityRank[b.read_priority] || 0) - (priorityRank[a.read_priority] || 0)
+            || b.final_score - a.final_score;
+        }
+        if (state.sort === 'source') {
+          return a.source.localeCompare(b.source) || b.final_score - a.final_score;
+        }
+        return b.final_score - a.final_score;
+      });
+    }
+
+    function renderCategoryActive() {
+      document.querySelectorAll('.category-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.category === state.category);
+      });
+    }
+
+    function renderSectionActive() {
+      document.querySelectorAll('.section-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.section === state.section);
+      });
+    }
+
+    function itemCard(item) {
+      const sec = item.report_sections?.[0] || 'other';
+      const sig = getFeedback(item.id);
+      return `
+        <article class="item ${item.id === state.activeId ? 'active' : ''}"
+                 data-id="${escapeAttr(item.id)}"
+                 data-section="${escapeAttr(sec)}">
+          <div class="item-top">
+            <h3>${escapeHtml(item.display_title || item.title)}</h3>
+            <div class="score">${Number(item.final_score).toFixed(1)}</div>
+          </div>
+          <div class="meta">
+            <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+            <span class="tag">${escapeHtml(item.source)}</span>
+            <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+          </div>
+          ${readerFormat(item, true)}
+          <div class="feedback-row">
+            <button class="feedback-btn ${sig === 1 ? 'active-up' : ''}" data-feedback="1" title="有用">👍</button>
+            <button class="feedback-btn ${sig === -1 ? 'active-down' : ''}" data-feedback="-1" title="跳过">👎</button>
+            <span class="feedback-hint">${sig === 1 ? '已标记有用' : sig === -1 ? '已标记跳过' : ''}</span>
+          </div>
+        </article>
+      `;
+    }
+
+    function sectionGroupHeader(section, count) {
+      return `
+        <div class="section-group-header" data-section="${escapeAttr(section.key)}">
+          <span class="section-group-title">${escapeHtml(section.label)}</span>
+          <span class="section-group-count">${count} 条</span>
+        </div>
+      `;
+    }
+
+    function renderItems(visible) {
+      const container = $('items');
+      if (!visible.length) {
+        container.innerHTML = '<div class="empty">当前筛选条件下没有匹配内容。</div>';
+        return;
+      }
+
+      let html = '';
+      if (state.section === 'All') {
+        // Group by section in defined order, with a header for each group
+        const grouped = {};
+        for (const item of visible) {
+          const sec = item.report_sections?.[0] || 'other';
+          if (!grouped[sec]) grouped[sec] = [];
+          grouped[sec].push(item);
+        }
+        for (const section of (payload.sections || [])) {
+          const group = grouped[section.key];
+          if (!group || !group.length) continue;
+          html += sectionGroupHeader(section, group.length);
+          html += group.map((item) => itemCard(item)).join('');
+        }
+        // Append any items that fell into 'other' (shouldn't normally happen)
+        if (grouped['other']?.length) {
+          html += grouped['other'].map((item) => itemCard(item)).join('');
+        }
+      } else {
+        html = visible.map((item) => itemCard(item)).join('');
+      }
+
+      container.innerHTML = html;
+      container.querySelectorAll('.item').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.activeId = node.dataset.id;
+          render();
+        });
+      });
+      container.querySelectorAll('.feedback-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const itemNode = btn.closest('.item');
+          setFeedback(itemNode.dataset.id, parseInt(btn.dataset.feedback, 10));
+          render();
+        });
+      });
+    }
+
+    function renderDetail(item) {
+      const detail = $('detail');
+      if (!item) {
+        detail.innerHTML = '<div class="empty">选择一条内容查看详情。</div>';
+        return;
+      }
+
+      detail.innerHTML = `
+        <h2>${escapeHtml(item.display_title || item.title)}</h2>
+        <div class="meta">
+          <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+          <span class="tag">${escapeHtml(sourceTypeLabel(item.source_type))}</span>
+          <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+        </div>
+
+        ${readerFormat(item, false)}
+
+        <div class="detail-block">
+          <h3>评分拆解</h3>
+          <div class="breakdown">
+            ${bar('相关性', item.relevance_score)}
+            ${bar('新颖度', item.novelty_score)}
+            ${bar('学术性', item.academic_score)}
+            ${bar('讨论度', item.discussion_score)}
+            ${bar('可行动性', item.actionable_score)}
+          </div>
+        </div>
+
+      `;
+    }
+
+    function readerFormat(item, compact) {
+      const points = itemKeyPoints(item);
+      return `
+        <div class="reader-format ${compact ? 'compact' : ''}">
+          <div class="reader-block">
+            <h4>1. 这篇文章的太长不读</h4>
+            <p>${escapeHtml(item.tldr || item.one_line_summary || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>2. 核心价值，对我量化的工作能够提供什么样的帮助</h4>
+            <p>${escapeHtml(item.core_value || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>3. 关键核心点 / 论文或帖子摘要</h4>
+            <ol>${points.map((point) => `<li>${escapeHtml(point)}</li>`).join('')}</ol>
+          </div>
+          <div class="reader-block">
+            <h4>4. 原文链接</h4>
+            ${referenceHtml(item)}
+          </div>
+        </div>
+      `;
+    }
+
+    function itemKeyPoints(item) {
+      const points = Array.isArray(item.key_points_list)
+        ? item.key_points_list
+        : (Array.isArray(item.key_points) ? item.key_points : []);
+      const clean = points.filter(Boolean).slice(0, 3);
+      return clean.length ? clean : ['需要打开原文进一步确认方法、数据和适用边界。'];
+    }
+
+    function referenceHtml(item) {
+      const url = item.reference_url || '';
+      if (!url) return '<p>暂无可打开链接</p>';
+      return `
+        <a class="reader-reference" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">打开原文</a>
+        <small class="reference-url">${escapeHtml(url)}</small>
+      `;
+    }
+
+    function bar(label, value) {
+      const score = Number(value || 0);
+      const width = Math.max(0, Math.min(100, score * 10));
+      return `
+        <div class="bar">
+          <span>${label}</span>
+          <div class="bar-track"><div class="bar-fill" style="width: ${width}%"></div></div>
+          <b>${score.toFixed(1)}</b>
+        </div>
+      `;
+    }
+
+    function countBy(list, key) {
+      return list.reduce((acc, item) => {
+        acc[item[key]] = (acc[item[key]] || 0) + 1;
+        return acc;
+      }, {});
+    }
+
+    function averageScore(list) {
+      if (!list.length) return 0;
+      return list.reduce((sum, item) => sum + Number(item.final_score || 0), 0) / list.length;
+    }
+
+    function option(value, label) {
+      return `<option value="${escapeAttr(value)}">${escapeHtml(label)}</option>`;
+    }
+
+    function sectionButton(section, label, count) {
+      return `
+        <button class="category-button section-button" type="button" data-section="${escapeAttr(section)}">
+          <span>${escapeHtml(label)}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryButton(category, count) {
+      return `
+        <button class="category-button" type="button" data-category="${escapeAttr(category)}">
+          <span>${escapeHtml(category === 'All' ? '全部' : categoryLabel(category))}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryLabel(category) {
+      return categoryLabels[category] || category;
+    }
+
+    function sectionLabel(sectionKey) {
+      const section = (payload.sections || []).find((item) => item.key === sectionKey);
+      return section ? section.label : '其他';
+    }
+
+    function feedTitle() {
+      const parts = [];
+      if (state.section !== 'All') parts.push(sectionLabel(state.section));
+      if (state.category !== 'All') parts.push(categoryLabel(state.category));
+      return parts.length ? parts.join(' / ') : '今日情报';
+    }
+
+    function priorityLabel(priority) {
+      return priorityLabels[priority] || priority;
+    }
+
+    function sourceTypeLabel(sourceType) {
+      return sourceTypeLabels[sourceType] || sourceType;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replaceAll('`', '&#096;');
+    }
+
+    init();
+  </script>
+</body>
+</html>
