@@ -1,0 +1,1086 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>samson 量化情报台 - 2026-08-17</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --panel: #ffffff;
+      --ink: #202124;
+      --muted: #5f6368;
+      --line: #dadce0;
+      --blue: #1a73e8;
+      --red: #ea4335;
+      --yellow: #fbbc04;
+      --green: #34a853;
+      --blue-soft: #e8f0fe;
+      --green-soft: #e6f4ea;
+      --yellow-soft: #fef7e0;
+      --red-soft: #fce8e6;
+      --shadow: 0 1px 2px rgba(60, 64, 67, 0.16), 0 8px 24px rgba(60, 64, 67, 0.10);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(66, 133, 244, 0.07), transparent 30%),
+        radial-gradient(circle at top right, rgba(251, 188, 4, 0.08), transparent 26%),
+        var(--bg);
+      color: var(--ink);
+      font-family: "Google Sans", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(280px, 620px);
+      gap: 24px;
+      align-items: center;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand h1 {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin: 0;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+
+    .brand h1::before {
+      content: "";
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background:
+        conic-gradient(from 0deg, var(--blue) 0 25%, var(--red) 0 50%, var(--yellow) 0 75%, var(--green) 0 100%);
+      box-shadow: inset 0 0 0 7px #fff;
+    }
+
+    .date-pill {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 170px 170px 150px;
+      gap: 10px;
+    }
+
+    .control {
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 12px;
+      outline: none;
+    }
+
+    .control:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.14);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 260px minmax(420px, 1fr) 420px;
+      gap: 22px;
+      padding: 24px 32px 36px;
+    }
+
+    .rail,
+    .detail {
+      position: sticky;
+      top: 86px;
+      height: calc(100vh - 112px);
+      overflow: auto;
+    }
+
+    .rail,
+    .detail,
+    .feed {
+      min-width: 0;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      padding: 12px;
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
+    }
+
+    .metric:nth-child(1) { border-top: 3px solid var(--blue); }
+    .metric:nth-child(2) { border-top: 3px solid var(--red); }
+    .metric:nth-child(3) { border-top: 3px solid var(--yellow); }
+    .metric:nth-child(4) { border-top: 3px solid var(--green); }
+
+    .metric b {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .section-label {
+      margin: 18px 0 8px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .category-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .category-button {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--ink);
+      padding: 8px 10px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .category-button:hover,
+    .category-button.active {
+      border-color: transparent;
+      background: var(--blue-soft);
+      color: #174ea6;
+    }
+
+    .count {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .source-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .source-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .feed-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .feed-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .result-count {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .items {
+      display: grid;
+      gap: 10px;
+    }
+
+    .section-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 2px 4px;
+      margin-top: 10px;
+      border-bottom: 2px solid var(--line);
+    }
+
+    .section-group-header:first-child {
+      margin-top: 0;
+    }
+
+    .section-group-title {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .section-group-header[data-section="deep_learning_quant"] .section-group-title { color: var(--blue); }
+    .section-group-header[data-section="ai_quant_tools"] .section-group-title { color: var(--green); }
+    .section-group-header[data-section="daily_news"] .section-group-title { color: var(--yellow); }
+
+    .section-group-count {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .item {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.10);
+      padding: 18px;
+      cursor: pointer;
+      transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+    }
+
+    .item::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--blue), var(--red), var(--yellow), var(--green));
+    }
+
+    .item[data-section="deep_learning_quant"]::before { background: var(--blue); }
+    .item[data-section="ai_quant_tools"]::before { background: var(--green); }
+    .item[data-section="daily_news"]::before { background: var(--yellow); }
+
+    .item:hover,
+    .item.active {
+      border-color: #c6dafc;
+      box-shadow: var(--shadow);
+      transform: translateY(-2px);
+    }
+
+    .item-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .item h3 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.28;
+    }
+
+    .score {
+      min-width: 54px;
+      border-radius: 999px;
+      background: var(--blue-soft);
+      color: #174ea6;
+      padding: 6px 8px;
+      text-align: center;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .tag {
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: #f1f3f4;
+      padding: 3px 8px;
+    }
+
+    .tag:nth-child(1) { background: var(--blue-soft); color: #174ea6; }
+    .tag:nth-child(2) { background: var(--green-soft); color: #137333; }
+    .tag:nth-child(3) { background: var(--yellow-soft); color: #8a5a00; }
+    .tag:nth-child(4) { background: var(--red-soft); color: #b3261e; }
+
+    .summary {
+      margin: 0;
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .reference-link {
+      display: inline-flex;
+      width: fit-content;
+      border-top: 1px solid var(--line);
+      color: var(--blue);
+      padding-top: 9px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .reader-format {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .reader-format.compact {
+      gap: 8px;
+    }
+
+    .reader-block {
+      border-top: 1px solid var(--line);
+      padding-top: 9px;
+    }
+
+    .reader-block:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .reader-block h4 {
+      margin: 0 0 5px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .reader-block p,
+    .reader-block li {
+      margin: 0;
+      color: #30342d;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .reader-block ol {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .reader-reference {
+      color: var(--blue);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
+    .reference-url {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .detail {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .detail h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+
+    .detail-block {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .detail-block h3 {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+
+    .detail-block p,
+    .detail-block li {
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .detail-block ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .breakdown {
+      display: grid;
+      gap: 8px;
+    }
+
+    .bar {
+      display: grid;
+      grid-template-columns: 118px 1fr 40px;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .bar-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e7eadf;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--blue), var(--green), var(--yellow), var(--red));
+    }
+
+    .open-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      margin-top: 16px;
+      border: 1px solid var(--blue);
+      border-radius: var(--radius);
+      color: var(--blue);
+      text-decoration: none;
+      padding: 0 12px;
+      font-weight: 700;
+    }
+
+    .feedback-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+    }
+
+    .feedback-btn {
+      background: #f1f3f4;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 120ms, border-color 120ms;
+    }
+
+    .feedback-btn:hover { background: var(--blue-soft); }
+    .feedback-btn.active-up { background: var(--green-soft); border-color: var(--green); }
+    .feedback-btn.active-down { background: var(--red-soft); border-color: var(--red); }
+
+    .feedback-hint {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      padding: 28px;
+      color: var(--muted);
+      background: var(--panel);
+    }
+
+    @media (max-width: 1180px) {
+      .layout {
+        grid-template-columns: 220px 1fr;
+      }
+
+      .detail {
+        position: static;
+        grid-column: 1 / -1;
+        height: auto;
+      }
+    }
+
+    @media (max-width: 820px) {
+      .topbar {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .brand {
+        display: grid;
+        gap: 4px;
+      }
+
+      .brand h1 {
+        white-space: normal;
+        font-size: 21px;
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .rail,
+      .detail {
+        position: static;
+        height: auto;
+      }
+
+      .metric-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <h1>samson 量化情报台</h1>
+        <span class="date-pill" id="report-date"></span>
+      </div>
+      <div class="controls">
+        <input class="control" id="search" type="search" placeholder="搜索标题、摘要、分类..." />
+        <select class="control" id="section-select"></select>
+        <select class="control" id="category-select"></select>
+        <select class="control" id="sort-select">
+          <option value="score">按评分排序</option>
+          <option value="priority">按优先级排序</option>
+          <option value="source">按来源排序</option>
+        </select>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="rail">
+        <div class="metric-grid">
+          <div class="metric"><b id="metric-items">0</b><span>报告条目</span></div>
+          <div class="metric"><b id="metric-categories">0</b><span>分类数量</span></div>
+          <div class="metric"><b id="metric-high">0</b><span>高优先级</span></div>
+          <div class="metric"><b id="metric-avg">0.0</b><span>平均评分</span></div>
+        </div>
+
+        <div class="section-label">两条主线</div>
+        <div class="category-list" id="section-list"></div>
+
+        <div class="section-label">细分标签</div>
+        <div class="category-list" id="category-list"></div>
+
+        <div class="section-label">主力来源</div>
+        <ul class="source-list" id="source-list"></ul>
+      </aside>
+
+      <section class="feed">
+        <div class="feed-header">
+          <h2 id="feed-title">今日情报</h2>
+          <span class="result-count" id="result-count"></span>
+        </div>
+        <div class="items" id="items"></div>
+      </section>
+
+      <aside class="detail" id="detail"></aside>
+    </main>
+  </div>
+
+  <script id="dashboard-data" type="application/json">{"report_date": "2026-08-17", "generated_at": "2026-08-16T23:26:55Z", "items": [{"id": "72318524772934f930f6e3991ee97e45b859c06f802c26a921caeceba0cae7c1", "source": "Quant StackExchange", "source_type": "forum", "title": "How should static Kelly sizing be extended to asynchronous trading signals with capital lock-up and stochastic future arrivals?", "url": "https://quant.stackexchange.com/questions/85781/how-should-static-kelly-sizing-be-extended-to-asynchronous-trading-signals-with", "authors": ["J.Doe"], "published_at": "2026-08-16", "collected_at": "2026-08-16T23:20:53Z", "raw_text": "I am designing an event-driven capital allocator for several trading strategies. I currently have three strategies, although the allocator should eventually support additional ones. This is a mathematical modeling question, not a request for investment advice, a package recommendation, or help debugging an existing implementation. Available information Each strategy generates signals at a different and uncertain frequency. For each signal $i$ , I can estimate: a predictive distribution for its net return per dollar of notional, $R_i$ , including transaction costs; a stop-loss loss fraction, $s_i$ ; a distribution or estimate of its holding time, $H_i$ ; the strategy that generated it; the historical arrival process of signals from that strategy. I use expected log return as the geometric-growth measure: $$ \\ell_i = \\mathbb{E}\\left[\\log(1+R_i)\\right]. $$ The corresponding geometric mean return is $$ \\exp(\\ell_i)-1. $$ A possible descriptive score for comparing signals with different holding periods is $$ \\rho_i = \\frac{ \\mathbb{E}\\left[\\log(1+R_i)\\right] }{ \\mathbb{E}[H_i] }. $$ However, I do not assume that ranking or sizing trades by $\\rho_i$ is optimal. Such a ratio may be meaningful for isolated sequential opportunities, but my positions can overlap and compete for the same capital. I also understand that a scalar expected log return is not sufficient for position sizing. The dispersion, downside tail, dependence between simultaneous trades, and estimation uncertainty of the return distributions should matter. Event-driven setting Signals arrive asynchronously. Several signals can arrive at the same time, while positions opened earlier may still be active. Capital allocated to a position remains unavailable until that position closes. Consequently, accepting a positive-expected-growth signal now has an opportunity cost: it may prevent the allocator from accepting a better signal that arrives before the first position closes. At an event time $t$ , let: $W_t$ be total portfolio wealth; $C_t$ be capital currently available for new positions; $\\mathcal{P}_t$ be the set of open positions; $\\mathcal{A}_t$ be the set of newly available signals; $x_{i,t}$ be the notional allocated to signal $i \\in \\mathcal{A}_t$ . The allocation vector $x_t$ simultaneously determines the three decisions I care about. First, the amount invested now is $$ I_t = \\sum_{i \\in \\mathcal{A}_t} x_{i,t}. $$ Second, the amount kept available for future signals is $$ C_t-I_t. $$ Third, the individual values $x_{i,t}$ determine how current exposure is distributed across simultaneous signals. At a minimum, the allocations must satisfy $$ x_{i,t} \\geq 0, \\qquad \\sum_{i \\in \\mathcal{A}_t} x_{i,t} \\leq C_t. $$ If $D_t$ denotes the existing stop-loss risk from open positions and $B_t$ is the permitted portfolio stop-risk budget, another constraint could be $$ D_t + \\sum_{i \\in \\mathcal{A}_t} s_i x_{i,t} \\leq B_t. $$ Additional limits may apply to gross exposure, individual trades, and individual strategies. When a position closes, its capital is released and its realized profit or loss changes portfolio wealth. New decisions are then made using only the information available at that time. Objective The economic objective is to maximize long-run geometric growth per unit of calendar time. A possible formal objective is $$ \\sup_{\\pi} \\liminf_{T \\to \\infty} \\frac{1}{T} \\mathbb{E}_{\\pi} \\left[ \\log\\left(\\frac{W_T}{W_0}\\right) \\right], $$ where $\\pi$ is an allocation policy mapping the observable portfolio state and current signals to their notionals. For a static one-period problem, let $b$ denote the fractions of wealth allocated to a vector of opportunities with joint return vector $R$ . If all opportunities are known and resolve over the same period, I understand the standard log-optimal formulation to be $$ \\max_b \\mathbb{E} \\left[ \\log\\left(1+b^\\top R\\right) \\right], $$ subject to exposure and risk constraints. My difficulty is extending this formulation when: decisions occur at irregular event times; positions have different and uncertain durations; capital is temporarily locked; future opportunities are not yet observed; signal-arrival frequencies differ by strategy; several positions can overlap; the return and arrival distributions must be estimated from limited data. Data limitation This is not high-frequency trading. I have roughly 18 months of observations and fewer than about 2,000 signals across all strategies. The effective sample size is lower because signals and holding periods overlap, observations from the same strategy are dependent, and market conditions may change through time. I have tested many allocation ideas, but including the implementation history would obscure the underlying question. I would like to reconsider the problem from first principles. A neural network or reinforcement-learning policy would not be appropriate for this sample size. I am looking for a parsimonious and auditable solution that can be retrained chronologically as additional observations become available. Main question How should the static log-optimal allocation problem be formulated and approximated in this event-driven setting so that the chosen notionals account for current expected log growth, capital lock-up, and the opportunity cost of stochastic future signals? I suspect that the full problem could be represented as a constrained semi-Markov decision process or as a stochastic resource-allocation problem with reusable capacity. However, estimating a large state-dependent value function from fewer than 2,000 dependent signals appears unrealistic. A useful answer would ideally describe: the smallest defensible state representation; how signal-arrival frequencies and holding-time distributions should enter the model; how to represent the marginal value of keeping one additional dollar available; a tractable low-dimensional approximation appropriate for this sample size; how to favor signals with stronger expected log growth without allowing estimation error to create unstable concentration; a chronological validation procedure and a simple benchmark that a more complex allocator should be required to outperform. I would be particularly interested in practical experience with simplified policies such as: current-only fractional Kelly; shrinkage toward equal stop-risk allocation; a receding-horizon stochastic program; a bid-price or shadow-price approximation for available capital; approximate dynamic programming with a deliberately low-dimensional value function. The central issue is not how to solve a static optimizer numerically. It is how to value currently available capital when using it changes the set of future opportunities that the portfolio will be able to accept. References or descriptions of comparable systems used in practice would be especially helpful.", "abstract": "I am designing an event-driven capital allocator for several trading strategies. I currently have three strategies, although the allocator should eventually support additional ones. This is a mathematical modeling question, not a request for investment advice, a package recommendation, or help debugging an existing implementation. Available information Each strategy generates signals at a different and uncertain frequency. For each signal $i$ , I can estimate: a predictive distribution for its net return per dollar of notional, $R_i$ , including transaction costs; a stop-loss loss fraction, $s_i$ ; a distribution or estimate of its holding time, $H_i$ ; the strategy that generated it; the historical arrival process of signals from that strategy. I use expected log return as the geometric-growth measure: $$ \\ell_i = \\mathbb{E}\\left[\\log(1+R_i)\\right]. $$ The corresponding geometric mean return is $$ \\exp(\\ell_i)-1. $$ A possible descriptive score for comparing signals with different holding periods is $$ \\rho_i = \\frac{ \\mathbb{E}\\left[\\log(1+R_i)\\right] }{ \\mathbb{E}[H_i] }. $$ However, I do not assume that ranking or sizing trades by $\\rho_i$ is optimal. Such a ratio may be meaningful for isolated sequential opportunities, but my positions can overlap and compete for the same capital. I also understand that a scalar expected log return is not sufficient for position sizing. The dispersion, downside tail, dependence between simultaneous trades, and estimation uncertainty of the return distributions should matter. Event-driven setting Signals arrive asynchronously. Several signals can arrive at the same time, while positions opened earlier may still be active. Capital allocated to a position remains unavailable until that position closes. Consequently, accepting a positive-expected-growth signal now has an opportunity cost: it may prevent the allocator from accepting a better signal that arrives before the first position closes. At an event time $t$ , let: $W_t$ be total portfolio wealth; $C_t$ be capital currently available for new positions; $\\mathcal{P}_t$ be the set of open positions; $\\mathcal{A}_t$ be the set of newly available signals; $x_{i,t}$ be the notional allocated to signal $i \\in \\mathcal{A}_t$ . The allocation vector $x_t$ simultaneously determines the three decisions I care about. First, the amount invested now is $$ I_t = \\sum_{i \\in \\mathcal{A}_t} x_{i,t}. $$ Second, the amount kept available for future signals is $$ C_t-I_t. $$ Third, the individual values $x_{i,t}$ determine how current exposure is distributed across simultaneous signals. At a minimum, the allocations must satisfy $$ x_{i,t} \\geq 0, \\qquad \\sum_{i \\in \\mathcal{A}_t} x_{i,t} \\leq C_t. $$ If $D_t$ denotes the existing stop-loss risk from open positions and $B_t$ is the permitted portfolio stop-risk budget, another constraint could be $$ D_t + \\sum_{i \\in \\mathcal{A}_t} s_i x_{i,t} \\leq B_t. $$ Additional limits may apply to gross exposure, individual trades, and individual strategies. When a position closes, its capital is released and its realized profit or loss changes portfolio wealth. New decisions are then made using only the information available at that time. Objective The economic objective is to maximize long-run geometric growth per unit of calendar time. A possible formal objective is $$ \\sup_{\\pi} \\liminf_{T \\to \\infty} \\frac{1}{T} \\mathbb{E}_{\\pi} \\left[ \\log\\left(\\frac{W_T}{W_0}\\right) \\right], $$ where $\\pi$ is an allocation policy mapping the observable portfolio state and current signals to their notionals. For a static one-period problem, let $b$ denote the fractions of wealth allocated to a vector of opportunities with joint return vector $R$ . If all opportunities are known and resolve over the same period, I understand the standard log-optimal formulation to be $$ \\max_b \\mathbb{E} \\left[ \\log\\left(1+b^\\top R\\right) \\right], $$ subject to exposure and risk constraints. My difficulty is extending this formulation when: decisions occur at irregular event times; positions have different and uncertain durations; capital is temporarily locked; future opportunities are not yet observed; signal-arrival frequencies differ by strategy; several positions can overlap; the return and arrival distributions must be estimated from limited data. Data limitation This is not high-frequency trading. I have roughly 18 months of observations and fewer than about 2,000 signals across all strategies. The effective sample size is lower because signals and holding periods overlap, observations from the same strategy are dependent, and market conditions may change through time. I have tested many allocation ideas, but including the implementation history would obscure the underlying question. I would like to reconsider the problem from first principles. A neural network or reinforcement-learning policy would not be appropriate for this sample size. I am looking for a parsimonious and auditable solution that can be retrained chronologically as additional observations become available. Main question How should the static log-optimal allocation problem be formulated and approximated in this event-driven setting so that the chosen notionals account for current expected log growth, capital lock-up, and the opportunity cost of stochastic future signals? I suspect that the full problem could be represented as a constrained semi-Markov decision process or as a stochastic resource-allocation problem with reusable capacity. However, estimating a large state-dependent value function from fewer than 2,000 dependent signals appears unrealistic. A useful answer would ideally describe: the smallest defensible state representation; how signal-arrival frequencies and holding-time distributions should enter the model; how to represent the marginal value of keeping one additional dollar available; a tractable low-dimensional approximation appropriate for this sample size; how to favor signals with stronger expected log growth without allowing estimation error to create unstable concentration; a chronological validation procedure and a simple benchmark that a more complex allocator should be required to outperform. I would be particularly interested in practical experience with simplified policies such as: current-only fractional Kelly; shrinkage toward equal stop-risk allocation; a receding-horizon stochastic program; a bid-price or shadow-price approximation for available capital; approximate dynamic programming with a deliberately low-dimensional value function. The central issue is not how to solve a static optimizer numerically. It is how to value currently available capital when using it changes the set of future opportunities that the portfolio will be able to accept. References or descriptions of comparable systems used in practice would be especially helpful.", "content_hash": "30ff516c21b7d64f1549d45b67c96312b597418e880f1919f5d752c72db038ac", "category": "Portfolio Construction", "tags": ["allocation", "exposure", "neural", "package", "portfolio", "risk", "signal"], "language": "en", "metadata": {"feed_url": "https://quant.stackexchange.com/feeds"}, "one_line_summary": "用半马尔可夫/随机资源分配视角扩展静态 Kelly，处理约2000个重叠异步信号的资金锁定与机会成本", "technical_summary": "帖子定义了事件驱动资金分配问题：多策略信号异步到达，持仓期未结束前资金被锁定，接受当前正期望信号会占用资本，可能错过未来更优信号。静态对数最优形式为 max_b E[log(1+b^T R)]，但需扩展至不规则事件时间、不同持仓时长、随机未来到达和资金释放。数据仅约18个月、不到2000个信号且重叠相关，因此作者排除神经网络或强化学习，倾向半马尔可夫决策过程或随机资源分配建模。社区目前主要是问题框架与公式，尚未给出完整实证方案。", "key_points": ["核心是静态 Kelly 无法处理持仓重叠与资金锁定：接受当前信号会占用资金，未来更优信号可能错过，需把到达频率和持仓时长纳入决策。", "可用半马尔可夫决策/随机资源分配建模，先估计各策略信号到达过程和 H_i 分布，再对每单位留守资本赋予机会成本，用滚动窗口校准。", "样本仅18个月、\u003c2000个信号且重叠相关，状态依赖价值函数容易过拟合；帖内无实证答案，必须做样本外滚动验证。"], "quant_relevance": "组合构建 / 权重优化；风险建模", "possible_use_case": "作为多策略事件驱动资金分配器的建模起点：先用信号历史估计到达强度与持有期分布，再对可用资金分配设置机会成本惩罚，并在18个月以上样本上做滚动样本外测试。", "limitations": "这是 StackExchange 单帖，缺乏实证回测；样本量小且信号重叠，到达过程和收益联合分布估计困难；公式未细化交易成本之外的执行细节，需在实际数据中验证。", "read_priority": "高", "key_figures_md": "", "relevance_score": 7.5, "novelty_score": 9.78, "academic_score": 5.5, "discussion_score": 3.0, "actionable_score": 7.5, "final_score": 6.981, "display_title": "组合、风险、最优配置实践讨论", "tldr": "用半马尔可夫/随机资源分配视角扩展静态 Kelly，处理约2000个重叠异步信号的资金锁定与机会成本", "core_value": "对你的量化工作帮助：把它当作组合、风险、最优配置的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["核心是静态 Kelly 无法处理持仓重叠与资金锁定：接受当前信号会占用资金，未来更优信号可能错过，需把到达频率和持仓时长纳入决策。", "可用半马尔可夫决策/随机资源分配建模，先估计各策略信号到达过程和 H_i 分布，再对每单位留守资本赋予机会成本，用滚动窗口校准。", "样本仅18个月、\u003c2000个信号且重叠相关，状态依赖价值函数容易过拟合；帖内无实证答案，必须做样本外滚动验证。"], "reference_url": "https://quant.stackexchange.com/questions/85781/how-should-static-kelly-sizing-be-extended-to-asynchronous-trading-signals-with", "report_sections": ["deep_learning_quant"], "report_section_labels": ["深度学习量化未来"], "category_label": "组合构建", "priority_label": "高", "source_type_label": "论坛"}, {"id": "dace0cd9db5abd305dfc678b6ee75962a8147742917dafbd9651675097e84c36", "source": "Reddit algotrading", "source_type": "forum", "title": "Mean Reversion Strategy Prospects", "url": "https://www.reddit.com/r/algotrading/comments/1vqbakf/mean_reversion_strategy_prospects/", "authors": ["/u/Brilliant_Grade7388"], "published_at": "2026-08-16", "collected_at": "2026-08-16T23:20:53Z", "raw_text": "Hey everyone! I've been creating a pipeline for my future trading bot and I am currently at the research stage. I wanted to share with you guys my interesting results using mean reversion. For some background on my process: I am using EURUSD focusing on the daily timeframe only. The data ranges from 2003 to 2026, where I use the following split split ranges start end TEST 62 2021-05-31 00:00:00+00:00 2025-10-20 00:00:00+00:00 TRAIN 185 2003-06-04 00:00:00+00:00 2017-02-27 00:00:00+00:00 VALIDATION 62 2017-03-07 00:00:00+00:00 2021-05-05 00:00:00+00:00 \"ranges\" refers to micro ranges I have algorithmically programmed to discover. I checked the ranges visually and they are very accurate. The amount of data may be small but I am currently only interested in the behavior of the EURUSD market, I can increase the amount of data by including daily data from other pairs but will reserve that for when I train with AI. My research used the following rule(s) for making a trade upon a confirmed micro range... 1)upon a confirmed micro range I freeze the following attributes as a snapshot: -upper boundary -lower boundary -midpoint -range width -confirmation ATR -causal market context 2) watch price relative to the frozen boundaries. This led me to produce some of the following targeted behaviors... -boundary touches (doesnt close above/below boundary) -wick rejection (wick exceeds above/below boundary) -outside close (price closes above/below boundary) -consecutive outside closes -reentry/reversion (closed above/below boundary then comes back into range) -breakout retest/hold (price breaks out and deviates from range) 3) simulate a trade taken in both directions (buy and sell) for every snapshot There is more involved, but this is a brief summary of the core behavior involved in the research. I produced the following findings: ------------------------------------------------------------------------------------- What survived across all three periods: CLOSE_ABOVE_UPPER / ACTIVE_RANGE → SHORTTRAIN: +0.321 ATR VALIDATION: +0.628 ATR TEST: +0.233 ATR consistent in terms of direction but my samples are only 14, 14, and 8. What did not remain stable: FIRST_TRADABLE → LONG weakened from +0.192 to +0.051, then became -0.074 ATR. LOWER_WICK → LONG worked in TRAIN/VALIDATION but reversed in TEST. UPPER_WICK → SHORT worked strongly in TRAIN/VALIDATION but reversed in TEST. LOWER_TOUCH changed direction. UPPER_TOUCH → SHORT improved after TRAIN, but the TRAIN mean was negative. ***Most important finding is it shows that most unconditional signals are dependent on structure**** ------------------------------------------------------------------------------------- Most promising hypotheses: CLOSE_ABOVE_UPPER / ACTIVE_RANGE → SHORT Mean: +0.421 ATR Median: +0.553 ATR Win rate: 72.2% This hints that active-range upside breaks often fade. UPPER_WICK_BREAK_CLOSE_INSIDE / ACTIVE_RANGE → SHORT Mean: +0.239 ATR Win rate: 56.9% This is consistent with rejection at the upper boundary. UPPER_TOUCH / ACTIVE_RANGE → SHORT Mean: +0.068 ATR Median: +0.290 ATR Win rate: 58.0% The three results above prove consistency: while a range remains active, activity with its upper boundary historically favors fading downward AKA reversion. ------------------------------------------------------------------------------------- Most of you may already know this, especially by just visually analyzing the charts, but thought I'd share my proof from an algorithmic perspective. submitted by /u/Brilliant_Grade7388 [link] [comments]", "abstract": "Hey everyone! I've been creating a pipeline for my future trading bot and I am currently at the research stage. I wanted to share with you guys my interesting results using mean reversion. For some background on my process: I am using EURUSD focusing on the daily timeframe only. The data ranges from 2003 to 2026, where I use the following split split ranges start end TEST 62 2021-05-31 00:00:00+00:00 2025-10-20 00:00:00+00:00 TRAIN 185 2003-06-04 00:00:00+00:00 2017-02-27 00:00:00+00:00 VALIDATION 62 2017-03-07 00:00:00+00:00 2021-05-05 00:00:00+00:00 \"ranges\" refers to micro ranges I have algorithmically programmed to discover. I checked the ranges visually and they are very accurate. The amount of data may be small but I am currently only interested in the behavior of the EURUSD market, I can increase the amount of data by including daily data from other pairs but will reserve that for when I train with AI. My research used the following rule(s) for making a trade upon a confirmed micro range... 1)upon a confirmed micro range I freeze the following attributes as a snapshot: -upper boundary -lower boundary -midpoint -range width -confirmation ATR -causal market context 2) watch price relative to the frozen boundaries. This led me to produce some of the following targeted behaviors... -boundary touches (doesnt close above/below boundary) -wick rejection (wick exceeds above/below boundary) -outside close (price closes above/below boundary) -consecutive outside closes -reentry/reversion (closed above/below boundary then comes back into range) -breakout retest/hold (price breaks out and deviates from range) 3) simulate a trade taken in both directions (buy and sell) for every snapshot There is more involved, but this is a brief summary of the core behavior involved in the research. I produced the following findings: ------------------------------------------------------------------------------------- What survived across all three periods: CLOSE_ABOVE_UPPER / ACTIVE_RANGE → SHORTTRAIN: +0.321 ATR VALIDATION: +0.628 ATR TEST: +0.233 ATR consistent in terms of direction but my samples are only 14, 14, and 8. What did not remain stable: FIRST_TRADABLE → LONG weakened from +0.192 to +0.051, then became -0.074 ATR. LOWER_WICK → LONG worked in TRAIN/VALIDATION but reversed in TEST. UPPER_WICK → SHORT worked strongly in TRAIN/VALIDATION but reversed in TEST. LOWER_TOUCH changed direction. UPPER_TOUCH → SHORT improved after TRAIN, but the TRAIN mean was negative. ***Most important finding is it shows that most unconditional signals are dependent on structure**** ------------------------------------------------------------------------------------- Most promising hypotheses: CLOSE_ABOVE_UPPER / ACTIVE_RANGE → SHORT Mean: +0.421 ATR Median: +0.553 ATR Win rate: 72.2% This hints that active-range upside breaks often fade. UPPER_WICK_BREAK_CLOSE_INSIDE / ACTIVE_RANGE → SHORT Mean: +0.239 ATR Win rate: 56.9% This is consistent with rejection at the upper boundary. UPPER_TOUCH / ACTIVE_RANGE → SHORT Mean: +0.068 ATR Median: +0.290 ATR Win rate: 58.0% The three results above prove consistency: while a range remains active, activity with its upper boundary historically favors fading downward AKA reversion. ------------------------------------------------------------------------------------- Most of you may already know this, especially by just visually analyzing the charts, but thought I'd share my proof from an algorithmic perspective. submitted by /u/Brilliant_Grade7388 [link] [comments]", "content_hash": "37cb8f32c7d7948e92b74838819d2bfa65fa8a719289e5defd23778b3fc7584c", "category": "Statistical Arbitrage", "tags": ["mean reversion"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "EURUSD 日线 micro range 收盘上破后做空信号三周期方向一致，合并均值 +0.421 ATR、胜率 72.2%", "technical_summary": "讨论一个自建均值回归研究流程：用算法识别 EURUSD 日线 micro range，冻结边界、中点、ATR 等快照，统计价格相对边界行为后双向模拟交易。结论是收盘上破 active range 后做空最稳健，三周期均值分别为 +0.321、+0.628、+0.233 ATR，合并均值 +0.421 ATR，胜率 72.2%。但下影线、上影线、触边等多数信号在测试期方向反转，说明非条件信号依赖市场结构，不能盲目使用。", "key_points": ["EURUSD 日线收盘上破 active range 后做空在三周期方向一致，合并均值 +0.421 ATR、胜率 72.2%，是最稳信号。", "可将该信号加入均值回归候选池；用 ATR 设置止盈止损，先做更长样本、多品种或交叉验证再决定实盘。", "样本仅 14/14/8，下影线、上影线及触边信号在测试期反转，且未计点差滑点，直接实盘风险高。"], "quant_relevance": "因子/alpha 信号；研究工具/工作流提效", "possible_use_case": "可先用 EURUSD 日线构建收盘上破区间做空信号，在 backtrader/vectorbt 中按 ATR 止损回测，并验证扣除点差后的净收益。", "limitations": "这是社区讨论，需用数据验证后才能用于研究结论；样本量极小；部分信号样本外反转；未考虑交易成本与滑点；只覆盖 EURUSD 单一品种与日线周期。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.78, "academic_score": 5.5, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 6.001, "display_title": "人工智能实践讨论", "tldr": "EURUSD 日线 micro range 收盘上破后做空信号三周期方向一致，合并均值 +0.421 ATR、胜率 72.2%", "core_value": "对你的量化工作帮助：把它当作人工智能的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["EURUSD 日线收盘上破 active range 后做空在三周期方向一致，合并均值 +0.421 ATR、胜率 72.2%，是最稳信号。", "可将该信号加入均值回归候选池；用 ATR 设置止盈止损，先做更长样本、多品种或交叉验证再决定实盘。", "样本仅 14/14/8，下影线、上影线及触边信号在测试期反转，且未计点差滑点，直接实盘风险高。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1vqbakf/mean_reversion_strategy_prospects/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "统计套利", "priority_label": "高", "source_type_label": "论坛"}, {"id": "b45954d310b142bfcd02ed5867cd9b974f10cb26a39c5a7fbd4d11ed6efed0ee", "source": "Reddit algotrading", "source_type": "forum", "title": "Am I approaching backtesting correctly", "url": "https://www.reddit.com/r/algotrading/comments/1vpzmzo/am_i_approaching_backtesting_correctly/", "authors": ["/u/PizzaPalace12345"], "published_at": "2026-08-16", "collected_at": "2026-08-16T23:20:53Z", "raw_text": "I'm working on putting some strategies together and backtesting them and I wanted to see if anyone had any comments on if I'm doing so correctly or making any errors I might not be aware of as part of my backtesting. Right now, the strategies I'm trading primarily matter on five-minute candles or one-hour candles or longer time frames. My data set I have is built from both one-minute candles and daily candles that I have a data provider for. I can then construct five-minute candles, hourly candles, or arbitrary time frames from the one-minute candles. The part that I'm making an assumption about is let's say for example my strategy signals that it wants to enter a position after the close of a five minute candle I use the immediately following one minute candle and it's high to find the most pessimistic fill value that this strategy would enter and use that for my back testing. Is that how people typically do their backtesting for fills or is there another way that many people approach it? Could I be missing something here that might be throwing my results off? submitted by /u/PizzaPalace12345 [link] [comments]", "abstract": "I'm working on putting some strategies together and backtesting them and I wanted to see if anyone had any comments on if I'm doing so correctly or making any errors I might not be aware of as part of my backtesting. Right now, the strategies I'm trading primarily matter on five-minute candles or one-hour candles or longer time frames. My data set I have is built from both one-minute candles and daily candles that I have a data provider for. I can then construct five-minute candles, hourly candles, or arbitrary time frames from the one-minute candles. The part that I'm making an assumption about is let's say for example my strategy signals that it wants to enter a position after the close of a five minute candle I use the immediately following one minute candle and it's high to find the most pessimistic fill value that this strategy would enter and use that for my back testing. Is that how people typically do their backtesting for fills or is there another way that many people approach it? Could I be missing something here that might be throwing my results off? submitted by /u/PizzaPalace12345 [link] [comments]", "content_hash": "13c3ed24296b54751d58896389c3a92a8682309a0dfdfcf1c8aeebe15a5d3202", "category": "Backtesting / Research Tools", "tags": ["backtesting"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "回测成交假设讨论：用下一根1分钟K线最高价作保守填充价，避免未来函数但可能高估交易成本", "technical_summary": "讨论围绕回测成交假设展开：策略在5分钟或1小时K线收盘后产生信号，用下一根1分钟K线的最高价作为最保守买入成交价，问这是否是常见做法。常见观点认为，用信号后K线的极值做填充价可以避免前视偏差，但属于最坏情况估计，可能比实际成交更悲观。更稳健的流程是分层测试：用下一根开盘价、按固定滑点bps调整、以及K线极值三个场景交叉验证。主要的回测误差来源是K线聚合时的时间戳对齐、市价单与限价单成交机制差异，以及1分钟K线无法揭示盘口深度和执行延迟。", "key_points": ["用信号后下一根K线的最高/最低价做填充是常用的保守假设，能避免前视偏差，但会系统性低估策略真实表现。", "推荐同时跑下一根开盘价、固定滑点bps、K线极值三档回测，观察收益对成交假设的敏感性。", "K线高低价不代表实际可成交价，未体现盘口深度、跳空缺口和执行延迟，低流动性品种下回测结果容易失真。"], "quant_relevance": "执行 / 交易成本；研究工具 / 工作流提效", "possible_use_case": "在回测框架中增加成交场景参数：开盘价、固定滑点bps、K线极值，作为策略入库前的滑点压力测试；若三档结果差异过大，标记该策略为成交敏感型并降低信号权重。", "limitations": "这是社区讨论，需用自己的逐笔或盘口数据验证后才能用于研究结论；原文没有回测结果和具体数字，无法判断其策略表现；K线极值法忽略订单簿深度、部分成交和延迟，高冲击成本场景下回测结果可能严重失真。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.78, "academic_score": 5.41, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 5.988, "display_title": "回测、测试实践讨论", "tldr": "回测成交假设讨论：用下一根1分钟K线最高价作保守填充价，避免未来函数但可能高估交易成本", "core_value": "对你的量化工作帮助：把它当作回测、测试的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["用信号后下一根K线的最高/最低价做填充是常用的保守假设，能避免前视偏差，但会系统性低估策略真实表现。", "推荐同时跑下一根开盘价、固定滑点bps、K线极值三档回测，观察收益对成交假设的敏感性。", "K线高低价不代表实际可成交价，未体现盘口深度、跳空缺口和执行延迟，低流动性品种下回测结果容易失真。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1vpzmzo/am_i_approaching_backtesting_correctly/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "回测 / 研究工具", "priority_label": "高", "source_type_label": "论坛"}, {"id": "f330600311004ac9d56f87428e90a187819e6333971aff478f10877cbacea56d", "source": "Reddit algotrading", "source_type": "forum", "title": "Do Futures make sense at high margin rates?", "url": "https://www.reddit.com/r/algotrading/comments/1vq1fuk/do_futures_make_sense_at_high_margin_rates/", "authors": ["/u/loudsound-org"], "published_at": "2026-08-16", "collected_at": "2026-08-16T23:20:53Z", "raw_text": "I've been backtesting and paper trading an NQ scalping strategy for awhile. I went with IBKR as my broker based on the API and the low fees for API, data and trades. However, IBKR doesn't have discount margin rates on futures, and NQ has skyrocketed to well over 40k per contract. This means tying up quite a bit of money in either cash or t-bills (best I can find as an alternative to at least get some return). No matter how successful my strategy is (or isn't!), that's opportunity cost lost in other investments compared to discount margin. But switching to another broker would be a lot of work, plus potentially higher regular costs. Are others still using brokers such as IBKR for futures? submitted by /u/loudsound-org [link] [comments]", "abstract": "I've been backtesting and paper trading an NQ scalping strategy for awhile. I went with IBKR as my broker based on the API and the low fees for API, data and trades. However, IBKR doesn't have discount margin rates on futures, and NQ has skyrocketed to well over 40k per contract. This means tying up quite a bit of money in either cash or t-bills (best I can find as an alternative to at least get some return). No matter how successful my strategy is (or isn't!), that's opportunity cost lost in other investments compared to discount margin. But switching to another broker would be a lot of work, plus potentially higher regular costs. Are others still using brokers such as IBKR for futures? submitted by /u/loudsound-org [link] [comments]", "content_hash": "23200dfa4f6c243f578a20a8e0085a9f4f3a85bbb0aefba79a701174858a7a0e", "category": "Backtesting / Research Tools", "tags": ["backtesting"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "高保证金率下 NQ 期货每张占用超 4 万美元，IBKR 无折扣保证金引发策略资金效率质疑", "technical_summary": "发帖人回测和模拟交易 NQ 日内剥头皮策略，使用 IBKR 看重 API 和低手续费，但 IBKR 对期货不提供折扣保证金，NQ 每张保证金超过 4 万美元，导致大量资金被占用在现金或国债上。核心矛盾是：策略收益即使为正，也要扣除这部分资金在别处可赚的无风险收益，形成机会成本。社区讨论普遍把保证金占用和融资成本纳入期货策略成本模型，强调不能只比较佣金和 API 质量。切换券商虽然可能获得折扣保证金，但会增加迁移工作量和潜在更高的常规费用，需要量化比较总成本。", "key_points": ["核心观点：保证金率决定期货策略资金效率，NQ 每张超 4 万美元的资金占用机会成本可能侵蚀低佣金优势。", "可操作建议：用 T-bill 收益率折算保证金占用成本，对比 IBKR 与折扣保证金券商的总成本再决定是否迁移。", "风险提示：IBKR 无期货保证金折扣，但折扣券商可能佣金和 API 成本更高；保证金率随市场波动，需动态压力测试。"], "quant_relevance": "执行 / 交易成本；组合构建 / 权重优化", "possible_use_case": "在回测中按 NQ 每张 4 万美元初始保证金和当前国债收益率计算每日资金机会成本，比较 IBKR 与折扣保证金券商的净收益，并据此调整策略资金规模。", "limitations": "这是单个用户的社区提问，缺乏完整评论和实证数据；未提供 IBKR 与其他券商的具体费率对比，保证金率会随市场波动，实际机会成本需按自身资金成本和交易频率重新计算。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.78, "academic_score": 4.93, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 5.916, "display_title": "回测、券商实践讨论", "tldr": "高保证金率下 NQ 期货每张占用超 4 万美元，IBKR 无折扣保证金引发策略资金效率质疑", "core_value": "对你的量化工作帮助：把它当作回测、券商的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["核心观点：保证金率决定期货策略资金效率，NQ 每张超 4 万美元的资金占用机会成本可能侵蚀低佣金优势。", "可操作建议：用 T-bill 收益率折算保证金占用成本，对比 IBKR 与折扣保证金券商的总成本再决定是否迁移。", "风险提示：IBKR 无期货保证金折扣，但折扣券商可能佣金和 接口 成本更高；保证金率随市场波动，需动态压力测试。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1vq1fuk/do_futures_make_sense_at_high_margin_rates/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "回测 / 研究工具", "priority_label": "高", "source_type_label": "论坛"}, {"id": "949bec54f9f51ca21e35c03f728dc300fae0171a3f9188ce98a252ddb4191afb", "source": "Reddit algotrading", "source_type": "forum", "title": "Stock sentiment API with insider trading API", "url": "https://www.reddit.com/r/algotrading/comments/1vpx6r0/stock_sentiment_api_with_insider_trading_api/", "authors": ["/u/Routine_Bat6675"], "published_at": "2026-08-16", "collected_at": "2026-08-16T23:20:53Z", "raw_text": "Hello. i am using Sentimentick for stock sentiment API with IBKR Gateway for execution of trades, it works really good for me but i am looking to add also insider trading API for more coverage. is there any recommended Insider trading API you suggest? thanks! submitted by /u/Routine_Bat6675 [link] [comments]", "abstract": "Hello. i am using Sentimentick for stock sentiment API with IBKR Gateway for execution of trades, it works really good for me but i am looking to add also insider trading API for more coverage. is there any recommended Insider trading API you suggest? thanks! submitted by /u/Routine_Bat6675 [link] [comments]", "content_hash": "9cbf509b9cfda542ceef928fffd73086676d78778ae20cac6ed24229db798eaf", "category": "Execution / Transaction Cost", "tags": ["execution"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "Reddit 讨论股票情绪 API 搭配 insider trading API，增加内部人交易数据覆盖以补充情绪信号", "technical_summary": "社区讨论围绕如何扩展量化交易系统的数据覆盖：用户当前使用 Sentimentick 股票情绪 API 产生交易信号，并通过 IBKR Gateway 自动执行，效果良好；现在希望加入 insider trading API，以覆盖内部人交易行为（如公司高管买卖股票），从而获得更全面的市场情报。讨论中尚无明确推荐的具体 API，但社区普遍认为内部人交易数据是有价值的补充因子，尤其在事件驱动和均值回归策略中可作为情绪信号的确认或反向指标。", "key_points": ["社区共识：内部人交易数据是情绪信号的有效补充，可用于事件驱动策略或交叉验证", "可操作建议：在 Reddit 搜索时考虑 SEC Form 4 数据源或 Polygon、Quiver Quantitative、Benzinga 等 API，并与 Sentimentick 输出做信号融合", "风险：Reddit 帖子缺乏严格回测和延迟、成本说明，候选 API 的覆盖度、更新延迟、数据清洗质量可能显著影响信号有效性"], "quant_relevance": "因子 / alpha 信号：内部人交易数据可叠加情绪信号作为独立 alpha 来源或交叉验证信号", "possible_use_case": "先小规模对比 3-5 个 insider trading API（如 Quiver Quantitative、SEC EDGAR 免费数据）的历史覆盖和延迟，再在 IBKR paper trading 上测试情绪+内幕交易的叠加信号", "limitations": "这是社区讨论，需用数据验证后才能用于研究结论；帖子未提供回测、样本、成本和具体实验；需警惕社交媒体上的 API 推荐可能存在广告导向", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.78, "academic_score": 4.386, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 5.834, "display_title": "交易执行实践讨论", "tldr": "Reddit 讨论股票情绪 API 搭配 insider trading API，增加内部人交易数据覆盖以补充情绪信号", "core_value": "对你的量化工作帮助：把它当作交易执行的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["社区共识：内部人交易数据是情绪信号的有效补充，可用于事件驱动策略或交叉验证", "可操作建议：在 Reddit 搜索时考虑 SEC Form 4 数据源或 Polygon、Quiver Quantitative、Benzinga 等 接口，并与 Sentimentick 输出做信号融合", "风险：Reddit 帖子缺乏严格回测和延迟、成本说明，候选 接口 的覆盖度、更新延迟、数据清洗质量可能显著影响信号有效性"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1vpx6r0/stock_sentiment_api_with_insider_trading_api/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "交易执行 / 交易成本", "priority_label": "高", "source_type_label": "论坛"}, {"id": "0e63270a512d445de484d9e5ca005e067a3bc794ed48c40694040fa3a1b066ef", "source": "Reddit algotrading", "source_type": "forum", "title": "my problem was never the entry, it was the 40 minutes after it", "url": "https://www.reddit.com/r/algotrading/comments/1vq794i/my_problem_was_never_the_entry_it_was_the_40/", "authors": ["/u/david19790"], "published_at": "2026-08-16", "collected_at": "2026-08-16T23:20:53Z", "raw_text": "took me way too long to see this one. my entries were fine. the signal itself was roughly break even to slightly positive over a few hundred trades. what actually drained the account was everything i did once i was already in. move the stop to breakeven because it ticked against me. take half off because im up and dont want to give it back. cut it because it went sideways for 20 min. add because now im sure. flatten because theres news in ten minutes. every single one of those felt like the smart adult decision in the moment. so i went back through my journal and screenshots and tried to actually separate the two. entry pnl vs post entry management pnl. the entries were basically flat. the management was the hole. what fixed it wasnt discipline, i spent years on discipline. it was defining all three levels before the order goes in. entry, stop, target. if i cant write down all three im not taking the trade. eventually i just coded it so the stop and target go out attached to the entry and i cant nudge them without opening the file and editing it, which is enough friction that i dont. feels rigid, thats sort of the point. the trade can only finish two ways now and both of them were already set when i clicked. downside is the losers look identical to the winners while theyre open, no drama either way, and that took me longer to get used to than i expected. unexpected side effect, i stopped sitting at the screen. not because im zen about it. because if im in front of an open position long enough ill find a reason to touch it. anyone actually measured this split on their own trades? curious how many people here are losing on management rather than on entries. submitted by /u/david19790 [link] [comments]", "abstract": "took me way too long to see this one. my entries were fine. the signal itself was roughly break even to slightly positive over a few hundred trades. what actually drained the account was everything i did once i was already in. move the stop to breakeven because it ticked against me. take half off because im up and dont want to give it back. cut it because it went sideways for 20 min. add because now im sure. flatten because theres news in ten minutes. every single one of those felt like the smart adult decision in the moment. so i went back through my journal and screenshots and tried to actually separate the two. entry pnl vs post entry management pnl. the entries were basically flat. the management was the hole. what fixed it wasnt discipline, i spent years on discipline. it was defining all three levels before the order goes in. entry, stop, target. if i cant write down all three im not taking the trade. eventually i just coded it so the stop and target go out attached to the entry and i cant nudge them without opening the file and editing it, which is enough friction that i dont. feels rigid, thats sort of the point. the trade can only finish two ways now and both of them were already set when i clicked. downside is the losers look identical to the winners while theyre open, no drama either way, and that took me longer to get used to than i expected. unexpected side effect, i stopped sitting at the screen. not because im zen about it. because if im in front of an open position long enough ill find a reason to touch it. anyone actually measured this split on their own trades? curious how many people here are losing on management rather than on entries. submitted by /u/david19790 [link] [comments]", "content_hash": "e50f2e1066e4774b06665f66935e199f7202caac7df061fd37b20e8b208ef2ce", "category": "Alpha / Factor Research", "tags": ["signal"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "Reddit 交易者复盘发现：几百笔交易中入场信号盈亏持平，真正亏钱的是持仓后 40 分钟内的手动干预", "technical_summary": "社区交易者复盘数百笔交易，将盈亏拆分为'入场贡献'与'持仓管理贡献'，发现入场信号本身约盈亏平衡甚至略正，真正拖垮账户的是一笔交易建仓后约 40 分钟内的临时决定：回调就把止损移到保本、浮盈就减半、横盘 20 分钟就砍仓、确认信号就加仓、新闻前清仓。修复方法不是靠多年练出来的纪律，而是在下单前强制写下入场价、止损价、目标价三者，三者缺一就不交易；随后把止损和目标随入场单一起挂出，想改动必须打开文件编辑，用摩擦阻止随意干预。副作用是交易者不再盯盘，因为只要看着持仓就能找到理由去动它。", "key_points": ["社区核心经验：数百笔交易中，入场信号本身约盈亏平衡甚至略正，真正拖垮账户的是持仓后 40 分钟内的止损上移、减仓、横盘砍仓等手动干预。", "可直接落地：下单前必须同时定义入场、止损、目标三个价位，三者缺一就不交易；代码实现为'止损和目标随入场单同时发出'，修改需打开文件编辑，用摩擦阻止临时改动。", "局限警示：这是单一交易者的复盘经验，没有账户规模、标的类型、胜率/盈亏比等量化证据；把止损和目标锁死可能增加震荡市过早出场或错过顺势加仓的机会成本。"], "quant_relevance": "执行 / 交易成本", "possible_use_case": "可将其作为交易执行模块的规则参考：实盘下单时强制附带止损/止盈委托，或回测中对比'固定出场规则'与'人工干预式出场'的 PnL 差异。", "limitations": "这是社区讨论，非严格实验结论，数据来自单一交易者复盘，缺乏账户曲线、交易标的、胜率和盈亏比；'几百笔'的统计显著性未知，需自行用交易日志验证后再用于研究结论。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.2, "novelty_score": 9.78, "academic_score": 5.5, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 5.791, "display_title": "阿尔法 / 因子研究实践讨论", "tldr": "Reddit 交易者复盘发现：几百笔交易中入场信号盈亏持平，真正亏钱的是持仓后 40 分钟内的手动干预", "core_value": "对你的量化工作帮助：把它当作阿尔法 / 因子研究的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["社区核心经验：数百笔交易中，入场信号本身约盈亏平衡甚至略正，真正拖垮账户的是持仓后 40 分钟内的止损上移、减仓、横盘砍仓等手动干预。", "可直接落地：下单前必须同时定义入场、止损、目标三个价位，三者缺一就不交易；代码实现为'止损和目标随入场单同时发出'，修改需打开文件编辑，用摩擦阻止临时改动。", "局限警示：这是单一交易者的复盘经验，没有账户规模、标的类型、胜率/盈亏比等量化证据；把止损和目标锁死可能增加震荡市过早出场或错过顺势加仓的机会成本。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1vq794i/my_problem_was_never_the_entry_it_was_the_40/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "论坛"}, {"id": "c043515b2ca8908f7ee07d94c91820b9bb25e356805e2671ceaa72c517a500b8", "source": "CoinDesk", "source_type": "crypto_news", "title": "The 'long bitcoin, short the bankers' era is officially over as TradFi giants embrace digital assets", "url": "https://www.coindesk.com/business/2026/08/13/the-long-bitcoin-short-the-bankers-era-is-officially-over-as-tradfi-giants-embrace-digital-assets", "authors": [], "published_at": "2026-08-16", "collected_at": "2026-08-16T23:20:54Z", "raw_text": "Financial firms are partnering with specialists to build infrastructure, blurring lines between traditional and decentralized finance into a unified sector.", "abstract": "Financial firms are partnering with specialists to build infrastructure, blurring lines between traditional and decentralized finance into a unified sector.", "content_hash": "f10444fc7c43f83646da731328a9971fadfdedb68fc3b072a75b678eed0dc47f", "category": "Crypto Quant", "tags": ["bitcoin"], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "CoinDesk 评论：TradFi 巨头与加密服务商共建基础设施，「做多比特币、做空银行家」时代宣告终结", "technical_summary": "这篇评论的核心论点是传统金融巨头不再将加密资产视为对立面，而是通过和专业加密基础设施服务商合作，切入托管、交易、结算等环节，最终使传统金融与去中心化金融融合为单一行业。对量化研究的意义在于：机构资金通道拓宽会改变加密市场的参与者结构和微观结构——流动性分布、波动特征和价格效率都可能发生中期变化。原文没有给出任何机构名称、资金规模或具体时间表，属于方向性观点而非数据驱动分析。", "key_points": ["核心事件：CoinDesk 宣告「做多 BTC、做空银行家」交易叙事终结，TradFi 与专业加密服务商正在融合", "对量化交易者的参考：可将其作为中期机构资金流入趋势的定性信号，关注托管与合规通道落地后的流动性变化", "原文未点名具体机构、未提供资金数据或时间表，观点与实盘资金流不同步，不能直接作为交易依据"], "quant_relevance": "风险建模", "possible_use_case": "作为中长期判断机构资金流入趋势的方向性参考，用于调整加密策略的持仓周期假设和流动性成本参数", "limitations": "原文缺乏量化证据、未披露具体机构与资金规模，摘要基于定性描述；CoinDesk 观点评论可能存在叙事偏差，需用链上巨鲸持仓和 CEX 机构托管数据独立验证", "read_priority": "低", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.78, "academic_score": 5.695, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.48, "display_title": "加密资产量化加密市场新闻情报", "tldr": "CoinDesk 评论：TradFi 巨头与加密服务商共建基础设施，「做多比特币、做空银行家」时代宣告终结", "core_value": "对你的量化工作帮助：围绕加密资产量化补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["核心事件：CoinDesk 宣告「做多 BTC、做空银行家」交易叙事终结，TradFi 与专业加密服务商正在融合", "对量化交易者的参考：可将其作为中期机构资金流入趋势的定性信号，关注托管与合规通道落地后的流动性变化", "原文未点名具体机构、未提供资金数据或时间表，观点与实盘资金流不同步，不能直接作为交易依据"], "reference_url": "https://www.coindesk.com/business/2026/08/13/the-long-bitcoin-short-the-bankers-era-is-officially-over-as-tradfi-giants-embrace-digital-assets", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "低", "source_type_label": "加密市场新闻"}, {"id": "f0d471fdf45f35362de8699802e3613cbdad6c4d986278a668454a361ac7d9c6", "source": "The Block", "source_type": "crypto_news", "title": "Wallet provider SafePal says data breach exposed personal info of nearly 40,000 customers", "url": "https://www.theblock.co/news/business/2026-08-16-wallet-provider-safepal-says-data-breach-exposed-personal-info-of-nearly-40000-customers-411934", "authors": [], "published_at": "2026-08-16", "collected_at": "2026-08-16T23:20:54Z", "raw_text": "SafePal said it found the root cause of the breach recently, though customers had posted online about being targeted by phishing attempts as early as July.", "abstract": "SafePal said it found the root cause of the breach recently, though customers had posted online about being targeted by phishing attempts as early as July.", "content_hash": "2cdcb91842a487effcdeebf4ee5a3cbcb7bc95d271e8b7f2a5268ae54bcf635b", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://www.theblock.co/rss.xml"}, "one_line_summary": "SafePal 钱包数据泄露暴露 4 万客户信息，短期或增添加密钱包安全相关的交易情绪风险", "technical_summary": "加密钱包提供商 SafePal 通报数据泄露，影响近 40,000 名客户，个人信息被暴露，公司表示最近确定了根本原因，而用户早在 7 月就报告过钓鱼攻击。事件引发对钱包安全性的关注，可能影响用户信任和短期相关代币表现。", "key_points": ["SafePal 数据泄露影响约 4 万名用户，公司近期才定位根本原因，但 7 月已有钓鱼攻击报告。", "可监控 SafePal 代币及竞品钱包代币的交易量和社交媒体热度，将安全事件纳入加密舆情因子。", "泄露具体范围和资金损失未知，公司单方声明缺乏独立取证，对价格影响需用事件研究验证。"], "quant_relevance": "风险建模", "possible_use_case": "可作为加密舆情事件因子：在数据泄露公告前后，观察 SafePal 代币及同类钱包代币的短期收益和波动率，验证是否存在事件驱动 alpha。", "limitations": "声明来自公司单方，缺乏第三方审计；泄露数据类型和资金损失未明确；用户规模相对加密市场较小，对整体市场传导有限。", "read_priority": "中", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 5.694, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.31, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "SafePal 钱包数据泄露暴露 4 万客户信息，短期或增添加密钱包安全相关的交易情绪风险", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["SafePal 数据泄露影响约 4 万名用户，公司近期才定位根本原因，但 7 月已有钓鱼攻击报告。", "可监控 SafePal 代币及竞品钱包代币的交易量和社交媒体热度，将安全事件纳入加密舆情因子。", "泄露具体范围和资金损失未知，公司单方声明缺乏独立取证，对价格影响需用事件研究验证。"], "reference_url": "https://www.theblock.co/news/business/2026-08-16-wallet-provider-safepal-says-data-breach-exposed-personal-info-of-nearly-40000-customers-411934", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "中", "source_type_label": "加密市场新闻"}, {"id": "fcf4fd848a9396598f3b1a26ff807c2270c7938cad758f083e31fc65033f1c71", "source": "The Block", "source_type": "crypto_news", "title": "Hackers exploited macOS Screen Sharing flaw to install Monero miners, Dutch cyber agency says", "url": "https://www.theblock.co/news/defi/2026-08-16-hackers-exploited-macos-screen-sharing-flaw-to-install-monero-miners-dutch-cyber-agency-says-411932", "authors": [], "published_at": "2026-08-16", "collected_at": "2026-08-16T23:20:54Z", "raw_text": "U.S. officials rated the severity of the vulnerability a critical 9.8/10 on the CVSS scale, and experts are warning users to update their devices.", "abstract": "U.S. officials rated the severity of the vulnerability a critical 9.8/10 on the CVSS scale, and experts are warning users to update their devices.", "content_hash": "0c077ad99b99577a5817b8bb846f961a6e63e519091b0ad8090551bac750c798", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://www.theblock.co/rss.xml"}, "one_line_summary": "macOS 屏幕共享漏洞被用于安装门罗币矿工（CVSS 9.8/10），量化团队需评估终端安全暴露面", "technical_summary": "荷兰网络机构披露，黑客利用 macOS 屏幕共享（Screen Sharing）漏洞远程安装门罗币矿工。美国官员将该漏洞严重性评定为 CVSS 9.8/10（严重）。矿工程序会占用 CPU，拖慢受感染设备的正常任务。专家建议用户立即安装安全更新，避免暴露屏幕共享服务。", "key_points": ["荷兰网络机构披露黑客利用 macOS Screen Sharing 漏洞安装门罗币矿工，美国 CVSS 评分 9.8/10 严重。", "量化团队若有 macOS 机器或开启屏幕共享，应立即打补丁，并监控 CPU 高占用排查挖矿木马。", "报道未披露漏洞利用细节、影响范围和受害者数量，信息来自单一媒体，需等 Apple 官方公告验证。"], "quant_relevance": "风险建模：终端被植入挖矿程序会消耗计算资源并影响交易系统稳定性；数据工程：策略代码和数据可能因入侵而泄露。", "possible_use_case": "量化团队可立即核查所有 macOS 设备的 Screen Sharing 服务是否暴露，并部署 CPU 占用监控以识别门罗币挖矿木马；后续可纳入终端安全基线。", "limitations": "该新闻报道信息有限，没有披露漏洞利用细节、影响范围和实际受害者数量；CVSS 评分来自美国官员但未指定具体机构；来源为单一媒体，需以 Apple 官方安全公告为准；内容不涉及市场数据或量化策略。", "read_priority": "中", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 5.683, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.308, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "macOS 屏幕共享漏洞被用于安装门罗币矿工（CVSS 9.8/10），量化团队需评估终端安全暴露面", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["荷兰网络机构披露黑客利用 macOS Screen Sharing 漏洞安装门罗币矿工，美国 CVSS 评分 9.8/10 严重。", "量化团队若有 macOS 机器或开启屏幕共享，应立即打补丁，并监控 CPU 高占用排查挖矿木马。", "报道未披露漏洞利用细节、影响范围和受害者数量，信息来自单一媒体，需等 Apple 官方公告验证。"], "reference_url": "https://www.theblock.co/news/defi/2026-08-16-hackers-exploited-macos-screen-sharing-flaw-to-install-monero-miners-dutch-cyber-agency-says-411932", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "中", "source_type_label": "加密市场新闻"}, {"id": "558b90434878532c4ea3c89e81ee0b513ee43abe04f549264ba11267abf3d877", "source": "The Block", "source_type": "crypto_news", "title": "Prediction market Novig sues Wisconsin AG in latest spat over sports contracts", "url": "https://www.theblock.co/news/business/2026-08-16-prediction-market-novig-sues-wisconsin-ag-in-latest-spat-over-sports-contracts-411938", "authors": [], "published_at": "2026-08-16", "collected_at": "2026-08-16T23:20:54Z", "raw_text": "Novig, which recently announced a partnership with the New York Mets, has sued officials in five states including Wisconsin since Aug. 4.", "abstract": "Novig, which recently announced a partnership with the New York Mets, has sued officials in five states including Wisconsin since Aug. 4.", "content_hash": "c0cfd89aee35154e9f4ef23cbbd2febfe3cc0f2f3352200ae19fdc604441e087", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://www.theblock.co/rss.xml"}, "one_line_summary": "Novig 因体育合约起诉威斯康星等五州监管方，凸显预测市场法律风险影响量化参与", "technical_summary": "预测市场平台 Novig 宣布与纽约大都会（New York Mets）建立合作伙伴关系。自 8 月 4 日起，该公司已在包括威斯康星在内的五个州对监管官员提起诉讼。核心争执围绕体育合约的合法性，体现预测市场在州级体育博彩监管下的合规风险。对量化交易者而言，诉讼直接威胁相关预测市场合约的可交易性和流动性，需纳入风险建模。", "key_points": ["预测市场 Novig 自 8 月 4 日已起诉威斯康星等五州官员，并与纽约大都会达成合作，体育合约监管冲突升级。", "量化交易者可关注诉讼对预测市场合约上架和流动性的影响，作为体育事件合约的监管风险预警。", "仅为单一平台诉讼信息，缺乏对全市场影响和数据支持，监管结果不确定，信息来源单一。"], "quant_relevance": "风险建模", "possible_use_case": "可作为预测市场（如 Polymarket、Novig）体育衍生品交易的监管风险敏感指标：当新增州级诉讼时，动态降低相关体育合约敞口或暂停对冲策略。", "limitations": "这是加密媒体报道的单一事件，缺乏诉讼细节、市场影响量化和跨平台对比。体育合约监管结果不确定，需跟踪法庭裁定和州监管动态。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 5.671, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.307, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "Novig 因体育合约起诉威斯康星等五州监管方，凸显预测市场法律风险影响量化参与", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["预测市场 Novig 自 8 月 4 日已起诉威斯康星等五州官员，并与纽约大都会达成合作，体育合约监管冲突升级。", "量化交易者可关注诉讼对预测市场合约上架和流动性的影响，作为体育事件合约的监管风险预警。", "仅为单一平台诉讼信息，缺乏对全市场影响和数据支持，监管结果不确定，信息来源单一。"], "reference_url": "https://www.theblock.co/news/business/2026-08-16-prediction-market-novig-sues-wisconsin-ag-in-latest-spat-over-sports-contracts-411938", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "c32802399b44fac7e0dc55035cb8d67190b520866d781141b63c073cbbe1c51b", "source": "CoinDesk", "source_type": "crypto_news", "title": "The stablecoin yield clash that won't go away has banks, crypto battling over tradition", "url": "https://www.coindesk.com/news-analysis/2026/08/14/the-stablecoin-yield-clash-that-won-t-go-away-has-banks-crypto-battling-over-tradition", "authors": [], "published_at": "2026-08-16", "collected_at": "2026-08-16T23:20:54Z", "raw_text": "The bankers want people kept in lower-yield deposits for the good of the financial system as it's existed for generations, and their argument is gaining ground.", "abstract": "The bankers want people kept in lower-yield deposits for the good of the financial system as it's existed for generations, and their argument is gaining ground.", "content_hash": "3524214b23dbdd85fe889b6a62103475a8a4c075fa6e86b51445abcee57b3fb5", "category": "Crypto Quant", "tags": ["crypto"], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "银行与加密行业围绕稳定币收益的监管冲突升温，银行主张低收益存款正渐占上风，可能压缩稳定币生息空间", "technical_summary": "这是围绕稳定币收益与银行存款争夺资金的监管叙事冲突。银行认为高收益稳定币产品会吸走传统存款，破坏金融体系长期结构，因此主张限制或引导用户留在低收益存款中。报道指出银行方的论点正在获得更多政策层面支持，但原文未提供具体法案、数据或时间表。对加密量化而言，若该趋势落地，稳定币供给、DeFi 收益率和链上流动性都可能承压。", "key_points": ["核心事件：银行与加密行业就稳定币收益展开争论，银行主张低收益存款以维护传统体系，且立场正在增强；原文未给出具体数字。", "对量化交易者直接影响：若监管收紧稳定币收益产品，稳定币发行规模与DeFi协议锁仓量可能下降，影响加密市场流动性和资金费率。", "风险点：报道仅为一篇短讯，缺乏具体监管草案、支持者名单或量化证据，不能据此判断实际政策概率。"], "quant_relevance": "风险建模、数据工程", "possible_use_case": "可跟踪稳定币发行商储备收益率和主要借贷协议利率，作为加密市场流动性收紧或监管冲击的早期预警信号。", "limitations": "原文无具体数据，缺少法案细节与时间表；银行观点“gaining ground”缺乏实证支撑；来源为单一媒体，需要结合后续监管文件验证。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.2, "novelty_score": 9.78, "academic_score": 5.7, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.271, "display_title": "加密资产加密市场新闻情报", "tldr": "银行与加密行业围绕稳定币收益的监管冲突升温，银行主张低收益存款正渐占上风，可能压缩稳定币生息空间", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["核心事件：银行与加密行业就稳定币收益展开争论，银行主张低收益存款以维护传统体系，且立场正在增强；原文未给出具体数字。", "对量化交易者直接影响：若监管收紧稳定币收益产品，稳定币发行规模与DeFi协议锁仓量可能下降，影响加密市场流动性和资金费率。", "风险点：报道仅为一篇短讯，缺乏具体监管草案、支持者名单或量化证据，不能据此判断实际政策概率。"], "reference_url": "https://www.coindesk.com/news-analysis/2026/08/14/the-stablecoin-yield-clash-that-won-t-go-away-has-banks-crypto-battling-over-tradition", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}], "source_stats": {"Quant StackExchange": 1, "Reddit algotrading": 5, "CoinDesk": 2, "The Block": 3}, "category_counts": {"Portfolio Construction": 1, "Statistical Arbitrage": 1, "Backtesting / Research Tools": 2, "Execution / Transaction Cost": 1, "Alpha / Factor Research": 4, "Crypto Quant": 2}, "section_counts": {"deep_learning_quant": 1, "ai_quant_tools": 5, "daily_news": 5}, "sections": [{"key": "deep_learning_quant", "label": "深度学习量化未来", "description": "技术主线：深度学习、强化学习、Transformer、图神经网络、表征学习、订单簿预测、金融时间序列大模型等在量化里的应用。"}, {"key": "ai_quant_tools", "label": "AI 量化工具", "description": "工具主线：能提升量化研究效率的 AI 工具、代码仓库、研究自动化、智能体、回测/数据工程工具和可接入团队工作流的基础设施。"}, {"key": "daily_news", "label": "Crypto 市场每日 Top 5", "description": "加密市场新闻主线：来自 CoinDesk、CoinTelegraph、The Block、Decrypt、Blockworks 等主流媒体当日最重要的 Crypto 市场报道。"}], "category_labels": {"Alpha / Factor Research": "阿尔法 / 因子研究", "Statistical Arbitrage": "统计套利", "Portfolio Construction": "组合构建", "Risk Management": "风险管理", "Options / Volatility": "期权 / 波动率", "Market Microstructure": "市场微观结构", "Execution / Transaction Cost": "交易执行 / 交易成本", "Machine Learning for Finance": "金融机器学习", "LLM / Agents for Quant": "量化大模型 / 智能体", "Crypto Quant": "加密资产量化", "Data Engineering": "数据工程", "Backtesting / Research Tools": "回测 / 研究工具", "Industry / Career": "行业 / 职业 / 合规", "Unclassified": "未分类"}, "priority_labels": {"High": "高", "Medium": "中", "Low": "低", "高": "高", "中": "中", "低": "低"}, "source_type_labels": {"paper": "论文", "forum": "论坛", "github": "代码仓库", "blog": "博客", "news": "新闻", "social": "社交媒体", "zhihu": "知乎", "x": "X", "quantml": "QuantML", "crypto_news": "加密市场新闻"}, "report_config": {"max_items_per_category": 5, "max_total_items": 60, "executive_brief_items": 5}}</script>
+  <script>
+    const payload = JSON.parse(document.getElementById('dashboard-data').textContent);
+    const items = payload.items || [];
+    const categoryLabels = payload.category_labels || {};
+    const priorityLabels = payload.priority_labels || {};
+    const sourceTypeLabels = payload.source_type_labels || {};
+    const state = {
+      query: '',
+      section: 'All',
+      category: 'All',
+      sort: 'score',
+      activeId: items[0]?.id || null,
+    };
+
+    const priorityRank = { High: 3, Medium: 2, Low: 1, '高': 3, '中': 2, '低': 1 };
+    const $ = (id) => document.getElementById(id);
+
+    // --- Feedback ---
+    const _feedbackStore = JSON.parse(localStorage.getItem('quant-feedback') || '{}');
+    function getFeedback(id) { return _feedbackStore[id] || 0; }
+    function setFeedback(id, signal) {
+      if (_feedbackStore[id] === signal) { delete _feedbackStore[id]; signal = 0; }
+      else { _feedbackStore[id] = signal; }
+      localStorage.setItem('quant-feedback', JSON.stringify(_feedbackStore));
+      fetch('http://localhost:8080/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, signal }),
+      }).catch(() => {});
+    }
+
+    function init() {
+      $('report-date').textContent = payload.report_date + ' - 主力源：arXiv / 知乎 / QuantML / 大型论坛 - 生成时间 ' + payload.generated_at;
+      $('metric-items').textContent = items.length;
+      $('metric-categories').textContent = new Set(items.map((item) => item.category)).size;
+      $('metric-high').textContent = items.filter((item) => priorityLabel(item.read_priority) === '高').length;
+      $('metric-avg').textContent = averageScore(items).toFixed(1);
+
+      buildSectionControls();
+      buildCategoryControls();
+      buildSourceList();
+      bindControls();
+      render();
+    }
+
+    function bindControls() {
+      $('search').addEventListener('input', (event) => {
+        state.query = event.target.value.trim().toLowerCase();
+        render();
+      });
+      $('category-select').addEventListener('change', (event) => {
+        state.category = event.target.value;
+        render();
+      });
+      $('section-select').addEventListener('change', (event) => {
+        state.section = event.target.value;
+        render();
+      });
+      $('sort-select').addEventListener('change', (event) => {
+        state.sort = event.target.value;
+        render();
+      });
+    }
+
+    function buildCategoryControls() {
+      const counts = countBy(items, 'category');
+      const categories = Object.keys(counts).sort();
+      const select = $('category-select');
+      select.innerHTML = option('All', `全部细分标签 (${items.length})`) +
+        categories.map((category) => option(category, `${categoryLabel(category)} (${counts[category]})`)).join('');
+
+      const list = $('category-list');
+      list.innerHTML = categoryButton('All', items.length) +
+        categories.map((category) => categoryButton(category, counts[category])).join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.category = button.dataset.category;
+          select.value = state.category;
+          if (state.category === 'All') {
+            state.section = 'All';
+            $('section-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSectionControls() {
+      const counts = payload.section_counts || {};
+      const sections = payload.sections || [];
+      const select = $('section-select');
+      select.innerHTML = option('All', `全部主线 (${items.length})`) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => option(section.key, `${section.label} (${counts[section.key]})`))
+          .join('');
+
+      const list = $('section-list');
+      list.innerHTML = sectionButton('All', '全部', items.length) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => sectionButton(section.key, section.label, counts[section.key]))
+          .join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.section = button.dataset.section;
+          select.value = state.section;
+          if (state.section === 'All') {
+            state.category = 'All';
+            $('category-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSourceList() {
+      const stats = payload.source_stats || {};
+      const entries = Object.entries(stats)
+        .filter(([source]) => !source.startsWith('fetched:'))
+        .sort((a, b) => b[1] - a[1]);
+      $('source-list').innerHTML = entries.length
+        ? entries.map(([source, count]) => `<li><span>${escapeHtml(source)}</span><b>${count}</b></li>`).join('')
+        : '<li><span>暂无来源统计</span><b>0</b></li>';
+    }
+
+    function render() {
+      let visible = items.filter(matchesFilters);
+      visible = sortItems(visible);
+      if (!visible.some((item) => item.id === state.activeId)) {
+        state.activeId = visible[0]?.id || null;
+      }
+
+      $('feed-title').textContent = feedTitle();
+      $('result-count').textContent = `展示 ${visible.length} 条 - 两条主线每条最多 ${payload.report_config.max_items_per_category} 条`;
+      renderSectionActive();
+      renderCategoryActive();
+      renderItems(visible);
+      renderDetail(visible.find((item) => item.id === state.activeId) || visible[0]);
+    }
+
+    function matchesFilters(item) {
+      const sectionMatch = state.section === 'All' || (item.report_sections || []).includes(state.section);
+      if (!sectionMatch) return false;
+      const categoryMatch = state.category === 'All' || item.category === state.category;
+      if (!categoryMatch) return false;
+      if (!state.query) return true;
+      const haystack = [
+        item.title,
+        item.display_title,
+        item.source,
+        item.source_type,
+        item.category,
+        categoryLabel(item.category),
+        sectionLabel(item.report_sections?.[0]),
+        sourceTypeLabel(item.source_type),
+        priorityLabel(item.read_priority),
+        item.one_line_summary,
+        item.technical_summary,
+        item.quant_relevance,
+        item.possible_use_case,
+        item.tldr,
+        item.core_value,
+        ...(item.key_points_list || []),
+        item.reference_url,
+      ].join(' ').toLowerCase();
+      return haystack.includes(state.query);
+    }
+
+    function sortItems(list) {
+      return [...list].sort((a, b) => {
+        if (state.sort === 'priority') {
+          return (priorityRank[b.read_priority] || 0) - (priorityRank[a.read_priority] || 0)
+            || b.final_score - a.final_score;
+        }
+        if (state.sort === 'source') {
+          return a.source.localeCompare(b.source) || b.final_score - a.final_score;
+        }
+        return b.final_score - a.final_score;
+      });
+    }
+
+    function renderCategoryActive() {
+      document.querySelectorAll('.category-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.category === state.category);
+      });
+    }
+
+    function renderSectionActive() {
+      document.querySelectorAll('.section-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.section === state.section);
+      });
+    }
+
+    function itemCard(item) {
+      const sec = item.report_sections?.[0] || 'other';
+      const sig = getFeedback(item.id);
+      return `
+        <article class="item ${item.id === state.activeId ? 'active' : ''}"
+                 data-id="${escapeAttr(item.id)}"
+                 data-section="${escapeAttr(sec)}">
+          <div class="item-top">
+            <h3>${escapeHtml(item.display_title || item.title)}</h3>
+            <div class="score">${Number(item.final_score).toFixed(1)}</div>
+          </div>
+          <div class="meta">
+            <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+            <span class="tag">${escapeHtml(item.source)}</span>
+            <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+          </div>
+          ${readerFormat(item, true)}
+          <div class="feedback-row">
+            <button class="feedback-btn ${sig === 1 ? 'active-up' : ''}" data-feedback="1" title="有用">👍</button>
+            <button class="feedback-btn ${sig === -1 ? 'active-down' : ''}" data-feedback="-1" title="跳过">👎</button>
+            <span class="feedback-hint">${sig === 1 ? '已标记有用' : sig === -1 ? '已标记跳过' : ''}</span>
+          </div>
+        </article>
+      `;
+    }
+
+    function sectionGroupHeader(section, count) {
+      return `
+        <div class="section-group-header" data-section="${escapeAttr(section.key)}">
+          <span class="section-group-title">${escapeHtml(section.label)}</span>
+          <span class="section-group-count">${count} 条</span>
+        </div>
+      `;
+    }
+
+    function renderItems(visible) {
+      const container = $('items');
+      if (!visible.length) {
+        container.innerHTML = '<div class="empty">当前筛选条件下没有匹配内容。</div>';
+        return;
+      }
+
+      let html = '';
+      if (state.section === 'All') {
+        // Group by section in defined order, with a header for each group
+        const grouped = {};
+        for (const item of visible) {
+          const sec = item.report_sections?.[0] || 'other';
+          if (!grouped[sec]) grouped[sec] = [];
+          grouped[sec].push(item);
+        }
+        for (const section of (payload.sections || [])) {
+          const group = grouped[section.key];
+          if (!group || !group.length) continue;
+          html += sectionGroupHeader(section, group.length);
+          html += group.map((item) => itemCard(item)).join('');
+        }
+        // Append any items that fell into 'other' (shouldn't normally happen)
+        if (grouped['other']?.length) {
+          html += grouped['other'].map((item) => itemCard(item)).join('');
+        }
+      } else {
+        html = visible.map((item) => itemCard(item)).join('');
+      }
+
+      container.innerHTML = html;
+      container.querySelectorAll('.item').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.activeId = node.dataset.id;
+          render();
+        });
+      });
+      container.querySelectorAll('.feedback-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const itemNode = btn.closest('.item');
+          setFeedback(itemNode.dataset.id, parseInt(btn.dataset.feedback, 10));
+          render();
+        });
+      });
+    }
+
+    function renderDetail(item) {
+      const detail = $('detail');
+      if (!item) {
+        detail.innerHTML = '<div class="empty">选择一条内容查看详情。</div>';
+        return;
+      }
+
+      detail.innerHTML = `
+        <h2>${escapeHtml(item.display_title || item.title)}</h2>
+        <div class="meta">
+          <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+          <span class="tag">${escapeHtml(sourceTypeLabel(item.source_type))}</span>
+          <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+        </div>
+
+        ${readerFormat(item, false)}
+
+        <div class="detail-block">
+          <h3>评分拆解</h3>
+          <div class="breakdown">
+            ${bar('相关性', item.relevance_score)}
+            ${bar('新颖度', item.novelty_score)}
+            ${bar('学术性', item.academic_score)}
+            ${bar('讨论度', item.discussion_score)}
+            ${bar('可行动性', item.actionable_score)}
+          </div>
+        </div>
+
+      `;
+    }
+
+    function readerFormat(item, compact) {
+      const points = itemKeyPoints(item);
+      return `
+        <div class="reader-format ${compact ? 'compact' : ''}">
+          <div class="reader-block">
+            <h4>1. 这篇文章的太长不读</h4>
+            <p>${escapeHtml(item.tldr || item.one_line_summary || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>2. 核心价值，对我量化的工作能够提供什么样的帮助</h4>
+            <p>${escapeHtml(item.core_value || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>3. 关键核心点 / 论文或帖子摘要</h4>
+            <ol>${points.map((point) => `<li>${escapeHtml(point)}</li>`).join('')}</ol>
+          </div>
+          <div class="reader-block">
+            <h4>4. 原文链接</h4>
+            ${referenceHtml(item)}
+          </div>
+        </div>
+      `;
+    }
+
+    function itemKeyPoints(item) {
+      const points = Array.isArray(item.key_points_list)
+        ? item.key_points_list
+        : (Array.isArray(item.key_points) ? item.key_points : []);
+      const clean = points.filter(Boolean).slice(0, 3);
+      return clean.length ? clean : ['需要打开原文进一步确认方法、数据和适用边界。'];
+    }
+
+    function referenceHtml(item) {
+      const url = item.reference_url || '';
+      if (!url) return '<p>暂无可打开链接</p>';
+      return `
+        <a class="reader-reference" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">打开原文</a>
+        <small class="reference-url">${escapeHtml(url)}</small>
+      `;
+    }
+
+    function bar(label, value) {
+      const score = Number(value || 0);
+      const width = Math.max(0, Math.min(100, score * 10));
+      return `
+        <div class="bar">
+          <span>${label}</span>
+          <div class="bar-track"><div class="bar-fill" style="width: ${width}%"></div></div>
+          <b>${score.toFixed(1)}</b>
+        </div>
+      `;
+    }
+
+    function countBy(list, key) {
+      return list.reduce((acc, item) => {
+        acc[item[key]] = (acc[item[key]] || 0) + 1;
+        return acc;
+      }, {});
+    }
+
+    function averageScore(list) {
+      if (!list.length) return 0;
+      return list.reduce((sum, item) => sum + Number(item.final_score || 0), 0) / list.length;
+    }
+
+    function option(value, label) {
+      return `<option value="${escapeAttr(value)}">${escapeHtml(label)}</option>`;
+    }
+
+    function sectionButton(section, label, count) {
+      return `
+        <button class="category-button section-button" type="button" data-section="${escapeAttr(section)}">
+          <span>${escapeHtml(label)}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryButton(category, count) {
+      return `
+        <button class="category-button" type="button" data-category="${escapeAttr(category)}">
+          <span>${escapeHtml(category === 'All' ? '全部' : categoryLabel(category))}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryLabel(category) {
+      return categoryLabels[category] || category;
+    }
+
+    function sectionLabel(sectionKey) {
+      const section = (payload.sections || []).find((item) => item.key === sectionKey);
+      return section ? section.label : '其他';
+    }
+
+    function feedTitle() {
+      const parts = [];
+      if (state.section !== 'All') parts.push(sectionLabel(state.section));
+      if (state.category !== 'All') parts.push(categoryLabel(state.category));
+      return parts.length ? parts.join(' / ') : '今日情报';
+    }
+
+    function priorityLabel(priority) {
+      return priorityLabels[priority] || priority;
+    }
+
+    function sourceTypeLabel(sourceType) {
+      return sourceTypeLabels[sourceType] || sourceType;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replaceAll('`', '&#096;');
+    }
+
+    init();
+  </script>
+</body>
+</html>
