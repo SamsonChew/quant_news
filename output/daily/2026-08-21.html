@@ -1,0 +1,1086 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>samson 量化情报台 - 2026-08-21</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --panel: #ffffff;
+      --ink: #202124;
+      --muted: #5f6368;
+      --line: #dadce0;
+      --blue: #1a73e8;
+      --red: #ea4335;
+      --yellow: #fbbc04;
+      --green: #34a853;
+      --blue-soft: #e8f0fe;
+      --green-soft: #e6f4ea;
+      --yellow-soft: #fef7e0;
+      --red-soft: #fce8e6;
+      --shadow: 0 1px 2px rgba(60, 64, 67, 0.16), 0 8px 24px rgba(60, 64, 67, 0.10);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(66, 133, 244, 0.07), transparent 30%),
+        radial-gradient(circle at top right, rgba(251, 188, 4, 0.08), transparent 26%),
+        var(--bg);
+      color: var(--ink);
+      font-family: "Google Sans", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(280px, 620px);
+      gap: 24px;
+      align-items: center;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand h1 {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin: 0;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+
+    .brand h1::before {
+      content: "";
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background:
+        conic-gradient(from 0deg, var(--blue) 0 25%, var(--red) 0 50%, var(--yellow) 0 75%, var(--green) 0 100%);
+      box-shadow: inset 0 0 0 7px #fff;
+    }
+
+    .date-pill {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 170px 170px 150px;
+      gap: 10px;
+    }
+
+    .control {
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 12px;
+      outline: none;
+    }
+
+    .control:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.14);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 260px minmax(420px, 1fr) 420px;
+      gap: 22px;
+      padding: 24px 32px 36px;
+    }
+
+    .rail,
+    .detail {
+      position: sticky;
+      top: 86px;
+      height: calc(100vh - 112px);
+      overflow: auto;
+    }
+
+    .rail,
+    .detail,
+    .feed {
+      min-width: 0;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      padding: 12px;
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
+    }
+
+    .metric:nth-child(1) { border-top: 3px solid var(--blue); }
+    .metric:nth-child(2) { border-top: 3px solid var(--red); }
+    .metric:nth-child(3) { border-top: 3px solid var(--yellow); }
+    .metric:nth-child(4) { border-top: 3px solid var(--green); }
+
+    .metric b {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .section-label {
+      margin: 18px 0 8px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .category-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .category-button {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--ink);
+      padding: 8px 10px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .category-button:hover,
+    .category-button.active {
+      border-color: transparent;
+      background: var(--blue-soft);
+      color: #174ea6;
+    }
+
+    .count {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .source-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .source-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .feed-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .feed-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .result-count {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .items {
+      display: grid;
+      gap: 10px;
+    }
+
+    .section-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 2px 4px;
+      margin-top: 10px;
+      border-bottom: 2px solid var(--line);
+    }
+
+    .section-group-header:first-child {
+      margin-top: 0;
+    }
+
+    .section-group-title {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .section-group-header[data-section="deep_learning_quant"] .section-group-title { color: var(--blue); }
+    .section-group-header[data-section="ai_quant_tools"] .section-group-title { color: var(--green); }
+    .section-group-header[data-section="daily_news"] .section-group-title { color: var(--yellow); }
+
+    .section-group-count {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .item {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.10);
+      padding: 18px;
+      cursor: pointer;
+      transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+    }
+
+    .item::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--blue), var(--red), var(--yellow), var(--green));
+    }
+
+    .item[data-section="deep_learning_quant"]::before { background: var(--blue); }
+    .item[data-section="ai_quant_tools"]::before { background: var(--green); }
+    .item[data-section="daily_news"]::before { background: var(--yellow); }
+
+    .item:hover,
+    .item.active {
+      border-color: #c6dafc;
+      box-shadow: var(--shadow);
+      transform: translateY(-2px);
+    }
+
+    .item-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .item h3 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.28;
+    }
+
+    .score {
+      min-width: 54px;
+      border-radius: 999px;
+      background: var(--blue-soft);
+      color: #174ea6;
+      padding: 6px 8px;
+      text-align: center;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .tag {
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: #f1f3f4;
+      padding: 3px 8px;
+    }
+
+    .tag:nth-child(1) { background: var(--blue-soft); color: #174ea6; }
+    .tag:nth-child(2) { background: var(--green-soft); color: #137333; }
+    .tag:nth-child(3) { background: var(--yellow-soft); color: #8a5a00; }
+    .tag:nth-child(4) { background: var(--red-soft); color: #b3261e; }
+
+    .summary {
+      margin: 0;
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .reference-link {
+      display: inline-flex;
+      width: fit-content;
+      border-top: 1px solid var(--line);
+      color: var(--blue);
+      padding-top: 9px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .reader-format {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .reader-format.compact {
+      gap: 8px;
+    }
+
+    .reader-block {
+      border-top: 1px solid var(--line);
+      padding-top: 9px;
+    }
+
+    .reader-block:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .reader-block h4 {
+      margin: 0 0 5px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .reader-block p,
+    .reader-block li {
+      margin: 0;
+      color: #30342d;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .reader-block ol {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .reader-reference {
+      color: var(--blue);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
+    .reference-url {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .detail {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .detail h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+
+    .detail-block {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .detail-block h3 {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+
+    .detail-block p,
+    .detail-block li {
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .detail-block ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .breakdown {
+      display: grid;
+      gap: 8px;
+    }
+
+    .bar {
+      display: grid;
+      grid-template-columns: 118px 1fr 40px;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .bar-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e7eadf;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--blue), var(--green), var(--yellow), var(--red));
+    }
+
+    .open-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      margin-top: 16px;
+      border: 1px solid var(--blue);
+      border-radius: var(--radius);
+      color: var(--blue);
+      text-decoration: none;
+      padding: 0 12px;
+      font-weight: 700;
+    }
+
+    .feedback-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+    }
+
+    .feedback-btn {
+      background: #f1f3f4;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 120ms, border-color 120ms;
+    }
+
+    .feedback-btn:hover { background: var(--blue-soft); }
+    .feedback-btn.active-up { background: var(--green-soft); border-color: var(--green); }
+    .feedback-btn.active-down { background: var(--red-soft); border-color: var(--red); }
+
+    .feedback-hint {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      padding: 28px;
+      color: var(--muted);
+      background: var(--panel);
+    }
+
+    @media (max-width: 1180px) {
+      .layout {
+        grid-template-columns: 220px 1fr;
+      }
+
+      .detail {
+        position: static;
+        grid-column: 1 / -1;
+        height: auto;
+      }
+    }
+
+    @media (max-width: 820px) {
+      .topbar {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .brand {
+        display: grid;
+        gap: 4px;
+      }
+
+      .brand h1 {
+        white-space: normal;
+        font-size: 21px;
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .rail,
+      .detail {
+        position: static;
+        height: auto;
+      }
+
+      .metric-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <h1>samson 量化情报台</h1>
+        <span class="date-pill" id="report-date"></span>
+      </div>
+      <div class="controls">
+        <input class="control" id="search" type="search" placeholder="搜索标题、摘要、分类..." />
+        <select class="control" id="section-select"></select>
+        <select class="control" id="category-select"></select>
+        <select class="control" id="sort-select">
+          <option value="score">按评分排序</option>
+          <option value="priority">按优先级排序</option>
+          <option value="source">按来源排序</option>
+        </select>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="rail">
+        <div class="metric-grid">
+          <div class="metric"><b id="metric-items">0</b><span>报告条目</span></div>
+          <div class="metric"><b id="metric-categories">0</b><span>分类数量</span></div>
+          <div class="metric"><b id="metric-high">0</b><span>高优先级</span></div>
+          <div class="metric"><b id="metric-avg">0.0</b><span>平均评分</span></div>
+        </div>
+
+        <div class="section-label">两条主线</div>
+        <div class="category-list" id="section-list"></div>
+
+        <div class="section-label">细分标签</div>
+        <div class="category-list" id="category-list"></div>
+
+        <div class="section-label">主力来源</div>
+        <ul class="source-list" id="source-list"></ul>
+      </aside>
+
+      <section class="feed">
+        <div class="feed-header">
+          <h2 id="feed-title">今日情报</h2>
+          <span class="result-count" id="result-count"></span>
+        </div>
+        <div class="items" id="items"></div>
+      </section>
+
+      <aside class="detail" id="detail"></aside>
+    </main>
+  </div>
+
+  <script id="dashboard-data" type="application/json">{"report_date": "2026-08-21", "generated_at": "2026-08-20T23:43:57Z", "items": [{"id": "a0ed62a3bbf65b3ea006426b3904710d582257397fda9d5116492a5faa69dbf4", "source": "Reddit algotrading", "source_type": "forum", "title": "Rate my workflow. All forms of criticism are allowed", "url": "https://www.reddit.com/r/algotrading/comments/1vtwszg/rate_my_workflow_all_forms_of_criticism_are/", "authors": ["/u/Capital-Field3324"], "published_at": "2026-08-20", "collected_at": "2026-08-20T23:31:14Z", "raw_text": "Brief Context I focus mainly on forex , indices and commodities like gold. My trading platform and backtesting engine is strictly MT5. I tried to built my own python backtesting engine but it was riddled with logical errors so i stuck with the industry default. Tick data with real spreads for backtesting is obtained from quant data manager using dukascopy. Forex and gold up to 2008 while indices go up to 2012. Custom commission and slippage above the norm are applied to break the strategy .Trading bots are Expert Advisors. I mainly focus on 4hr and Daily timeframes ,why The less trades i take ,the lower the amount i pay in fees (commission) and also that is what traders with verified darwinex profiles emphasis. There is a lot of noise in the space so if some one does not have a third party verified track record , i do not listen to them. You too should not listen to what i say because i also lack a verified third party track record💀. But anyways am here to learn and so are you . Step 1 - Find strategy ideas These are mainly found in old internet/books from the early 2000 and late 1990s like Trade like a hedge fund by James Altucher , x and reddit can be sources of good ideas Step 2 - Idea to Code Am not accustomed with MQL5 language so i use an LLM in the IDE to code the EA . Provide the LLM with context regarding the strategy logic , EA design patterns particularily fixed capital risk amount per trade (not a fixed percentage risk of account balance , this invokes compounding effect which affects results incase the strategy initially had a good streak) and ATR based SL and TP for volatility based position sizing.So in low vol , i size big and in high vol size small. I keep configurable strategy parameters below 4 . The rest of the variables are hardcoded to industry defaults. But rarely will a strategy have more than 2 indicators including a moving average (it is the only regime filter i trust lol) Step 3 - Test This takes up most of my time due to tough tests.The EA is compiled in meta editor and tested using strategy tester in MT5. I apply walk forward optimization. This involves splitting a data set into In sample (IS) and Out of sample (OOS) periods. Primarily IS is 3 years while OOS is 1 year. Using my availabe dataset am able to obtain 15 years of pure OOS performance for currencies and 12 years for indices. During IS , i use the strategy optimizer in MT5 to configure and find the optimal variable for each of the 3 parameters. Choosing the best parameter combinations based on max drawdown and pnl would yield the most overfit strategy. So i apply parameter sensitivity The data from the strategy optimizer is exported and a python script is used to generate a heatmap showing profitability of each combination based on intensity of colour. A 3 x 3 grid search is applied to find a region where 9 boxes are fully profitable. The middle box in the 3x3 grid makes our optimal parameter variable. However to avoid overfitting the outer parameter , A global profitability score of all boxes should > 40% and number of profitable grids in the neighouring positions of the 3x3 grid in +1 or -1 of the outer parameter should be 5/9 . If none of the above conditions are met , Failed Robustness Test watermark is placed on the heatmap and strategy placed in the recycle bin. However if the above conditions are met, the optimal parameter combination is tested on the OOS period. The max OOS Drawdown should not exceed 2x the IS Drawdown. The WF Validation process is continued until either i attain 3 consecutive net negative OOS years or max drawdown exceeds my threshold (15%) or i failed to find an optimal parameter combination during parameter sensitivity tests Step 4 - Final test If a strategy passes through WFW and parameter sensitivity test. The WFW OOS Equity curves and csv files are stitched together. To test for strategy robustness , a strategy should not only work on one symbol. If am building a strategy for USDJPY, it should show relative performance on USTEC or XAU as these are trending assets. After this monte carlo permutations (1000 times) are applied to trade order history and 1000 different equity curves are plotted.If the strategies' performance sits in the upper 90% of all the equity curves , it is discontinued since such historical performance may not repeated so ideally between 40 to 60% range is acceptable. Obtain the 95% max drawdown as this is the drawdown i will size for And there you have it boys .we have a strategy that may work Step 5 - Portfolio Construction Accumulate a good number of strategies. Measure correlation between the strategies. Correlated measured strictly on drawdown and position overlap. Everything cannot be allowed to bleed on one bad morning. Build a portfolio consisting of atleast 10 strategies each with a correlation between -0.10 to 0.20 . Size the strategies such that the 95% max drawdown does not wipe out your portfolio This is my workflow as of late. It improves as my domain knowledge and expertise expand submitted by /u/Capital-Field3324 [link] [comments]", "abstract": "Brief Context I focus mainly on forex , indices and commodities like gold. My trading platform and backtesting engine is strictly MT5. I tried to built my own python backtesting engine but it was riddled with logical errors so i stuck with the industry default. Tick data with real spreads for backtesting is obtained from quant data manager using dukascopy. Forex and gold up to 2008 while indices go up to 2012. Custom commission and slippage above the norm are applied to break the strategy .Trading bots are Expert Advisors. I mainly focus on 4hr and Daily timeframes ,why The less trades i take ,the lower the amount i pay in fees (commission) and also that is what traders with verified darwinex profiles emphasis. There is a lot of noise in the space so if some one does not have a third party verified track record , i do not listen to them. You too should not listen to what i say because i also lack a verified third party track record💀. But anyways am here to learn and so are you . Step 1 - Find strategy ideas These are mainly found in old internet/books from the early 2000 and late 1990s like Trade like a hedge fund by James Altucher , x and reddit can be sources of good ideas Step 2 - Idea to Code Am not accustomed with MQL5 language so i use an LLM in the IDE to code the EA . Provide the LLM with context regarding the strategy logic , EA design patterns particularily fixed capital risk amount per trade (not a fixed percentage risk of account balance , this invokes compounding effect which affects results incase the strategy initially had a good streak) and ATR based SL and TP for volatility based position sizing.So in low vol , i size big and in high vol size small. I keep configurable strategy parameters below 4 . The rest of the variables are hardcoded to industry defaults. But rarely will a strategy have more than 2 indicators including a moving average (it is the only regime filter i trust lol) Step 3 - Test This takes up most of my time due to tough tests.The EA is compiled in meta editor and tested using strategy tester in MT5. I apply walk forward optimization. This involves splitting a data set into In sample (IS) and Out of sample (OOS) periods. Primarily IS is 3 years while OOS is 1 year. Using my availabe dataset am able to obtain 15 years of pure OOS performance for currencies and 12 years for indices. During IS , i use the strategy optimizer in MT5 to configure and find the optimal variable for each of the 3 parameters. Choosing the best parameter combinations based on max drawdown and pnl would yield the most overfit strategy. So i apply parameter sensitivity The data from the strategy optimizer is exported and a python script is used to generate a heatmap showing profitability of each combination based on intensity of colour. A 3 x 3 grid search is applied to find a region where 9 boxes are fully profitable. The middle box in the 3x3 grid makes our optimal parameter variable. However to avoid overfitting the outer parameter , A global profitability score of all boxes should > 40% and number of profitable grids in the neighouring positions of the 3x3 grid in +1 or -1 of the outer parameter should be 5/9 . If none of the above conditions are met , Failed Robustness Test watermark is placed on the heatmap and strategy placed in the recycle bin. However if the above conditions are met, the optimal parameter combination is tested on the OOS period. The max OOS Drawdown should not exceed 2x the IS Drawdown. The WF Validation process is continued until either i attain 3 consecutive net negative OOS years or max drawdown exceeds my threshold (15%) or i failed to find an optimal parameter combination during parameter sensitivity tests Step 4 - Final test If a strategy passes through WFW and parameter sensitivity test. The WFW OOS Equity curves and csv files are stitched together. To test for strategy robustness , a strategy should not only work on one symbol. If am building a strategy for USDJPY, it should show relative performance on USTEC or XAU as these are trending assets. After this monte carlo permutations (1000 times) are applied to trade order history and 1000 different equity curves are plotted.If the strategies' performance sits in the upper 90% of all the equity curves , it is discontinued since such historical performance may not repeated so ideally between 40 to 60% range is acceptable. Obtain the 95% max drawdown as this is the drawdown i will size for And there you have it boys .we have a strategy that may work Step 5 - Portfolio Construction Accumulate a good number of strategies. Measure correlation between the strategies. Correlated measured strictly on drawdown and position overlap. Everything cannot be allowed to bleed on one bad morning. Build a portfolio consisting of atleast 10 strategies each with a correlation between -0.10 to 0.20 . Size the strategies such that the 95% max drawdown does not wipe out your portfolio This is my workflow as of late. It improves as my domain knowledge and expertise expand submitted by /u/Capital-Field3324 [link] [comments]", "content_hash": "61cfd453bf520db1c0efed2f928f170b5d5f323279de8b659be7f5e7167ed731", "category": "Portfolio Construction", "tags": ["backtesting", "dataset", "drawdown", "llm", "optimization", "portfolio", "risk", "slippage"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "Reddit 分享 MT5 全流程：15年 OOS 数据+3x3 参数稳健性+1000次蒙特卡洛筛选策略，附严格风控门槛", "technical_summary": "分享一套 MT5 策略开发流水线：数据用 Dukascopy tick 含真实点差，外汇和黄金可追溯到 2008 年、指数到 2012 年，策略以 EA 部署。回测采用 3 年样本内/1 年样本外滚动 WFO，用 3x3 参数热力图检查参数稳健性，要求全局盈利格占比大于 40%、邻域 5/9 盈利。OOS 最大回撤不能超过 IS 最大回撤的 2 倍，且绝对门槛是 15%。通过后拼接 OOS 曲线，对成交历史做 1000 次蒙特卡洛置换，要求业绩排名落在 40%–60% 分位，并用 95% 最大回撤决定仓位。最后组合至少 10 个策略，相关性控制在 -0.10 到 0.20 之间。作者明确说自己没有第三方验证记录，观点需谨慎。", "key_points": ["核心方法：WFO 用 3 年 IS/1 年 OOS，参数敏感性要求 3x3 热力图全局盈利>40%且邻域 5/9 盈利，OOS 最大回撤≤2 倍 IS 且≤15%。", "可直接借鉴：从 MT5 优化器导出参数组合生成热力图筛选、对订单历史做 1000 次蒙特卡洛、按 95% 最大回撤定仓位、组合相关性按回撤和持仓重叠度计算。", "风险提示：作者无第三方验证记录，OOS 拼接和人工阈值容易被过拟合，实盘滑点/佣金假设需用独立数据复核。"], "quant_relevance": "组合构建 / 权重优化；研究工具 / 工作流提效", "possible_use_case": "可将参数热力图+3x3 稳健性门槛复制到现有回测框架，用于 4h/日频 CTA 策略的过拟合筛查；也可用蒙特卡洛 40%–60% 分位淘汰规则和相关性区间 -0.10~0.20 来构建多策略组合。", "limitations": "这是社区讨论，需用数据验证后才能用于研究结论。作者没有第三方业绩验证；WFO 的样本窗口和 OOS 拼接方式可能引入未来函数；40%、5/9、2 倍回撤、15% 等阈值是主观设定；蒙特卡洛基于订单历史重排，未包含真实市场冲击；外汇和黄金市场结构与中国 A 股差异较大。", "read_priority": "高", "key_figures_md": "", "relevance_score": 8.2, "novelty_score": 9.78, "academic_score": 5.5, "discussion_score": 3.0, "actionable_score": 7.5, "final_score": 7.191, "display_title": "回测、回撤、大模型、优化实践讨论", "tldr": "Reddit 分享 MT5 全流程：15年 OOS 数据+3x3 参数稳健性+1000次蒙特卡洛筛选策略，附严格风控门槛", "core_value": "对你的量化工作帮助：把它当作回测、回撤、大模型、优化的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["核心方法：WFO 用 3 年 IS/1 年 OOS，参数敏感性要求 3x3 热力图全局盈利>40%且邻域 5/9 盈利，OOS 最大回撤≤2 倍 IS 且≤15%。", "可直接借鉴：从 MT5 优化器导出参数组合生成热力图筛选、对订单历史做 1000 次蒙特卡洛、按 95% 最大回撤定仓位、组合相关性按回撤和持仓重叠度计算。", "风险提示：作者无第三方验证记录，OOS 拼接和人工阈值容易被过拟合，实盘滑点/佣金假设需用独立数据复核。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1vtwszg/rate_my_workflow_all_forms_of_criticism_are/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "组合构建", "priority_label": "高", "source_type_label": "论坛"}, {"id": "15cefd5999cae79513c34122cd45fe5dc3e74cfb69f391355799ae9d6e36d5a9", "source": "Quant StackExchange", "source_type": "forum", "title": "How should correlated, regime-dependent return-path forecasts be combined into a trading consensus?", "url": "https://quant.stackexchange.com/questions/85792/how-should-correlated-regime-dependent-return-path-forecasts-be-combined-into-a", "authors": ["Russlan Ramdowar"], "published_at": "2026-08-20", "collected_at": "2026-08-20T23:31:15Z", "raw_text": "This question comes from implementing the consensus engine in iPulse AI, an Open Agentic Investment Research Platform that I'am developing with my team for 3 years now. I mention the platform purpose only to explain the applied setting and context. By “open,” I mean that the research questions, methodology, evaluation procedures, historical forecasts, limitations, results and unsuccessful approaches are intended to be publicly inspectable and subject to external scrutiny. Since launch in November 2025 (2 years after development), I have recorded each production forecast as it was originally issued, together with its timestamp, detailed AI agent configuration, specified Investment Evaluation Framework it's instructed to follow, contemporaneous market and fundamental inputs, and the subsequently realized return path. Everything runs in batches of Deep Analysis, done every two weeks or so. Each agent is intended to produce a structured investment thesis rather than merely classify an asset as going up or down. The current implementation contains 12 distinct agent configurations evaluating 380 assets. One run therefore produces 12 separate theses per asset and 4,560 analyst–asset evaluations overall. The evaluations are launched as a single time-aligned batch, using the same evaluation timestamp and a common set of inputs (Global events starting from model's knowledge cutoff date till date, and asset specific fundamentals and financials). This minimizes differences caused by news or market conditions changing during the run. However, the agents are not genuinely independent: they may share input data while differing in the model (ChatGPT vs Claude vs Gemini vs Grok), investment framework (Value Analysis Framework, Power Dynamics Framework, AI readiness and visionary disruptor framework etc) and mode (web search enabled or not). This dependence is what makes the consensus problem difficult. My initial implementation treated consensus as a democratic vote—effectively a board of AI advisors or (AI Parliament) in which every member had equal weight. I am now looking for statistically grounded criticism and established, implementable methods for aggregating these different forecasts while accounting for shared information, correlated errors and changing performance. Suppose the system contains $m$ systematic research analysts forecasting the same asset over the same horizon. An analyst is not just one model. Each analyst is a configuration consisting of: an LLM or reasoning model; an investment-analysis framework; a retrieval mode, with or without external search; a common set of market and fundamental input data. The input dataset is largely shared, while the model, framework and retrieval configuration can differ. Consequently, the analysts are neither independent nor equally correlated. For example, two analysts using the same investment framework may make similar errors even if they use different underlying models (ChatGPT vs Gemini vs Claude). At forecast origin $t$ , analyst $i$ produces a path of cumulative excess-return forecasts: $$ f_{i,t} = \\left( f_{i,t}(1),\\ldots,f_{i,t}(H) \\right)^\\top . $$ I want to construct a consensus path $$ c_t(h) = \\sum_{i=1}^{m} w_{i,t} f_{i,t}(h), \\qquad w_{i,t}\\geq 0, \\qquad \\sum_{i=1}^{m}w_{i,t}=1. $$ I have considered four possible weighting mechanisms. 1. Equal weighting $$ w_{i,t}=\\frac{1}{m}. $$ This is simple and difficult to overfit, but treats several highly similar analysts as independent confirmations. 2. Weighting by recent historical performance For a specified path-level loss $L_{i,s}$ , one possibility is an exponentially discounted rule such as $$ w_{i,t} \\propto \\exp\\left( -\\eta \\sum_{s This adapts to changing performance, but may chase noise and eliminate temporarily weak analysts. 3. Covariance-aware weighting Let $e_{i,t}(h)$ denote analyst $i$ 's forecast error at horizon $h$ . An integrated error-covariance matrix could be estimated as $$ \\Omega_{ij} = \\sum_{h=1}^{H} a_h\\, \\operatorname{Cov} \\left( e_{i,t}(h),e_{j,t}(h) \\right), $$ followed by $$ w_t = \\arg\\min_{w\\in\\Delta_m} w^\\top\\Omega w, $$ where $\\Delta_m$ is the probability simplex. This accounts for average error dependence, but assumes that the estimated relationship remains relevant in the current macroeconomic environment. 4. Regime-dependent weighting The weights could instead depend on observable or latent state variables $z_t$ : $$ w_t=g(z_t), $$ where $z_t$ might contain volatility, inflation, liquidity, growth or other macroeconomic-state indicators. This could recognize that some analytical frameworks perform better in particular environments, but estimating many conditional weights from a limited history creates substantial overfitting risk. A further complication is the potentially valuable contrarian analyst (The Michael Burry AI for example) . An analyst may have worse unconditional performance than the group but make different errors, or perform particularly well during the relatively rare periods in which the majority suffers a common-mode failure. Weighting analysts only by individual average loss could remove exactly the analyst that provides the most useful conditional diversification. I have started storing every forecast at its original issue time, together with the analyst configuration, contemporaneous macro state and subsequently realized return path. The weights can therefore be evaluated through chronological walk-forward tests rather than fitted and tested on the same observations. For this question, assume that an economically appropriate path-level loss has already been selected. Choosing that loss is a related but separate problem: pointwise MSE can, for example, score a forecast of a useful cyclical pattern poorly when its phase is slightly displaced. Is there an established and practically implementable framework for combining: unequal and partially shared information; correlated forecast errors; regime-dependent analyst skill; and the conditional value of contrarian forecasts? Would the statistically defensible approach be a hierarchical or factor model for the analysts' shared error components combined with dynamic model averaging, a contextual prediction-with-expert-advice algorithm, or a regularized rolling optimization of the combination weights? In particular, how can one distinguish a genuinely diversifying contrarian analyst from a merely noisy one using only chronologically resolved forecasts, while limiting overfitting when the number of market regimes and analyst configurations is large relative to the available history? Related discussions include ensemble techniques for return forecasts , combining forecasts at different horizons , and combining alternative volatility estimates , but they do not appear to address this combination of structured dependence, regime-dependent skill and path forecasts.", "abstract": "This question comes from implementing the consensus engine in iPulse AI, an Open Agentic Investment Research Platform that I'am developing with my team for 3 years now. I mention the platform purpose only to explain the applied setting and context. By “open,” I mean that the research questions, methodology, evaluation procedures, historical forecasts, limitations, results and unsuccessful approaches are intended to be publicly inspectable and subject to external scrutiny. Since launch in November 2025 (2 years after development), I have recorded each production forecast as it was originally issued, together with its timestamp, detailed AI agent configuration, specified Investment Evaluation Framework it's instructed to follow, contemporaneous market and fundamental inputs, and the subsequently realized return path. Everything runs in batches of Deep Analysis, done every two weeks or so. Each agent is intended to produce a structured investment thesis rather than merely classify an asset as going up or down. The current implementation contains 12 distinct agent configurations evaluating 380 assets. One run therefore produces 12 separate theses per asset and 4,560 analyst–asset evaluations overall. The evaluations are launched as a single time-aligned batch, using the same evaluation timestamp and a common set of inputs (Global events starting from model's knowledge cutoff date till date, and asset specific fundamentals and financials). This minimizes differences caused by news or market conditions changing during the run. However, the agents are not genuinely independent: they may share input data while differing in the model (ChatGPT vs Claude vs Gemini vs Grok), investment framework (Value Analysis Framework, Power Dynamics Framework, AI readiness and visionary disruptor framework etc) and mode (web search enabled or not). This dependence is what makes the consensus problem difficult. My initial implementation treated consensus as a democratic vote—effectively a board of AI advisors or (AI Parliament) in which every member had equal weight. I am now looking for statistically grounded criticism and established, implementable methods for aggregating these different forecasts while accounting for shared information, correlated errors and changing performance. Suppose the system contains $m$ systematic research analysts forecasting the same asset over the same horizon. An analyst is not just one model. Each analyst is a configuration consisting of: an LLM or reasoning model; an investment-analysis framework; a retrieval mode, with or without external search; a common set of market and fundamental input data. The input dataset is largely shared, while the model, framework and retrieval configuration can differ. Consequently, the analysts are neither independent nor equally correlated. For example, two analysts using the same investment framework may make similar errors even if they use different underlying models (ChatGPT vs Gemini vs Claude). At forecast origin $t$ , analyst $i$ produces a path of cumulative excess-return forecasts: $$ f_{i,t} = \\left( f_{i,t}(1),\\ldots,f_{i,t}(H) \\right)^\\top . $$ I want to construct a consensus path $$ c_t(h) = \\sum_{i=1}^{m} w_{i,t} f_{i,t}(h), \\qquad w_{i,t}\\geq 0, \\qquad \\sum_{i=1}^{m}w_{i,t}=1. $$ I have considered four possible weighting mechanisms. 1. Equal weighting $$ w_{i,t}=\\frac{1}{m}. $$ This is simple and difficult to overfit, but treats several highly similar analysts as independent confirmations. 2. Weighting by recent historical performance For a specified path-level loss $L_{i,s}$ , one possibility is an exponentially discounted rule such as $$ w_{i,t} \\propto \\exp\\left( -\\eta \\sum_{s This adapts to changing performance, but may chase noise and eliminate temporarily weak analysts. 3. Covariance-aware weighting Let $e_{i,t}(h)$ denote analyst $i$ 's forecast error at horizon $h$ . An integrated error-covariance matrix could be estimated as $$ \\Omega_{ij} = \\sum_{h=1}^{H} a_h\\, \\operatorname{Cov} \\left( e_{i,t}(h),e_{j,t}(h) \\right), $$ followed by $$ w_t = \\arg\\min_{w\\in\\Delta_m} w^\\top\\Omega w, $$ where $\\Delta_m$ is the probability simplex. This accounts for average error dependence, but assumes that the estimated relationship remains relevant in the current macroeconomic environment. 4. Regime-dependent weighting The weights could instead depend on observable or latent state variables $z_t$ : $$ w_t=g(z_t), $$ where $z_t$ might contain volatility, inflation, liquidity, growth or other macroeconomic-state indicators. This could recognize that some analytical frameworks perform better in particular environments, but estimating many conditional weights from a limited history creates substantial overfitting risk. A further complication is the potentially valuable contrarian analyst (The Michael Burry AI for example) . An analyst may have worse unconditional performance than the group but make different errors, or perform particularly well during the relatively rare periods in which the majority suffers a common-mode failure. Weighting analysts only by individual average loss could remove exactly the analyst that provides the most useful conditional diversification. I have started storing every forecast at its original issue time, together with the analyst configuration, contemporaneous macro state and subsequently realized return path. The weights can therefore be evaluated through chronological walk-forward tests rather than fitted and tested on the same observations. For this question, assume that an economically appropriate path-level loss has already been selected. Choosing that loss is a related but separate problem: pointwise MSE can, for example, score a forecast of a useful cyclical pattern poorly when its phase is slightly displaced. Is there an established and practically implementable framework for combining: unequal and partially shared information; correlated forecast errors; regime-dependent analyst skill; and the conditional value of contrarian forecasts? Would the statistically defensible approach be a hierarchical or factor model for the analysts' shared error components combined with dynamic model averaging, a contextual prediction-with-expert-advice algorithm, or a regularized rolling optimization of the combination weights? In particular, how can one distinguish a genuinely diversifying contrarian analyst from a merely noisy one using only chronologically resolved forecasts, while limiting overfitting when the number of market regimes and analyst configurations is large relative to the available history? Related discussions include ensemble techniques for return forecasts , combining forecasts at different horizons , and combining alternative volatility estimates , but they do not appear to address this combination of structured dependence, regime-dependent skill and path forecasts.", "content_hash": "8a62db67e0770bcf8fd1ffb0a4e678cccebad53bd6a8df81b2c0156cb71d6fa1", "category": "LLM / Agents for Quant", "tags": ["agent", "dataset", "factor", "forecasting", "liquidity", "llm", "optimization", "reasoning"], "language": "en", "metadata": {"feed_url": "https://quant.stackexchange.com/feeds"}, "one_line_summary": "This question comes from implementing the consensus engine in iPulse AI, an Open Agentic Investment Research Platform that I'am developing with my team for 3 years now.", "technical_summary": "This question comes from implementing the consensus engine in iPulse AI, an Open Agentic Investment Research Platform that I'am developing with my team for 3 years now. I mention the platform purpose only to explain the applied setting and context. By “open,” I mean that the research questions, methodology, evaluation procedures, historical forecasts, limitations, results and unsuccessful approaches are intended to be publicly inspectable and subject to external scrutiny. Since launch in November 2025 (2 years after development), I have recorded each production forecast as it was originally issued, together with its timestamp, detailed AI agent configuration, specified Investment Evaluation Framework it's instructed to follow, contemporaneous market and fundamental inputs, and the subsequently realized return path.", "key_points": ["This question comes from implementing the consensus engine in iPulse AI, an Open Agentic Investment Research Platform that I'am developing with my team for 3 years now.", "I mention the platform purpose only to explain the applied setting and context.", "By “open,” I mean that the research questions, methodology, evaluation procedures, historical forecasts, limitations, results and unsuccessful approaches are intended to be public..."], "quant_relevance": "和研究自动化、文档智能、代码智能体以及量化工作流工具相关。", "possible_use_case": "可以用于改进研究自动化、论文筛选或代码生成工作流。", "limitations": "论坛观点先视为经验性信息，只有经过可复现数据、成本和风控验证后才能进入研究结论。", "read_priority": "中", "key_figures_md": "", "relevance_score": 8.0, "novelty_score": 9.78, "academic_score": 5.5, "discussion_score": 3.0, "actionable_score": 7.5, "final_score": 7.131, "display_title": "因子、预测、流动性、大模型实践讨论", "tldr": "This question comes from implementing the consensus engine in iPulse AI, an Open Agentic Investment Research Platform that I'am developing with my team for 3 years now.", "core_value": "对你的量化工作帮助：把它当作因子、预测、流动性、大模型的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["This question comes from implementing the consensus engine in iPulse AI, an Open 智能体ic Investment Research Platform that I'am developing with my team for 3 years now.", "I mention the platform purpose only to explain the applied setting and context.", "By “open,” I mean that the research questions, methodology, evaluation procedures, historical forecasts, limitations, results and unsuccessful approaches are intended to be public..."], "reference_url": "https://quant.stackexchange.com/questions/85792/how-should-correlated-regime-dependent-return-path-forecasts-be-combined-into-a", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "量化大模型 / 智能体", "priority_label": "中", "source_type_label": "论坛"}, {"id": "998f6269c887109afb4574ae41d229c064923ee4dccd5ef41f38c7a534d8aa72", "source": "arXiv", "source_type": "paper", "title": "Converting Expert Deliberation into Financial Signals Through A Context-Aware NLP Pipeline", "url": "http://arxiv.org/abs/2608.18911v1", "authors": ["Vivek Batra", "Kristin Chen", "Sanjiv Das", "Samuel Judge", "Harshad Khadilkar", "Sukrit Mittal", "Amir Nasrollahzadeh", "Daniel Ostrov", "Jacob Sisk"], "published_at": "2026-08-19", "collected_at": "2026-08-20T23:24:44Z", "raw_text": "We introduce the CDSP (context-conditional deliberation signal pipeline), converting an investment committee's meeting transcripts into structured predictive features. CDSP segments the meeting transcripts into topical chunks, assigns asset-class context labels using a large language model (LLM), maps financial keywords to a pre-determined taxonomy of labels, and constructs complementary features: sentiment polarity and mention frequency. This feature engineering framework is applied to a dataset spanning 48 monthly committee meetings to predict if global equities will perform better or worse than global bonds in the following month. In experiments with engineered features, raw transcript text, sentence embeddings, and combined representations, the prediction accuracy ranges from 62% to 73%, compared to always choosing stocks, which outperforms bonds 60.4% of the time. The best (73% accurate) model combines sentence embeddings with engineered CDSP features, achieving a 0.73 F1 score (although this is not statistically significant compared to always choosing stocks). Sentiment carries a stronger signal than mention frequency for several taxonomy categories. These findings suggest that experts' deliberations may contain forward-looking information that context-aware NLP can extract.", "abstract": "We introduce the CDSP (context-conditional deliberation signal pipeline), converting an investment committee's meeting transcripts into structured predictive features. CDSP segments the meeting transcripts into topical chunks, assigns asset-class context labels using a large language model (LLM), maps financial keywords to a pre-determined taxonomy of labels, and constructs complementary features: sentiment polarity and mention frequency. This feature engineering framework is applied to a dataset spanning 48 monthly committee meetings to predict if global equities will perform better or worse than global bonds in the following month. In experiments with engineered features, raw transcript text, sentence embeddings, and combined representations, the prediction accuracy ranges from 62% to 73%, compared to always choosing stocks, which outperforms bonds 60.4% of the time. The best (73% accurate) model combines sentence embeddings with engineered CDSP features, achieving a 0.73 F1 score (although this is not statistically significant compared to always choosing stocks). Sentiment carries a stronger signal than mention frequency for several taxonomy categories. These findings suggest that experts' deliberations may contain forward-looking information that context-aware NLP can extract.", "content_hash": "1b16912f148005f9b39711935efae132160cce4122f47a42a81ab894ed54efb6", "category": "LLM / Agents for Quant", "tags": ["dataset", "feature engineering", "large language model", "llm", "signal"], "language": "en", "metadata": {"arxiv_categories": ["cs.LG", "cs.CE"]}, "one_line_summary": "用 LLM 上下文感知 NLP 管线（CDSP）从投委会纪要提取股债信号，月度方向预测最高准确率 73%，但未显著跑赢恒买股票基线", "technical_summary": "将 48 次月度投委会会议纪要通过 CDSP 分块、LLM 标注资产类别、关键词映射到分类体系，生成情绪极性和提及频率特征，用于预测下月全球股票是否跑赢全球债券。输入包括手工特征、原始文本、句子嵌入及组合；最佳组合模型准确率 73%、F1 0.73，但相对恒选股票基线（60.4% 胜率）无统计显著性。情绪对部分分类类别的信号贡献强于提及频率。样本较小且未考虑交易成本。", "key_points": ["最佳组合模型股债方向预测准确率 73%、F1 0.73，但相对恒买股票基线（60.4%）无统计显著性。", "数据要求低，只需 48 次月度投委会会议纪要；LLM 标注与嵌入实现中等，可复现，但需会议转写文本。", "样本仅 48 个月且只覆盖单一股债二分类，未含交易成本，统计显著性缺失，过拟合风险高。"], "quant_relevance": "因子/alpha 信号；组合构建/权重优化", "possible_use_case": "可将 CDSP 应用于内部投委会纪要，生成股债月度方向信号，先做样本外滚动验证，并与恒买股票/60-40 组合对比；也可作为另类情绪因子并入多因子模型。", "limitations": "样本量小（48 个月）且只预测股债二元结果；最佳模型相对基线无统计显著性；未包含交易成本、滑点；会议纪要获取受限；LLM 标注依赖 taxonomy 设计和提示词，主观性强；需警惕过拟合。", "read_priority": "中", "key_figures_md": "- **arXiv HTML 原图**：CDSP 流程示意与各特征组合同预测准确率对比，需查看 https://arxiv.org/html/2608.18911\n- **原文实验对比表**：手工特征、原始文本、句子嵌入及组合表示下的准确率与 F1 对比\n- [原文图表（HTML版）](https://arxiv.org/html/2608.18911)", "relevance_score": 5.4, "novelty_score": 9.565, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 7.5, "final_score": 6.833, "display_title": "特征工程、大模型研究论文", "tldr": "用 LLM 上下文感知 NLP 管线（CDSP）从投委会纪要提取股债信号，月度方向预测最高准确率 73%，但未显著跑赢恒买股票基线", "core_value": "对你的量化工作帮助：把它转成一个特征工程实验，对比原始价格特征、差分特征和分数阶差分特征，重点看平稳性、信息保留、样本外泛化和是否引入未来函数。", "key_points_list": ["最佳组合模型股债方向预测准确率 73%、F1 0.73，但相对恒买股票基线（60.4%）无统计显著性。", "数据要求低，只需 48 次月度投委会会议纪要；LLM 标注与嵌入实现中等，可复现，但需会议转写文本。", "样本仅 48 个月且只覆盖单一股债二分类，未含交易成本，统计显著性缺失，过拟合风险高。"], "reference_url": "http://arxiv.org/abs/2608.18911v1", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "量化大模型 / 智能体", "priority_label": "中", "source_type_label": "论文"}, {"id": "4eb0a16e199726b61265682f66d111c7bbb5874819d67bdff8b78201e9b0b51a", "source": "arXiv", "source_type": "paper", "title": "Multi-Level Market Making with Reinforcement Learning", "url": "http://arxiv.org/abs/2608.18195v1", "authors": ["Patrick Cheridito", "Moritz Weiss"], "published_at": "2026-08-18", "collected_at": "2026-08-20T23:24:40Z", "raw_text": "We introduce a reinforcement learning framework for market making in a limit order book. Our algorithm aims to maximize trading revenue by dynamically submitting market and limit orders of varying sizes across multiple price levels while controlling inventory size. We use multivariate logistic-normal distributions to model order allocations and employ a deep-set encoder to aggregate features from variable-length order sets into a fixed-dimensional latent representation. Additionally, we incorporate potential-based reward shaping to accelerate learning without altering the optimal policy. We illustrate the performance of the method in three simulated market environments consisting of noise traders who submit random trades, tactical traders who respond to instantaneous volume imbalance, and strategic traders who trade in the direction of an exponentially weighted volume imbalance signal.", "abstract": "We introduce a reinforcement learning framework for market making in a limit order book. Our algorithm aims to maximize trading revenue by dynamically submitting market and limit orders of varying sizes across multiple price levels while controlling inventory size. We use multivariate logistic-normal distributions to model order allocations and employ a deep-set encoder to aggregate features from variable-length order sets into a fixed-dimensional latent representation. Additionally, we incorporate potential-based reward shaping to accelerate learning without altering the optimal policy. We illustrate the performance of the method in three simulated market environments consisting of noise traders who submit random trades, tactical traders who respond to instantaneous volume imbalance, and strategic traders who trade in the direction of an exponentially weighted volume imbalance signal.", "content_hash": "926195bdabd092150e0308c63241d342811c240d6a354b4ec111906804e126d6", "category": "Market Microstructure", "tags": ["limit order book", "order book", "reinforcement learning", "signal"], "language": "en", "metadata": {"arxiv_categories": ["q-fin.TR"]}, "one_line_summary": "用 logistic-normal 分布与 deep-set 编码器实现多档位 RL 做市，在三种模拟 LOB 环境中同时优化收益和库存控制", "technical_summary": "解决限价订单簿做市中多档位订单分配和库存控制的联合决策问题。用多元 logistic-normal 分布对订单分配建模，用 deep-set 编码器把变长订单集映射为固定维度特征，并用基于势函数的 reward shaping 加速训练而不改变最优策略。在包含噪声交易者、战术交易者和战略交易者的三种模拟市场环境中验证，目标是最大化交易收入并控制库存。摘要未给出具体收益、夏普或库存方差指标。", "key_points": ["原文缺量化指标，结论待复核；核心是 logistic-normal 订单分配 + deep-set 编码器 + reward shaping，面向多层级做市。", "需要 LOB 模拟环境或订单簿数据，实现深度中等；可复现性依赖开源代码，目前摘要未给出代码或超参。", "只验证三种模拟市场，未展示真实订单簿样本外、交易成本/滑点、订单取消率，实盘前需严格检查过拟合。"], "quant_relevance": "执行 / 交易成本；风险建模", "possible_use_case": "先在模拟环境复现该 RL 做市器，确认收益和库存风险后再用 Level2 盘口数据做小时级回测；若作者开源，可替换自研做市策略的订单分配模块。", "limitations": "摘要未提供任何收益/夏普/库存方差等量化结果；仅模拟环境，缺少真实订单簿样本外验证；未说明交易成本、滑点、订单取消率假设；多档位同时提交可能放大逆向选择与库存风险；当前无代码/超参，复现成本高。原图见 https://arxiv.org/html/2608.18195", "read_priority": "低", "key_figures_md": "", "relevance_score": 6.1, "novelty_score": 9.355, "academic_score": 9.623, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 6.344, "display_title": "订单簿、强化学习研究论文", "tldr": "用 logistic-normal 分布与 deep-set 编码器实现多档位 RL 做市，在三种模拟 LOB 环境中同时优化收益和库存控制", "core_value": "对你的量化工作帮助：把它拆成一个市场微观结构复现任务，先验证订单簿、强化学习是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["原文缺量化指标，结论待复核；核心是 logistic-normal 订单分配 + deep-set 编码器 + reward shaping，面向多层级做市。", "需要 LOB 模拟环境或订单簿数据，实现深度中等；可复现性依赖开源代码，目前摘要未给出代码或超参。", "只验证三种模拟市场，未展示真实订单簿样本外、交易成本/滑点、订单取消率，实盘前需严格检查过拟合。"], "reference_url": "http://arxiv.org/abs/2608.18195v1", "report_sections": ["deep_learning_quant"], "report_section_labels": ["深度学习量化未来"], "category_label": "市场微观结构", "priority_label": "低", "source_type_label": "论文"}, {"id": "296359e72ed29c03158455bcdcca0f6d4cff52ddbcae3c41cc8dd26d8712794e", "source": "arXiv", "source_type": "paper", "title": "Mechanistic Interpretability of Structure-Aware Numerical Reasoning in LLaMA 3.1 8B", "url": "http://arxiv.org/abs/2608.18419v1", "authors": ["Rahul Chowdhury", "Timothy A Rupprecht", "Senhao Cao", "Jiahao Liu", "Octavia Camps", "David Bau", "Pu Zhao", "Yanzhi Wang"], "published_at": "2026-08-19", "collected_at": "2026-08-20T23:26:02Z", "raw_text": "Recent work has shown that large language models (LLMs) exhibit strong numerical sequence modeling capabilities and show promise in time-series prediction. While LLMs display in-context learning capabilities, the mechanisms with which they accomplish time-series prediction remain unclear. Specifically, whether they truly understand the underlying structure, which at a minimum requires reasoning over first differences in the sequence of numbers. To study this, we investigate Llama 3.1-8B from a mechanistic interpretability point of view. Mechanistic interpretability is an emerging field concerned with the reverse engineering of the algorithms learned by neural networks such as LLMs. To assess Llamas' numerical sequence modeling capabilities and to facilitate our mechanistic interpretability analysis, we create a sequence modeling task that cannot be solved without picking up structural cues. Specifically, we sample n random numbers and repeat them with an offset. We find that Llama displays strong performance on our tasks suggesting that it can pick up on the underlying structure. To understand the mechanisms that allow it to do so, we perform probing experiments and activation patching based counterfactual analysis. Probing reveals that the model computes and stores first differences in its internal representations without explicit supervision, indicating that it tracks structural information about the sequence. Activation patching reveals that Llama retrieves the relevant first-difference with a mechanism similar to an induction circuit and subsequently adds it to the current value. Notably, our work represents one of the first studies to identify this form of concept induction in LLMs.", "abstract": "Recent work has shown that large language models (LLMs) exhibit strong numerical sequence modeling capabilities and show promise in time-series prediction. While LLMs display in-context learning capabilities, the mechanisms with which they accomplish time-series prediction remain unclear. Specifically, whether they truly understand the underlying structure, which at a minimum requires reasoning over first differences in the sequence of numbers. To study this, we investigate Llama 3.1-8B from a mechanistic interpretability point of view. Mechanistic interpretability is an emerging field concerned with the reverse engineering of the algorithms learned by neural networks such as LLMs. To assess Llamas' numerical sequence modeling capabilities and to facilitate our mechanistic interpretability analysis, we create a sequence modeling task that cannot be solved without picking up structural cues. Specifically, we sample n random numbers and repeat them with an offset. We find that Llama displays strong performance on our tasks suggesting that it can pick up on the underlying structure. To understand the mechanisms that allow it to do so, we perform probing experiments and activation patching based counterfactual analysis. Probing reveals that the model computes and stores first differences in its internal representations without explicit supervision, indicating that it tracks structural information about the sequence. Activation patching reveals that Llama retrieves the relevant first-difference with a mechanism similar to an induction circuit and subsequently adds it to the current value. Notably, our work represents one of the first studies to identify this form of concept induction in LLMs.", "content_hash": "b68802cbb9bb0c209c4e6a5f78a4892e54a06c7c03049530ee3d13475a48bc6e", "category": "LLM / Agents for Quant", "tags": ["neural", "reasoning"], "language": "en", "metadata": {"arxiv_categories": ["cs.LG", "cs.AI"]}, "one_line_summary": "用机理可解释性解码 Llama 3.1-8B 的数值序列推理，发现其内部自行计算一阶差分，为 LLM 时间序列预测提供可验证机制", "technical_summary": "要判断 LLM 做时间序列预测时是真理解结构还是一般模式匹配。构造了 n 个随机数加偏移重复的序列任务，必须在内部计算首差才能解决。对 Llama 3.1-8B 做探针实验，发现其内部表征在无监督下编码一阶差分；激活替换显示它用类 induction circuit 的回路检索相关首差并加到当前值。摘要没有给出任务准确率、误差或样本数，量化结论需查看完整实验。", "key_points": ["用 8B LLaMA 做带偏移随机数序列任务，探针显示内部隐式存储一阶差分，激活替换确认其用 induction circuit 取差分并累加。", "只需构造数值序列和激活探针/替换即可复现，不依赖金融数据；适合评估 LLM 序列外推能力，但需 PyTorch 和模型权重。", "摘要未报告准确率、误差或数据集大小，任务为随机数而非真实金融时序，过度依赖人工结构假设，样本外意义有限。"], "quant_relevance": "研究工具 / 工作流提效、因子 / alpha 信号", "possible_use_case": "在把 LLM 接入因子挖掘前，先用类似差分探针测试其对日频收益序列的结构理解；也可用于评估不同 LLM 的数值序列建模能力。", "limitations": "摘要缺少任务准确率、数据集大小和样本外误差；实验仅针对随机数加偏移的合成任务，未涉及金融序列的噪声、非平稳和交易成本；模型为单一大小的 Llama，不代表更大或更小模型；结论是机制层面，不直接产生可交易 alpha。", "read_priority": "中", "key_figures_md": "- **Figure 1**：序列建模任务示意：随机数序列加偏移重复，需识别结构才能解决\n- **Figure 2**：探针实验：内部表征中一阶差分的线性可探测性\n- **Figure 3**：激活替换/反事实分析：定位负责检索一阶差分并累加的回路；原图见 https://arxiv.org/html/2608.18419\n- [原文图表（HTML版）](https://arxiv.org/html/2608.18419)", "relevance_score": 4.2, "novelty_score": 9.565, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 6.273, "display_title": "大模型研究论文", "tldr": "用机理可解释性解码 Llama 3.1-8B 的数值序列推理，发现其内部自行计算一阶差分，为 LLM 时间序列预测提供可验证机制", "core_value": "对你的量化工作帮助：把它拆成一个量化大模型 / 智能体复现任务，先验证大模型是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["用 8B LLaMA 做带偏移随机数序列任务，探针显示内部隐式存储一阶差分，激活替换确认其用 induction circuit 取差分并累加。", "只需构造数值序列和激活探针/替换即可复现，不依赖金融数据；适合评估 LLM 序列外推能力，但需 PyTorch 和模型权重。", "摘要未报告准确率、误差或数据集大小，任务为随机数而非真实金融时序，过度依赖人工结构假设，样本外意义有限。"], "reference_url": "http://arxiv.org/abs/2608.18419v1", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "量化大模型 / 智能体", "priority_label": "中", "source_type_label": "论文"}, {"id": "fb4518e09cb5102e10692845e4e16ba7b90016ee4782cb16a4116f2b6df2d94d", "source": "arXiv", "source_type": "paper", "title": "Towards Reversible Forgetting: Managing Obsolete Knowledge in Continual Enterprise AI Agents", "url": "http://arxiv.org/abs/2608.18177v1", "authors": ["Nilutpaul Sarker Yash", "Tirtho Roy", "Ushashi Bhattacharjee"], "published_at": "2026-08-18", "collected_at": "2026-08-20T23:24:44Z", "raw_text": "Continual learning has traditionally treated forgetting as a failure, emphasizing preservation of previously acquired knowledge as environments evolve. We argue that this objective is incomplete for enterprise AI agents operating in non-stationary environments, where customers, policies, tools, workflows, regulations, and market conditions change over time. Indiscriminate retention can allow obsolete knowledge to influence decisions, creating negative transfer and operational risk. We therefore propose reversible forgetting: a conceptual framework with three operational memory states: active, dormant, and retired, and a reactivation transition that can restore dormant knowledge when its relevance returns. We instantiate the framework as a Hysteretic Reversible Memory Controller that accumulates relevance evidence, uses asymmetric thresholds to prevent state oscillation, tests reactivation in shadow mode, and gates retirement through policy. The framework reduces the influence of obsolete information without conflating temporary suppression with permanent erasure. Finance illustrates the idea: knowledge useful under one market regime may become harmful under another yet regain relevance when similar conditions recur.", "abstract": "Continual learning has traditionally treated forgetting as a failure, emphasizing preservation of previously acquired knowledge as environments evolve. We argue that this objective is incomplete for enterprise AI agents operating in non-stationary environments, where customers, policies, tools, workflows, regulations, and market conditions change over time. Indiscriminate retention can allow obsolete knowledge to influence decisions, creating negative transfer and operational risk. We therefore propose reversible forgetting: a conceptual framework with three operational memory states: active, dormant, and retired, and a reactivation transition that can restore dormant knowledge when its relevance returns. We instantiate the framework as a Hysteretic Reversible Memory Controller that accumulates relevance evidence, uses asymmetric thresholds to prevent state oscillation, tests reactivation in shadow mode, and gates retirement through policy. The framework reduces the influence of obsolete information without conflating temporary suppression with permanent erasure. Finance illustrates the idea: knowledge useful under one market regime may become harmful under another yet regain relevance when similar conditions recur.", "content_hash": "3691399c1f7ca9de428e1d153e869c5e6dc620ff1ad185d181488ac87ce94882", "category": "Risk Management", "tags": ["risk"], "language": "en", "metadata": {"arxiv_categories": ["cs.LG", "cs.MA"]}, "one_line_summary": "HRMC 三态记忆框架让企业 AI agent 可逆遗忘过时知识，以降低市场制度切换下的负迁移风险", "technical_summary": "解决企业 AI agent 在非平稳环境中保留过时知识导致的负迁移和操作风险。设计了三态记忆状态 active、dormant、retired，由 Hysteretic Reversible Memory Controller 积累相关性证据，用非对称阈值防止状态反复切换，reactivation 先在 shadow mode 测试，retirement 通过 policy 门控。金融动机是：一种市场制度下有用的知识可能在其他制度下有害，制度回归后需要重新激活。全文是概念框架，没有实验、回测或精度/夏普等量化指标。", "key_points": ["原文无实验数据；核心是 HRMC 三态记忆，用非对称阈值和影子模式管理过时知识，降低负迁移。", "作为 LLM agent 记忆设计思路可借鉴，但无代码、无数据集、无接口定义，落地需自行实现。", "纯概念论文，未做样本外测试或回测，无法判断对策略收益、风险或执行成本的实际影响。"], "quant_relevance": "风险建模；研究工具 / 工作流提效 —— 帮助 LLM 量化 agent 淘汰过时信息，减少旧制度知识对当前决策的干扰。", "possible_use_case": "在 LLM 量化投研 agent 中加入知识状态管理：市场制度切换时把旧 regime 因子或规则降为 dormant，类似制度出现时先在 shadow mode 验证，再决定是否激活。", "limitations": "纯概念框架，无实验、无基准、无可复现代码；相关性证据、非对称阈值、policy gate 均无工程细节；未讨论交易成本和样本外风险。", "read_priority": "低", "key_figures_md": "", "relevance_score": 5.6, "novelty_score": 9.355, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 6.251, "display_title": "风险、人工智能研究论文", "tldr": "HRMC 三态记忆框架让企业 AI agent 可逆遗忘过时知识，以降低市场制度切换下的负迁移风险", "core_value": "对你的量化工作帮助：把它拆成一个风险管理复现任务，先验证风险、人工智能是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["原文无实验数据；核心是 HRMC 三态记忆，用非对称阈值和影子模式管理过时知识，降低负迁移。", "作为 LLM agent 记忆设计思路可借鉴，但无代码、无数据集、无接口定义，落地需自行实现。", "纯概念论文，未做样本外测试或回测，无法判断对策略收益、风险或执行成本的实际影响。"], "reference_url": "http://arxiv.org/abs/2608.18177v1", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "风险管理", "priority_label": "低", "source_type_label": "论文"}, {"id": "7e5f1d09a223470211df21c68d4d8f5e21cdd0bb86a14c0ede4b2daa5ddbc6eb", "source": "The Block", "source_type": "crypto_news", "title": "Spot bitcoin ETFs report $517 million in net inflows, largest in 3.5 months", "url": "https://www.theblock.co/news/markets/2026-08-20-us-bitcoin-etf-517-million-inflows-412291", "authors": [], "published_at": "2026-08-20", "collected_at": "2026-08-20T23:31:16Z", "raw_text": "Analysts attributed the inflows to the surprise crypto market rally driven by US Treasury Department's buyback expansion announcement.", "abstract": "Analysts attributed the inflows to the surprise crypto market rally driven by US Treasury Department's buyback expansion announcement.", "content_hash": "a59f372a4147e9e8d4a01e904e92904fde4c0459e6d03aed1178de746df2e4cd", "category": "Crypto Quant", "tags": ["bitcoin", "crypto"], "language": "en", "metadata": {"feed_url": "https://www.theblock.co/rss.xml"}, "one_line_summary": "现货比特币ETF单日净流入5.17亿美元，创3.5个月新高，受美国财政部扩大回购公告催化", "technical_summary": "现货比特币ETF在当日获得5.17亿美元净流入，为3.5个月最大单日纪录。分析师将原因归为美国财政部扩大回购公告触发加密市场意外上涨，推动资金加速入场。该数据反映传统资金对BTC的配置需求出现脉冲式回升，可作为短期市场情绪与流动性环境变化的风向标。", "key_points": ["现货比特币ETF单日净流入5.17亿美元，为3.5个月最大；驱动是财政部扩大回购公告触发的加密市场急涨。", "量化交易者可把ETF单日净流入作为BTC短期资金流信号，结合成交量与波动率判断情绪拐点。", "单日资金流受单一宏观事件驱动，可持续性存疑；报道未区分各ETF明细，也无法确认流入资金的实际持仓周期。"], "quant_relevance": "资金流向与市场情绪信号，可用于BTC短期动量因子、波动率情境判断和风险偏好监控。", "possible_use_case": "可作为BTC日内至数日方向的参考信号：当单日净流入超过5亿美元且伴随价格放量上涨时，可纳入加密动量策略的加仓条件。", "limitations": "这是新闻事件而非严格量化研究；资金流数据可能被修订；具体ETF产品拆分和交易成本未披露；事件驱动的单日流入不可直接外推为持续趋势。", "read_priority": "高", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.78, "academic_score": 5.668, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.626, "display_title": "加密资产加密市场新闻情报", "tldr": "现货比特币ETF单日净流入5.17亿美元，创3.5个月新高，受美国财政部扩大回购公告催化", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["现货比特币ETF单日净流入5.17亿美元，为3.5个月最大；驱动是财政部扩大回购公告触发的加密市场急涨。", "量化交易者可把ETF单日净流入作为BTC短期资金流信号，结合成交量与波动率判断情绪拐点。", "单日资金流受单一宏观事件驱动，可持续性存疑；报道未区分各ETF明细，也无法确认流入资金的实际持仓周期。"], "reference_url": "https://www.theblock.co/news/markets/2026-08-20-us-bitcoin-etf-517-million-inflows-412291", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "bc9aad31d5141c75e6050c518b4c916113e2626df59e0d1becd154c42bf675d0", "source": "CoinDesk", "source_type": "crypto_news", "title": "U.S. CFTC chief puts staff on notice to create crypto regulations if Clarity Act fails", "url": "https://www.coindesk.com/policy/2026/08/20/u-s-cftc-chief-puts-staff-on-notice-to-create-crypto-regulations-if-clarity-act-fails", "authors": [], "published_at": "2026-08-20", "collected_at": "2026-08-20T23:31:15Z", "raw_text": "Commodity Futures Trading Commission Chairman Mike Selig told the inaugural gathering of the Innovation Advisory Committee that his agency won't sit idle.", "abstract": "Commodity Futures Trading Commission Chairman Mike Selig told the inaugural gathering of the Innovation Advisory Committee that his agency won't sit idle.", "content_hash": "3934700ad57cc17c8c406e7578c19661be682e1e49d878d67f70c4338f6ba074", "category": "Crypto Quant", "tags": ["crypto"], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "CFTC 主席要求员工准备加密监管规则，以防 Clarity Act 失败后出现监管真空", "technical_summary": "CoinDesk 报道，CFTC 主席 Mike Selig 在首届 Innovation Advisory Committee 会议上表示，如果《Clarity Act》未获通过，其机构不会袖手旁观，而是会让员工准备制定加密相关的监管规则。报道本身没有给出具体规则内容、时间表或商品类别，核心信号是 CFTC 在加密市场监管上可能从被动等待立法转向主动行动。对量化交易者来说，这会影响美国加密衍生品的上市、保证金要求和合规成本，也可能影响现货与期货市场的监管边界。", "key_points": ["核心事件：CFTC 主席 Selig 要求员工在 Clarity Act 未通过时准备制定加密监管规则，机构不坐视监管空白。", "量化影响：关注美国加密期货/衍生品监管变化，可能影响合约上市、保证金要求与合规成本，需纳入策略风控。", "风险点：报道简短，法案是否失败、规则细节和时间表均未披露，政策走向存在高度不确定性。"], "quant_relevance": "风险建模 / 执行与交易环境", "possible_use_case": "对交易美国加密期货或 CFTC 监管范围内衍生品的量化团队，可用于政策事件监控，并在 Clarity Act 表决前后调整仓位和合规准备金。", "limitations": "这是一则监管动态新闻，原文未提供具体规则、实施时间或品种清单；法案进展和 CFTC 后续行动均不确定，需结合官方公告持续跟踪，不宜据此直接交易。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.78, "academic_score": 5.692, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.48, "display_title": "加密资产、监管调查加密市场新闻情报", "tldr": "CFTC 主席要求员工准备加密监管规则，以防 Clarity Act 失败后出现监管真空", "core_value": "对你的量化工作帮助：把它当作加密资产、监管调查案例，用来补充异常交易监控、市场操纵风险、大宗商品执行和合规审计的场景库。", "key_points_list": ["核心事件：CFTC 主席 Selig 要求员工在 Clarity Act 未通过时准备制定加密监管规则，机构不坐视监管空白。", "量化影响：关注美国加密期货/衍生品监管变化，可能影响合约上市、保证金要求与合规成本，需纳入策略风控。", "风险点：报道简短，法案是否失败、规则细节和时间表均未披露，政策走向存在高度不确定性。"], "reference_url": "https://www.coindesk.com/policy/2026/08/20/u-s-cftc-chief-puts-staff-on-notice-to-create-crypto-regulations-if-clarity-act-fails", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "afc998aff40b6e8b3530883a7c8b7a5ca33259105a38a669e6112999b9143e70", "source": "The Block", "source_type": "crypto_news", "title": "Inside the Oval Office meeting: Trump appears ‘bullish’ on Clarity Act as he solicits feedback from crypto, finance CEOs", "url": "https://www.theblock.co/news/regulation/2026-08-20-inside-oval-office-meeting-trump-bullish-clarity-act-solicits-feedback-crypto-finance-ceos-412340", "authors": [], "published_at": "2026-08-20", "collected_at": "2026-08-20T23:31:16Z", "raw_text": "During a private Oval Office meeting, President Trump appeared “bullish” on passing the Clarity Act, one source said.", "abstract": "During a private Oval Office meeting, President Trump appeared “bullish” on passing the Clarity Act, one source said.", "content_hash": "86f83b34fe25dbc191320eb5a63e427ace73be8d4998a357ec12486df131d1af", "category": "Crypto Quant", "tags": ["crypto"], "language": "en", "metadata": {"feed_url": "https://www.theblock.co/rss.xml"}, "one_line_summary": "特朗普私下表态支持 Clarity Act 通过，加密监管明朗化预期升温", "technical_summary": "这是一则加密监管动态。报道称特朗普在一次白宫椭圆形办公室的私下会议上，向加密和金融公司 CEO 征求反馈，并对推动 Clarity Act 通过表现出积极态度。Clarity Act 若通过，将明确加密资产的分类和监管归属。市场可能将此视作美国加密监管由不确定转向清晰化的信号。但原文未提供法案具体条款、会议细节或市场价格反应。", "key_points": ["核心事件：特朗普私下会议中表态积极推动 Clarity Act，但原文无具体政策细节或市场数据变动。", "对加密量化交易者：法案推进可降低监管不确定性，关注 BTC/ETH 等合规资产的波动率与风险溢价变化。", "风险：单一匿名消息源，缺乏法案文本和时间表，市场反应未知，勿过度外推。"], "quant_relevance": "风险建模：监管不确定性预期变化影响加密资产风险溢价；事件驱动因子：政策信号可作为择时或行业配置参考。", "possible_use_case": "用于事件驱动型加密策略：当监管明朗化信号出现时，可考虑降低尾部风险对冲或调整合规代币的仓位权重。", "limitations": "原文仅基于单一匿名消息源，未披露 Clarity Act 具体内容、投票时间表或市场数据；无价格反应佐证，对量化研究仅提供方向性参考，需以官方文件和链上/市场数据验证。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.78, "academic_score": 5.646, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.473, "display_title": "加密资产加密市场新闻情报", "tldr": "特朗普私下表态支持 Clarity Act 通过，加密监管明朗化预期升温", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["核心事件：特朗普私下会议中表态积极推动 Clarity Act，但原文无具体政策细节或市场数据变动。", "对加密量化交易者：法案推进可降低监管不确定性，关注 BTC/ETH 等合规资产的波动率与风险溢价变化。", "风险：单一匿名消息源，缺乏法案文本和时间表，市场反应未知，勿过度外推。"], "reference_url": "https://www.theblock.co/news/regulation/2026-08-20-inside-oval-office-meeting-trump-bullish-clarity-act-solicits-feedback-crypto-finance-ceos-412340", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "b389259bf81676857ffabf1ee19f7e722c914349fc4a3025d3d938070efb075c", "source": "The Block", "source_type": "crypto_news", "title": "Securitize’s Redfearn says SEC held back crypto innovation exemption over Clarity Act politics", "url": "https://www.theblock.co/news/regulation/2026-08-20-securitizes-redfearn-sec-innovation-exemption-clarity-act-politics-412298", "authors": [], "published_at": "2026-08-20", "collected_at": "2026-08-20T23:31:16Z", "raw_text": "Securitize says the SEC delayed its crypto trading exemption to avoid complicating Senate votes on the Clarity Act.", "abstract": "Securitize says the SEC delayed its crypto trading exemption to avoid complicating Senate votes on the Clarity Act.", "content_hash": "27a6789b9392776f9814bb16c6b3b7c9149e7be9992f641149ee0420a533a959", "category": "Crypto Quant", "tags": ["crypto"], "language": "en", "metadata": {"feed_url": "https://www.theblock.co/rss.xml"}, "one_line_summary": "SEC 为配合《Clarity Act》参议院投票推迟加密交易豁免，Securitize 指政治因素压制创新", "technical_summary": "Securitize 的 Redfearn 公开表示，SEC 推迟了加密交易相关豁免，原因是避免在《Clarity Act》参议院投票期间制造政治复杂化。这条信息表明监管决定可能受立法时间表影响，而非单纯基于市场或技术评估。对量化交易者而言，监管豁免延迟直接影响合规通道、流动性供给和可交易资产范围，尤其是证券型代币和机构级加密产品。报道未提供具体日期、条款或量化数据，结论主要来自公司高管单方表述。", "key_points": ["Securitize 称 SEC 推迟加密交易豁免，并认为政治因素影响监管节奏，涉及《Clarity Act》参议院投票。", "量化交易者需关注豁免落地时间：延迟可能压制证券型代币流动性、机构入金和套利范围，利好现有中心化加密市场结构。", "该消息仅来自 Securitize 单方声明，缺乏 SEC 回应和具体条款细节，存在游说叙事偏差风险。"], "quant_relevance": "风险建模 / 执行 / 交易成本", "possible_use_case": "作为加密货币市场政策风险事件的跟踪信号，短期内可用来提高资产相关性预警和监管政策敏感头寸的波动率估计。", "limitations": "这是单一来源的监管动向新闻，未给出具体豁免条款、时间线和量化影响；信息含机构游说立场，需待正式监管文件或官方声明核实。原文缺乏数字证据，结论基于定性描述。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.78, "academic_score": 5.644, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.473, "display_title": "加密资产加密市场新闻情报", "tldr": "SEC 为配合《Clarity Act》参议院投票推迟加密交易豁免，Securitize 指政治因素压制创新", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["Securitize 称 SEC 推迟加密交易豁免，并认为政治因素影响监管节奏，涉及《Clarity Act》参议院投票。", "量化交易者需关注豁免落地时间：延迟可能压制证券型代币流动性、机构入金和套利范围，利好现有中心化加密市场结构。", "该消息仅来自 Securitize 单方声明，缺乏 SEC 回应和具体条款细节，存在游说叙事偏差风险。"], "reference_url": "https://www.theblock.co/news/regulation/2026-08-20-securitizes-redfearn-sec-innovation-exemption-clarity-act-politics-412298", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "d86076b25f7707d592bee397b856c1b65c71e131e02d818ceb08bb7c7dd9778a", "source": "Decrypt", "source_type": "crypto_news", "title": "Tensions Flare as CME, Kalshi Execs Clash Over Prediction Markets in DC", "url": "https://decrypt.co/376158/tensions-flare-cme-kalshi-clash-prediction-markets-dc", "authors": [], "published_at": "2026-08-20", "collected_at": "2026-08-20T23:31:16Z", "raw_text": "CME Group Chairman Terry Duffy and Kalshi co-founder Luana Lopes Lara traded barbs during a CFTC meeting over prediction markets, manipulation, and regulatory standards.", "abstract": "CME Group Chairman Terry Duffy and Kalshi co-founder Luana Lopes Lara traded barbs during a CFTC meeting over prediction markets, manipulation, and regulatory standards.", "content_hash": "383016696417c5d7aa2ad2160be3d0e6e784c1d22440fd3ff141f07070c724a5", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://decrypt.co/feed"}, "one_line_summary": "CFTC会议上CME与Kalshi就预测市场监管标准交锋，监管不确定性直接影响预测市场与事件合约交易环境", "technical_summary": "CME董事长Terry Duffy与Kalshi联合创始人Luana Lopes Lara在CFTC会议就预测市场、操纵风险和监管标准公开交锋，双方对预测市场应适用的合规框架存在分歧。事件显示传统交易所与新兴预测平台在监管路径上的冲突，可能影响预测市场合约的交易范围、保证金和上市流程。目前尚无监管决定或价格数据披露。", "key_points": ["CME董事长Duffy与Kalshi联合创始人Lopes Lara在CFTC会议公开交锋，争论预测市场监管与操纵风险，无具体价格/数据变动。", "监管结果将影响预测市场合约准入和Polymarket等平台流动性，量化团队应跟踪CFTC后续指引及产品上市动态。", "报道未披露双方具体论据和条文，仅来自Decrypt单一信源；预测市场监管修订无时间表，政策风险较高。"], "quant_relevance": "风险建模：预测市场政策不确定性影响事件合约和加密预测平台的尾部风险与流动性建模。", "possible_use_case": "可跟踪CFTC对Kalshi/CME预测市场的裁决和产品上线动态，用于评估Polymarket等平台流动性风险，并作为事件驱动策略的政策风险信号。", "limitations": "原文缺乏量化证据，摘要基于定性描述；报道未给出具体监管条款、市场影响数据和双方详细主张，后续需用CFTC官方文件和成交量数据验证。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 5.711, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.313, "display_title": "监管、监管调查加密市场新闻情报", "tldr": "CFTC会议上CME与Kalshi就预测市场监管标准交锋，监管不确定性直接影响预测市场与事件合约交易环境", "core_value": "对你的量化工作帮助：把它当作监管、监管调查案例，用来补充异常交易监控、市场操纵风险、大宗商品执行和合规审计的场景库。", "key_points_list": ["CME董事长Duffy与Kalshi联合创始人Lopes Lara在 CFTC 会议公开交锋，争论预测市场监管与操纵风险，无具体价格/数据变动。", "监管结果将影响预测市场合约准入和Polymarket等平台流动性，量化团队应跟踪 CFTC 后续指引及产品上市动态。", "报道未披露双方具体论据和条文，仅来自Decrypt单一信源；预测市场监管修订无时间表，政策风险较高。"], "reference_url": "https://decrypt.co/376158/tensions-flare-cme-kalshi-clash-prediction-markets-dc", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "加密市场新闻"}], "source_stats": {"Reddit algotrading": 1, "Quant StackExchange": 1, "arXiv": 4, "The Block": 3, "CoinDesk": 1, "Decrypt": 1}, "category_counts": {"Portfolio Construction": 1, "LLM / Agents for Quant": 3, "Market Microstructure": 1, "Risk Management": 1, "Crypto Quant": 4, "Alpha / Factor Research": 1}, "section_counts": {"ai_quant_tools": 5, "deep_learning_quant": 1, "daily_news": 5}, "sections": [{"key": "deep_learning_quant", "label": "深度学习量化未来", "description": "技术主线：深度学习、强化学习、Transformer、图神经网络、表征学习、订单簿预测、金融时间序列大模型等在量化里的应用。"}, {"key": "ai_quant_tools", "label": "AI 量化工具", "description": "工具主线：能提升量化研究效率的 AI 工具、代码仓库、研究自动化、智能体、回测/数据工程工具和可接入团队工作流的基础设施。"}, {"key": "daily_news", "label": "Crypto 市场每日 Top 5", "description": "加密市场新闻主线：来自 CoinDesk、CoinTelegraph、The Block、Decrypt、Blockworks 等主流媒体当日最重要的 Crypto 市场报道。"}], "category_labels": {"Alpha / Factor Research": "阿尔法 / 因子研究", "Statistical Arbitrage": "统计套利", "Portfolio Construction": "组合构建", "Risk Management": "风险管理", "Options / Volatility": "期权 / 波动率", "Market Microstructure": "市场微观结构", "Execution / Transaction Cost": "交易执行 / 交易成本", "Machine Learning for Finance": "金融机器学习", "LLM / Agents for Quant": "量化大模型 / 智能体", "Crypto Quant": "加密资产量化", "Data Engineering": "数据工程", "Backtesting / Research Tools": "回测 / 研究工具", "Industry / Career": "行业 / 职业 / 合规", "Unclassified": "未分类"}, "priority_labels": {"High": "高", "Medium": "中", "Low": "低", "高": "高", "中": "中", "低": "低"}, "source_type_labels": {"paper": "论文", "forum": "论坛", "github": "代码仓库", "blog": "博客", "news": "新闻", "social": "社交媒体", "zhihu": "知乎", "x": "X", "quantml": "QuantML", "crypto_news": "加密市场新闻"}, "report_config": {"max_items_per_category": 5, "max_total_items": 60, "executive_brief_items": 5}}</script>
+  <script>
+    const payload = JSON.parse(document.getElementById('dashboard-data').textContent);
+    const items = payload.items || [];
+    const categoryLabels = payload.category_labels || {};
+    const priorityLabels = payload.priority_labels || {};
+    const sourceTypeLabels = payload.source_type_labels || {};
+    const state = {
+      query: '',
+      section: 'All',
+      category: 'All',
+      sort: 'score',
+      activeId: items[0]?.id || null,
+    };
+
+    const priorityRank = { High: 3, Medium: 2, Low: 1, '高': 3, '中': 2, '低': 1 };
+    const $ = (id) => document.getElementById(id);
+
+    // --- Feedback ---
+    const _feedbackStore = JSON.parse(localStorage.getItem('quant-feedback') || '{}');
+    function getFeedback(id) { return _feedbackStore[id] || 0; }
+    function setFeedback(id, signal) {
+      if (_feedbackStore[id] === signal) { delete _feedbackStore[id]; signal = 0; }
+      else { _feedbackStore[id] = signal; }
+      localStorage.setItem('quant-feedback', JSON.stringify(_feedbackStore));
+      fetch('http://localhost:8080/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, signal }),
+      }).catch(() => {});
+    }
+
+    function init() {
+      $('report-date').textContent = payload.report_date + ' - 主力源：arXiv / 知乎 / QuantML / 大型论坛 - 生成时间 ' + payload.generated_at;
+      $('metric-items').textContent = items.length;
+      $('metric-categories').textContent = new Set(items.map((item) => item.category)).size;
+      $('metric-high').textContent = items.filter((item) => priorityLabel(item.read_priority) === '高').length;
+      $('metric-avg').textContent = averageScore(items).toFixed(1);
+
+      buildSectionControls();
+      buildCategoryControls();
+      buildSourceList();
+      bindControls();
+      render();
+    }
+
+    function bindControls() {
+      $('search').addEventListener('input', (event) => {
+        state.query = event.target.value.trim().toLowerCase();
+        render();
+      });
+      $('category-select').addEventListener('change', (event) => {
+        state.category = event.target.value;
+        render();
+      });
+      $('section-select').addEventListener('change', (event) => {
+        state.section = event.target.value;
+        render();
+      });
+      $('sort-select').addEventListener('change', (event) => {
+        state.sort = event.target.value;
+        render();
+      });
+    }
+
+    function buildCategoryControls() {
+      const counts = countBy(items, 'category');
+      const categories = Object.keys(counts).sort();
+      const select = $('category-select');
+      select.innerHTML = option('All', `全部细分标签 (${items.length})`) +
+        categories.map((category) => option(category, `${categoryLabel(category)} (${counts[category]})`)).join('');
+
+      const list = $('category-list');
+      list.innerHTML = categoryButton('All', items.length) +
+        categories.map((category) => categoryButton(category, counts[category])).join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.category = button.dataset.category;
+          select.value = state.category;
+          if (state.category === 'All') {
+            state.section = 'All';
+            $('section-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSectionControls() {
+      const counts = payload.section_counts || {};
+      const sections = payload.sections || [];
+      const select = $('section-select');
+      select.innerHTML = option('All', `全部主线 (${items.length})`) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => option(section.key, `${section.label} (${counts[section.key]})`))
+          .join('');
+
+      const list = $('section-list');
+      list.innerHTML = sectionButton('All', '全部', items.length) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => sectionButton(section.key, section.label, counts[section.key]))
+          .join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.section = button.dataset.section;
+          select.value = state.section;
+          if (state.section === 'All') {
+            state.category = 'All';
+            $('category-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSourceList() {
+      const stats = payload.source_stats || {};
+      const entries = Object.entries(stats)
+        .filter(([source]) => !source.startsWith('fetched:'))
+        .sort((a, b) => b[1] - a[1]);
+      $('source-list').innerHTML = entries.length
+        ? entries.map(([source, count]) => `<li><span>${escapeHtml(source)}</span><b>${count}</b></li>`).join('')
+        : '<li><span>暂无来源统计</span><b>0</b></li>';
+    }
+
+    function render() {
+      let visible = items.filter(matchesFilters);
+      visible = sortItems(visible);
+      if (!visible.some((item) => item.id === state.activeId)) {
+        state.activeId = visible[0]?.id || null;
+      }
+
+      $('feed-title').textContent = feedTitle();
+      $('result-count').textContent = `展示 ${visible.length} 条 - 两条主线每条最多 ${payload.report_config.max_items_per_category} 条`;
+      renderSectionActive();
+      renderCategoryActive();
+      renderItems(visible);
+      renderDetail(visible.find((item) => item.id === state.activeId) || visible[0]);
+    }
+
+    function matchesFilters(item) {
+      const sectionMatch = state.section === 'All' || (item.report_sections || []).includes(state.section);
+      if (!sectionMatch) return false;
+      const categoryMatch = state.category === 'All' || item.category === state.category;
+      if (!categoryMatch) return false;
+      if (!state.query) return true;
+      const haystack = [
+        item.title,
+        item.display_title,
+        item.source,
+        item.source_type,
+        item.category,
+        categoryLabel(item.category),
+        sectionLabel(item.report_sections?.[0]),
+        sourceTypeLabel(item.source_type),
+        priorityLabel(item.read_priority),
+        item.one_line_summary,
+        item.technical_summary,
+        item.quant_relevance,
+        item.possible_use_case,
+        item.tldr,
+        item.core_value,
+        ...(item.key_points_list || []),
+        item.reference_url,
+      ].join(' ').toLowerCase();
+      return haystack.includes(state.query);
+    }
+
+    function sortItems(list) {
+      return [...list].sort((a, b) => {
+        if (state.sort === 'priority') {
+          return (priorityRank[b.read_priority] || 0) - (priorityRank[a.read_priority] || 0)
+            || b.final_score - a.final_score;
+        }
+        if (state.sort === 'source') {
+          return a.source.localeCompare(b.source) || b.final_score - a.final_score;
+        }
+        return b.final_score - a.final_score;
+      });
+    }
+
+    function renderCategoryActive() {
+      document.querySelectorAll('.category-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.category === state.category);
+      });
+    }
+
+    function renderSectionActive() {
+      document.querySelectorAll('.section-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.section === state.section);
+      });
+    }
+
+    function itemCard(item) {
+      const sec = item.report_sections?.[0] || 'other';
+      const sig = getFeedback(item.id);
+      return `
+        <article class="item ${item.id === state.activeId ? 'active' : ''}"
+                 data-id="${escapeAttr(item.id)}"
+                 data-section="${escapeAttr(sec)}">
+          <div class="item-top">
+            <h3>${escapeHtml(item.display_title || item.title)}</h3>
+            <div class="score">${Number(item.final_score).toFixed(1)}</div>
+          </div>
+          <div class="meta">
+            <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+            <span class="tag">${escapeHtml(item.source)}</span>
+            <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+          </div>
+          ${readerFormat(item, true)}
+          <div class="feedback-row">
+            <button class="feedback-btn ${sig === 1 ? 'active-up' : ''}" data-feedback="1" title="有用">👍</button>
+            <button class="feedback-btn ${sig === -1 ? 'active-down' : ''}" data-feedback="-1" title="跳过">👎</button>
+            <span class="feedback-hint">${sig === 1 ? '已标记有用' : sig === -1 ? '已标记跳过' : ''}</span>
+          </div>
+        </article>
+      `;
+    }
+
+    function sectionGroupHeader(section, count) {
+      return `
+        <div class="section-group-header" data-section="${escapeAttr(section.key)}">
+          <span class="section-group-title">${escapeHtml(section.label)}</span>
+          <span class="section-group-count">${count} 条</span>
+        </div>
+      `;
+    }
+
+    function renderItems(visible) {
+      const container = $('items');
+      if (!visible.length) {
+        container.innerHTML = '<div class="empty">当前筛选条件下没有匹配内容。</div>';
+        return;
+      }
+
+      let html = '';
+      if (state.section === 'All') {
+        // Group by section in defined order, with a header for each group
+        const grouped = {};
+        for (const item of visible) {
+          const sec = item.report_sections?.[0] || 'other';
+          if (!grouped[sec]) grouped[sec] = [];
+          grouped[sec].push(item);
+        }
+        for (const section of (payload.sections || [])) {
+          const group = grouped[section.key];
+          if (!group || !group.length) continue;
+          html += sectionGroupHeader(section, group.length);
+          html += group.map((item) => itemCard(item)).join('');
+        }
+        // Append any items that fell into 'other' (shouldn't normally happen)
+        if (grouped['other']?.length) {
+          html += grouped['other'].map((item) => itemCard(item)).join('');
+        }
+      } else {
+        html = visible.map((item) => itemCard(item)).join('');
+      }
+
+      container.innerHTML = html;
+      container.querySelectorAll('.item').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.activeId = node.dataset.id;
+          render();
+        });
+      });
+      container.querySelectorAll('.feedback-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const itemNode = btn.closest('.item');
+          setFeedback(itemNode.dataset.id, parseInt(btn.dataset.feedback, 10));
+          render();
+        });
+      });
+    }
+
+    function renderDetail(item) {
+      const detail = $('detail');
+      if (!item) {
+        detail.innerHTML = '<div class="empty">选择一条内容查看详情。</div>';
+        return;
+      }
+
+      detail.innerHTML = `
+        <h2>${escapeHtml(item.display_title || item.title)}</h2>
+        <div class="meta">
+          <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+          <span class="tag">${escapeHtml(sourceTypeLabel(item.source_type))}</span>
+          <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+        </div>
+
+        ${readerFormat(item, false)}
+
+        <div class="detail-block">
+          <h3>评分拆解</h3>
+          <div class="breakdown">
+            ${bar('相关性', item.relevance_score)}
+            ${bar('新颖度', item.novelty_score)}
+            ${bar('学术性', item.academic_score)}
+            ${bar('讨论度', item.discussion_score)}
+            ${bar('可行动性', item.actionable_score)}
+          </div>
+        </div>
+
+      `;
+    }
+
+    function readerFormat(item, compact) {
+      const points = itemKeyPoints(item);
+      return `
+        <div class="reader-format ${compact ? 'compact' : ''}">
+          <div class="reader-block">
+            <h4>1. 这篇文章的太长不读</h4>
+            <p>${escapeHtml(item.tldr || item.one_line_summary || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>2. 核心价值，对我量化的工作能够提供什么样的帮助</h4>
+            <p>${escapeHtml(item.core_value || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>3. 关键核心点 / 论文或帖子摘要</h4>
+            <ol>${points.map((point) => `<li>${escapeHtml(point)}</li>`).join('')}</ol>
+          </div>
+          <div class="reader-block">
+            <h4>4. 原文链接</h4>
+            ${referenceHtml(item)}
+          </div>
+        </div>
+      `;
+    }
+
+    function itemKeyPoints(item) {
+      const points = Array.isArray(item.key_points_list)
+        ? item.key_points_list
+        : (Array.isArray(item.key_points) ? item.key_points : []);
+      const clean = points.filter(Boolean).slice(0, 3);
+      return clean.length ? clean : ['需要打开原文进一步确认方法、数据和适用边界。'];
+    }
+
+    function referenceHtml(item) {
+      const url = item.reference_url || '';
+      if (!url) return '<p>暂无可打开链接</p>';
+      return `
+        <a class="reader-reference" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">打开原文</a>
+        <small class="reference-url">${escapeHtml(url)}</small>
+      `;
+    }
+
+    function bar(label, value) {
+      const score = Number(value || 0);
+      const width = Math.max(0, Math.min(100, score * 10));
+      return `
+        <div class="bar">
+          <span>${label}</span>
+          <div class="bar-track"><div class="bar-fill" style="width: ${width}%"></div></div>
+          <b>${score.toFixed(1)}</b>
+        </div>
+      `;
+    }
+
+    function countBy(list, key) {
+      return list.reduce((acc, item) => {
+        acc[item[key]] = (acc[item[key]] || 0) + 1;
+        return acc;
+      }, {});
+    }
+
+    function averageScore(list) {
+      if (!list.length) return 0;
+      return list.reduce((sum, item) => sum + Number(item.final_score || 0), 0) / list.length;
+    }
+
+    function option(value, label) {
+      return `<option value="${escapeAttr(value)}">${escapeHtml(label)}</option>`;
+    }
+
+    function sectionButton(section, label, count) {
+      return `
+        <button class="category-button section-button" type="button" data-section="${escapeAttr(section)}">
+          <span>${escapeHtml(label)}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryButton(category, count) {
+      return `
+        <button class="category-button" type="button" data-category="${escapeAttr(category)}">
+          <span>${escapeHtml(category === 'All' ? '全部' : categoryLabel(category))}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryLabel(category) {
+      return categoryLabels[category] || category;
+    }
+
+    function sectionLabel(sectionKey) {
+      const section = (payload.sections || []).find((item) => item.key === sectionKey);
+      return section ? section.label : '其他';
+    }
+
+    function feedTitle() {
+      const parts = [];
+      if (state.section !== 'All') parts.push(sectionLabel(state.section));
+      if (state.category !== 'All') parts.push(categoryLabel(state.category));
+      return parts.length ? parts.join(' / ') : '今日情报';
+    }
+
+    function priorityLabel(priority) {
+      return priorityLabels[priority] || priority;
+    }
+
+    function sourceTypeLabel(sourceType) {
+      return sourceTypeLabels[sourceType] || sourceType;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replaceAll('`', '&#096;');
+    }
+
+    init();
+  </script>
+</body>
+</html>
