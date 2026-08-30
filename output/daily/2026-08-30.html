@@ -1,0 +1,1086 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>samson 量化情报台 - 2026-08-30</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --panel: #ffffff;
+      --ink: #202124;
+      --muted: #5f6368;
+      --line: #dadce0;
+      --blue: #1a73e8;
+      --red: #ea4335;
+      --yellow: #fbbc04;
+      --green: #34a853;
+      --blue-soft: #e8f0fe;
+      --green-soft: #e6f4ea;
+      --yellow-soft: #fef7e0;
+      --red-soft: #fce8e6;
+      --shadow: 0 1px 2px rgba(60, 64, 67, 0.16), 0 8px 24px rgba(60, 64, 67, 0.10);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(66, 133, 244, 0.07), transparent 30%),
+        radial-gradient(circle at top right, rgba(251, 188, 4, 0.08), transparent 26%),
+        var(--bg);
+      color: var(--ink);
+      font-family: "Google Sans", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(280px, 620px);
+      gap: 24px;
+      align-items: center;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand h1 {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin: 0;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+
+    .brand h1::before {
+      content: "";
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background:
+        conic-gradient(from 0deg, var(--blue) 0 25%, var(--red) 0 50%, var(--yellow) 0 75%, var(--green) 0 100%);
+      box-shadow: inset 0 0 0 7px #fff;
+    }
+
+    .date-pill {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 170px 170px 150px;
+      gap: 10px;
+    }
+
+    .control {
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 12px;
+      outline: none;
+    }
+
+    .control:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.14);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 260px minmax(420px, 1fr) 420px;
+      gap: 22px;
+      padding: 24px 32px 36px;
+    }
+
+    .rail,
+    .detail {
+      position: sticky;
+      top: 86px;
+      height: calc(100vh - 112px);
+      overflow: auto;
+    }
+
+    .rail,
+    .detail,
+    .feed {
+      min-width: 0;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      padding: 12px;
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
+    }
+
+    .metric:nth-child(1) { border-top: 3px solid var(--blue); }
+    .metric:nth-child(2) { border-top: 3px solid var(--red); }
+    .metric:nth-child(3) { border-top: 3px solid var(--yellow); }
+    .metric:nth-child(4) { border-top: 3px solid var(--green); }
+
+    .metric b {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .section-label {
+      margin: 18px 0 8px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .category-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .category-button {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--ink);
+      padding: 8px 10px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .category-button:hover,
+    .category-button.active {
+      border-color: transparent;
+      background: var(--blue-soft);
+      color: #174ea6;
+    }
+
+    .count {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .source-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .source-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .feed-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .feed-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .result-count {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .items {
+      display: grid;
+      gap: 10px;
+    }
+
+    .section-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 2px 4px;
+      margin-top: 10px;
+      border-bottom: 2px solid var(--line);
+    }
+
+    .section-group-header:first-child {
+      margin-top: 0;
+    }
+
+    .section-group-title {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .section-group-header[data-section="deep_learning_quant"] .section-group-title { color: var(--blue); }
+    .section-group-header[data-section="ai_quant_tools"] .section-group-title { color: var(--green); }
+    .section-group-header[data-section="daily_news"] .section-group-title { color: var(--yellow); }
+
+    .section-group-count {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .item {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.10);
+      padding: 18px;
+      cursor: pointer;
+      transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+    }
+
+    .item::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--blue), var(--red), var(--yellow), var(--green));
+    }
+
+    .item[data-section="deep_learning_quant"]::before { background: var(--blue); }
+    .item[data-section="ai_quant_tools"]::before { background: var(--green); }
+    .item[data-section="daily_news"]::before { background: var(--yellow); }
+
+    .item:hover,
+    .item.active {
+      border-color: #c6dafc;
+      box-shadow: var(--shadow);
+      transform: translateY(-2px);
+    }
+
+    .item-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .item h3 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.28;
+    }
+
+    .score {
+      min-width: 54px;
+      border-radius: 999px;
+      background: var(--blue-soft);
+      color: #174ea6;
+      padding: 6px 8px;
+      text-align: center;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .tag {
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: #f1f3f4;
+      padding: 3px 8px;
+    }
+
+    .tag:nth-child(1) { background: var(--blue-soft); color: #174ea6; }
+    .tag:nth-child(2) { background: var(--green-soft); color: #137333; }
+    .tag:nth-child(3) { background: var(--yellow-soft); color: #8a5a00; }
+    .tag:nth-child(4) { background: var(--red-soft); color: #b3261e; }
+
+    .summary {
+      margin: 0;
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .reference-link {
+      display: inline-flex;
+      width: fit-content;
+      border-top: 1px solid var(--line);
+      color: var(--blue);
+      padding-top: 9px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .reader-format {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .reader-format.compact {
+      gap: 8px;
+    }
+
+    .reader-block {
+      border-top: 1px solid var(--line);
+      padding-top: 9px;
+    }
+
+    .reader-block:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .reader-block h4 {
+      margin: 0 0 5px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .reader-block p,
+    .reader-block li {
+      margin: 0;
+      color: #30342d;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .reader-block ol {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .reader-reference {
+      color: var(--blue);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
+    .reference-url {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .detail {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .detail h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+
+    .detail-block {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .detail-block h3 {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+
+    .detail-block p,
+    .detail-block li {
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .detail-block ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .breakdown {
+      display: grid;
+      gap: 8px;
+    }
+
+    .bar {
+      display: grid;
+      grid-template-columns: 118px 1fr 40px;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .bar-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e7eadf;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--blue), var(--green), var(--yellow), var(--red));
+    }
+
+    .open-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      margin-top: 16px;
+      border: 1px solid var(--blue);
+      border-radius: var(--radius);
+      color: var(--blue);
+      text-decoration: none;
+      padding: 0 12px;
+      font-weight: 700;
+    }
+
+    .feedback-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+    }
+
+    .feedback-btn {
+      background: #f1f3f4;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 120ms, border-color 120ms;
+    }
+
+    .feedback-btn:hover { background: var(--blue-soft); }
+    .feedback-btn.active-up { background: var(--green-soft); border-color: var(--green); }
+    .feedback-btn.active-down { background: var(--red-soft); border-color: var(--red); }
+
+    .feedback-hint {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      padding: 28px;
+      color: var(--muted);
+      background: var(--panel);
+    }
+
+    @media (max-width: 1180px) {
+      .layout {
+        grid-template-columns: 220px 1fr;
+      }
+
+      .detail {
+        position: static;
+        grid-column: 1 / -1;
+        height: auto;
+      }
+    }
+
+    @media (max-width: 820px) {
+      .topbar {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .brand {
+        display: grid;
+        gap: 4px;
+      }
+
+      .brand h1 {
+        white-space: normal;
+        font-size: 21px;
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .rail,
+      .detail {
+        position: static;
+        height: auto;
+      }
+
+      .metric-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <h1>samson 量化情报台</h1>
+        <span class="date-pill" id="report-date"></span>
+      </div>
+      <div class="controls">
+        <input class="control" id="search" type="search" placeholder="搜索标题、摘要、分类..." />
+        <select class="control" id="section-select"></select>
+        <select class="control" id="category-select"></select>
+        <select class="control" id="sort-select">
+          <option value="score">按评分排序</option>
+          <option value="priority">按优先级排序</option>
+          <option value="source">按来源排序</option>
+        </select>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="rail">
+        <div class="metric-grid">
+          <div class="metric"><b id="metric-items">0</b><span>报告条目</span></div>
+          <div class="metric"><b id="metric-categories">0</b><span>分类数量</span></div>
+          <div class="metric"><b id="metric-high">0</b><span>高优先级</span></div>
+          <div class="metric"><b id="metric-avg">0.0</b><span>平均评分</span></div>
+        </div>
+
+        <div class="section-label">两条主线</div>
+        <div class="category-list" id="section-list"></div>
+
+        <div class="section-label">细分标签</div>
+        <div class="category-list" id="category-list"></div>
+
+        <div class="section-label">主力来源</div>
+        <ul class="source-list" id="source-list"></ul>
+      </aside>
+
+      <section class="feed">
+        <div class="feed-header">
+          <h2 id="feed-title">今日情报</h2>
+          <span class="result-count" id="result-count"></span>
+        </div>
+        <div class="items" id="items"></div>
+      </section>
+
+      <aside class="detail" id="detail"></aside>
+    </main>
+  </div>
+
+  <script id="dashboard-data" type="application/json">{"report_date": "2026-08-30", "generated_at": "2026-08-30T01:14:32Z", "items": [{"id": "1f10722fc9a9e3ba89044b2a30948a27c673e01b2040ae02afd8d4e44c1a9a92", "source": "CoinDesk", "source_type": "crypto_news", "title": "Inside the high-stakes battle between digital dollars and Swift's massive money engine", "url": "https://www.coindesk.com/business/2026/08/29/swift-s-usd1-5-quadrillion-network-faces-a-blockchain-test", "authors": [], "published_at": "2026-08-29", "collected_at": "2026-08-30T01:08:32Z", "raw_text": "Crypto executives say new blockchain payment infrastructure could make Swift obsolete. Bankers say its 11,500-institution network gives it the power to absorb the technology instead.", "abstract": "Crypto executives say new blockchain payment infrastructure could make Swift obsolete. Bankers say its 11,500-institution network gives it the power to absorb the technology instead.", "content_hash": "b6451ee92c63962b74be756d63cd87a63aa393f928fba14e86db25e4389d219a", "category": "Crypto Quant", "tags": ["blockchain", "crypto"], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "数字美元结算基础设施向 Swift 的 11,500 家机构网络发起挑战，加密高管称可取代谢太尔，银行认为可吸收技术", "technical_summary": "围绕数字美元与 Swift 全球支付网络的竞争展开。加密高管认为新的区块链支付基础设施可让 Swift 过时；银行则认为 Swift 覆盖 11,500 家机构的网络效应足够吸收区块链技术，而非被替代。报道标题指出 Swift 网络流转规模为 1.5 千万亿美元（quadrillion）量级。核心分歧在于：区块链能否绕过传统代理行清算体系，或者只是被现有巨头整合。", "key_points": ["核心事件：数字美元/区块链支付基建与 Swift 竞争升温；Swift 连接约 11,500 家机构，网络流转规模达 1.5 千万亿美元（quadrillion）量级。", "对加密量化交易者：关注区块链支付和稳定币结算通道进展，可能影响稳定币流动性分布、跨所资金转移效率及出入金成本。", "风险点：这是加密高管与银行的观点博弈，缺少可验证结算量数据；实际迁移速度、监管阻力和市场采用仍有较大不确定性。"], "quant_relevance": "执行 / 交易成本；市场基础设施", "possible_use_case": "作为宏观事件监测项：当区块链结算通道升级或与 Swift 合作时，可结合稳定币汇率、CEX/DEX 价差判断资金流动成本和套利空间变化。", "limitations": "这是 CoinDesk 观点性报道，不是量化研究；关键数字 11,500 家机构和 1.5 千万亿美元（quadrillion）来自新闻口径，未给出统计区间和数据来源；需结合链上数据或 Swift 官方披露做交叉验证。", "read_priority": "高", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.78, "academic_score": 5.728, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.635, "display_title": "加密资产加密市场新闻情报", "tldr": "数字美元结算基础设施向 Swift 的 11,500 家机构网络发起挑战，加密高管称可取代谢太尔，银行认为可吸收技术", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["核心事件：数字美元/区块链支付基建与 Swift 竞争升温；Swift 连接约 11,500 家机构，网络流转规模达 1.5 千万亿美元（quadrillion）量级。", "对加密量化交易者：关注区块链支付和稳定币结算通道进展，可能影响稳定币流动性分布、跨所资金转移效率及出入金成本。", "风险点：这是加密高管与银行的观点博弈，缺少可验证结算量数据；实际迁移速度、监管阻力和市场采用仍有较大不确定性。"], "reference_url": "https://www.coindesk.com/business/2026/08/29/swift-s-usd1-5-quadrillion-network-faces-a-blockchain-test", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "19198dd167d91529a6ce6a3427068c00288d240e57077a49b9c19b88523b2f5c", "source": "The Block", "source_type": "crypto_news", "title": "Former White House teleprompter operator ordered to pay $172,000 for Kalshi trades on mention markets", "url": "https://www.theblock.co/news/regulation/2026-08-29-former-white-house-teleprompter-operator-ordered-to-pay-172000-for-kalshi-trades-on-mention-markets-413058", "authors": [], "published_at": "2026-08-29", "collected_at": "2026-08-30T01:08:32Z", "raw_text": "The fine marks the CFTC's second insider trading case against a federal employee trading event contracts and its second related settlement in four weeks.", "abstract": "The fine marks the CFTC's second insider trading case against a federal employee trading event contracts and its second related settlement in four weeks.", "content_hash": "b77b54c2eb352da2083efd38008759adcb0eb150c86012a1a9053693e90df575", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://www.theblock.co/rss.xml"}, "one_line_summary": "CFTC对前白宫助理Kalshi内幕交易罚款17.2万美元，凸显事件合约策略合规红线", "technical_summary": "美国CFTC对前白宫提词器操作员利用未公开信息在Kalshi平台交易'提及市场'事件合约处以17.2万美元罚款，并以和解方式结案，这是CFTC在四周内针对联邦雇员交易事件合约的第二起内幕交易执法。事件合约平台受CFTC管辖，监管执法显示利用信息优势在该类市场交易面临高合规风险。对量化交易者直接影响是：事件驱动策略需在数据获取与执行环节隔离重大非公开信息，避免触碰监管红线。", "key_points": ["CFTC对前白宫提词器操作员处以17.2万美元罚款，因其在Kalshi使用未公开信息交易'提及市场'事件合约，为四周内第二起联邦雇员相关和解案。", "量化交易者需关注Kalshi、Polymarket等预测市场的监管收紧，执行前过滤重大非公开信息，避免触及CFTC执法红线。", "不确定因素包括：CFTC执法是否扩大至加密预测市场或非联邦雇员尚不明朗；The Block报道未披露具体交易时段与罚款构成，需以CFTC官方文件为准。"], "quant_relevance": "风险建模", "possible_use_case": "可作为事件合约（Kalshi、Polymarket）策略的合规风控参考，提示策略执行前需检查是否存在重大未公开信息，尤其针对政治/选举类事件。", "limitations": "这是单一媒体（The Block）的新闻摘要，未提供完整处罚细节（具体行为、交易时段），且原报道可能带有美国监管视角，不代表所有市场；预测市场的监管影响仍需后续执法案例验证。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.7, "novelty_score": 9.78, "academic_score": 5.691, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.52, "display_title": "监管调查加密市场新闻情报", "tldr": "CFTC对前白宫助理Kalshi内幕交易罚款17.2万美元，凸显事件合约策略合规红线", "core_value": "对你的量化工作帮助：把它当作监管调查案例，用来补充异常交易监控、市场操纵风险、大宗商品执行和合规审计的场景库。", "key_points_list": ["CFTC 对前白宫提词器操作员处以17.2万美元罚款，因其在Kalshi使用未公开信息交易'提及市场'事件合约，为四周内第二起联邦雇员相关和解案。", "量化交易者需关注Kalshi、Polymarket等预测市场的监管收紧，执行前过滤重大非公开信息，避免触及 CFTC 执法红线。", "不确定因素包括：CFTC 执法是否扩大至加密预测市场或非联邦雇员尚不明朗；The Block报道未披露具体交易时段与罚款构成，需以 CFTC 官方文件为准。"], "reference_url": "https://www.theblock.co/news/regulation/2026-08-29-former-white-house-teleprompter-operator-ordered-to-pay-172000-for-kalshi-trades-on-mention-markets-413058", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "e66e73c25b09d023f08c8c646f2a93222444e321742b71d8722869cc88347443", "source": "Decrypt", "source_type": "crypto_news", "title": "BitGo Buys NYDIG's Institutional Trading Arm to Beef Up Derivatives and Financing", "url": "https://decrypt.co/376864/bitgo-buys-nydig-institutional-trading-arm", "authors": [], "published_at": "2026-08-29", "collected_at": "2026-08-30T01:08:33Z", "raw_text": "The roughly $42.5 million cash-and-stock deal adds derivatives, structured products and capital-markets capabilities, while letting NYDIG focus on its power and data-center business.", "abstract": "The roughly $42.5 million cash-and-stock deal adds derivatives, structured products and capital-markets capabilities, while letting NYDIG focus on its power and data-center business.", "content_hash": "45c165c232e884ad4b4f740e14eb32356ab9f4781e23a662c4da5f5672d44ef0", "category": "Options / Volatility", "tags": ["derivatives"], "language": "en", "metadata": {"feed_url": "https://decrypt.co/feed"}, "one_line_summary": "BitGo以约4250万美元现金+股票收购NYDIG机构交易部门，扩展加密衍生品与融资能力", "technical_summary": "这是一起加密机构合并案：BitGo以约4250万美元对价收购NYDIG的机构交易部门。收购后BitGo将获得衍生品、结构化产品和资本市场能力，从托管业务向交易和融资服务扩展。NYDIG则剥离机构交易业务，专注于电力基础设施和挖矿数据中心。这项交易可能改变机构级加密衍生品市场的产品供给和流动性格局，但具体产品路径尚未披露。", "key_points": ["BitGo以约4250万美元现金加股票收购NYDIG机构交易部门，获得衍生品、结构化产品与资本市场业务。", "机构托管与交易一体化趋势增强，量化团队可评估BitGo未来衍生品和融资产品对场外对冲成本及抵押品管理的影响。", "交易完成时间、监管审批以及NYDIG现有客户合约的转移安排尚未披露，整合效果存在不确定性。"], "quant_relevance": "['执行 / 交易成本', '风险建模']", "possible_use_case": "可关注BitGo整合后推出的新增衍生品和融资产品，若上线则可能带来BTC/ETH期权隐含波动率与资金费率的边际变化，作为机构资金流向和场外流动性变化的参考。", "limitations": "信息来源单一，交易尚未完成；未披露监管审批、产品上线时间和现有客户合约转移细节；市场影响需观察实际产品落地后验证。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.78, "academic_score": 5.728, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.485, "display_title": "期权 / 波动率加密市场新闻情报", "tldr": "BitGo以约4250万美元现金+股票收购NYDIG机构交易部门，扩展加密衍生品与融资能力", "core_value": "对你的量化工作帮助：围绕期权 / 波动率补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["BitGo以约4250万美元现金加股票收购NYDIG机构交易部门，获得衍生品、结构化产品与资本市场业务。", "机构托管与交易一体化趋势增强，量化团队可评估BitGo未来衍生品和融资产品对场外对冲成本及抵押品管理的影响。", "交易完成时间、监管审批以及NYDIG现有客户合约的转移安排尚未披露，整合效果存在不确定性。"], "reference_url": "https://decrypt.co/376864/bitgo-buys-nydig-institutional-trading-arm", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "期权 / 波动率", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "f5a423fe48ca225f926f6e4c79df6ed0c3abab202b2023f0712e949195a0372d", "source": "CoinDesk", "source_type": "crypto_news", "title": "Tokenized assets are busier than the data shows", "url": "https://www.coindesk.com/opinion/2026/08/29/tokenized-assets-are-busier-than-the-data-shows", "authors": [], "published_at": "2026-08-29", "collected_at": "2026-08-30T01:08:32Z", "raw_text": "When you strip out what was never mobile, correct for who's holding what and why, add back what works off-contract, the utilization of tokenized assets looks close to 20%, argues Katana’s Matthew Fisher.", "abstract": "When you strip out what was never mobile, correct for who's holding what and why, add back what works off-contract, the utilization of tokenized assets looks close to 20%, argues Katana’s Matthew Fisher.", "content_hash": "ee940cf1f7f0ed9863d0971993be1119cfea953c406cd0ad083b3da5bd783b91", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "Katana 分析师估算代币化资产真实利用率接近 20%，链上数据明显低估活跃度", "technical_summary": "链上数据显示代币化资产流动性有限，但 Katana 的 Matthew Fisher 认为这种统计低估了真实活跃度。剔除从未移动的资产、修正持有人结构和持有意图、加入链下合约交易后，真实利用率接近 20%。对量化研究的核心提醒是：仅用链上原始数据估算代币化资产的交易深度和容量，可能显著低于实际可交易规模。需结合托管商、发行方和场外交易数据源交叉验证。", "key_points": ["Katana 估算代币化资产真实利用率接近 20%，高于链上数据呈现的活跃度。", "量化交易者可关注链下持有和 OTC 数据，重新评估 RWA 代币化流动性池的真实深度。", "缺乏具体计算模型和原始数据，20% 为估算，存在口径偏差和夸大风险。"], "quant_relevance": "数据工程：提示构建代币化资产或 RWA 策略时，不能只依赖链上交易量，需要整合链下持仓和 OTC 数据来评估真实流动性。", "possible_use_case": "可作为评估代币化资产（RWA）流动性池的参考：在构建固定收益或 RWA 策略时，将链下持仓和 OTC 成交纳入流动性估算，用于容量测试和滑点预估。", "limitations": "这是 CoinDesk 专栏观点，未给出具体数据目录、计算步骤或可复现模型；20% 为估算值，需用链上原始数据、托管数据和场外成交数据独立验证后才能用于研究结论。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 5.754, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.319, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "Katana 分析师估算代币化资产真实利用率接近 20%，链上数据明显低估活跃度", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["Katana 估算代币化资产真实利用率接近 20%，高于链上数据呈现的活跃度。", "量化交易者可关注链下持有和 OTC 数据，重新评估 RWA 代币化流动性池的真实深度。", "缺乏具体计算模型和原始数据，20% 为估算，存在口径偏差和夸大风险。"], "reference_url": "https://www.coindesk.com/opinion/2026/08/29/tokenized-assets-are-busier-than-the-data-shows", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "1c1aa1a624e5ddfcfc9dae8d5a5853f1086b5002ebd852446df0bed08580ff69", "source": "CoinTelegraph", "source_type": "crypto_news", "title": "Stablecoins not credible for payments at scale, BIS chief says", "url": "https://cointelegraph.com/news/stablecoins-not-credible-payments-scale-bis-chief?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "authors": [], "published_at": "2026-08-29", "collected_at": "2026-08-30T01:08:32Z", "raw_text": "BIS chief Pablo Hernández de Cos said stablecoins lack credibility for payments at scale, while a new FSI study highlights sharp differences in issuer rules.", "abstract": "BIS chief Pablo Hernández de Cos said stablecoins lack credibility for payments at scale, while a new FSI study highlights sharp differences in issuer rules.", "content_hash": "3fa0b0368d1d62597468c11f511b59578ec8b70a15207982ebc6aaf6e279f4c2", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://cointelegraph.com/rss"}, "one_line_summary": "BIS 行长公开质疑稳定币在大规模支付中的可信度，FSI 研究显示各国发行规则差异明显", "technical_summary": "BIS 行长 Pablo Hernández de Cos 在公开场合表示，稳定币在大规模支付中的可信度不足。国际清算银行下属机构的 FSI 研究发现，不同司法管辖区的稳定币发行规则存在显著差异。这反映出监管层对稳定币系统性风险的关注升温。对量化研究而言，需要关注监管政策收紧对稳定币供给、折溢价和基差交易策略的潜在冲击。原文没有提供具体数据，核心依据是监管官员的立场和 FSI 研究报告。", "key_points": ["BIS 行长公开称稳定币在大规模支付场景下缺乏可信度，且各国发行规则差异明显。", "量化交易需跟踪稳定币监管动向，关注供给变化、折溢价以及基差交易等策略的监管风险。", "该声明为立场性观点，未落地具体政策，短期市场影响可能有限，需警惕过度解读。"], "quant_relevance": "风险建模：稳定币监管不确定性可能影响加密市场流动性和风险溢价。", "possible_use_case": "可将 BIS/FSI 后续监管指引作为稳定币供给预测和跨市场套利策略的宏观风险因子，纳入量化风控流程。", "limitations": "官方言论缺乏具体数据支撑，未给出时间表和监管细节；属于观点性新闻，对市场价格的直接影响不确定。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 5.696, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.31, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "BIS 行长公开质疑稳定币在大规模支付中的可信度，FSI 研究显示各国发行规则差异明显", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["BIS 行长公开称稳定币在大规模支付场景下缺乏可信度，且各国发行规则差异明显。", "量化交易需跟踪稳定币监管动向，关注供给变化、折溢价以及基差交易等策略的监管风险。", "该声明为立场性观点，未落地具体政策，短期市场影响可能有限，需警惕过度解读。"], "reference_url": "https://cointelegraph.com/news/stablecoins-not-credible-payments-scale-bis-chief?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "1401225c0ede2673fddffd32b1c01fccf29981e8c1253c510cf22406cd6318ff", "source": "CoinDesk", "source_type": "crypto_news", "title": "The next trillion-dollar currency may not be a stablecoin — it might not even have a name yet", "url": "https://www.coindesk.com/business/2026/08/29/the-next-trillion-dollar-currency-may-not-be-a-stablecoin-it-might-not-even-have-a-name-yet", "authors": [], "published_at": "2026-08-29", "collected_at": "2026-08-30T01:08:32Z", "raw_text": "AI agents are coming. They will need to pay each other. Crypto executives agree on the problem but disagree sharply on the solution, and one thinks the answer has not been invented yet.", "abstract": "AI agents are coming. They will need to pay each other. Crypto executives agree on the problem but disagree sharply on the solution, and one thinks the answer has not been invented yet.", "content_hash": "120f2dd6e4fa6735c769a502ed707eccae28bb94c4ea01e16c3fd8e5b182c0bc", "category": "Crypto Quant", "tags": ["crypto"], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "AI agent 之间支付被视为加密领域下一个万亿美元市场，但现有稳定币方案未必是终局", "technical_summary": "这篇文章讨论 AI agent 经济的支付基础设施问题：AI agents 需要自主完成相互支付，这意味着需要新的加密原生支付轨道。加密高管们一致认可这个需求，但对稳定币是否足够、是否需要全新协议存在分歧，有人甚至认为最终方案尚未被发明。文章属于行业观点型报道，未披露具体项目名称、市值预测或技术方案细节。标题暗示下一代万亿级货币可能不是现有稳定币，而是尚未出现的加密资产。", "key_points": ["AI agents 将需要自主相互支付，被视为下一个潜在万亿美元级加密赛道，但加密高管对方案尚无共识。", "量化可跟踪 AI agent 支付相关项目动态和链上交易量，作为早期主题信号，但当前无具体标的。", "原文缺乏具体项目、时间表和市场规模测算，仅有定性讨论，信息密度低，需后续数据验证。"], "quant_relevance": "因子 / alpha 信号 / 数据工程", "possible_use_case": "可作为 AI 主题区块链项目的观察清单参考，用于监控该赛道相关代币的交易量异动和链上活跃度变化。", "limitations": "CoinDesk 的定性观点报道，无具体数字、项目名称或可验证证据；文章大段重复，信息量低；标题的万亿级推测属于观点而非测算；需等待具体技术方案和链上数据出现后才能用于量化因子构建。", "read_priority": "中", "key_figures_md": "", "relevance_score": 4.2, "novelty_score": 9.78, "academic_score": 5.731, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.276, "display_title": "加密资产、人工智能加密市场新闻情报", "tldr": "AI agent 之间支付被视为加密领域下一个万亿美元市场，但现有稳定币方案未必是终局", "core_value": "对你的量化工作帮助：围绕加密资产、人工智能补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["AI agents 将需要自主相互支付，被视为下一个潜在万亿美元级加密赛道，但加密高管对方案尚无共识。", "量化可跟踪 AI agent 支付相关项目动态和链上交易量，作为早期主题信号，但当前无具体标的。", "原文缺乏具体项目、时间表和市场规模测算，仅有定性讨论，信息密度低，需后续数据验证。"], "reference_url": "https://www.coindesk.com/business/2026/08/29/the-next-trillion-dollar-currency-may-not-be-a-stablecoin-it-might-not-even-have-a-name-yet", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "加密资产量化", "priority_label": "中", "source_type_label": "加密市场新闻"}, {"id": "ba643d815bc582c8a339e5f375273ca5fdf3d868b651f59f2085a2d38d96f725", "source": "Decrypt", "source_type": "crypto_news", "title": "Bitcoin's Oldest Coins Are Waking Up in 2026 at a Pace Rarely Seen", "url": "https://decrypt.co/376866/bitcoin-oldest-coins-waking-up-2026", "authors": [], "published_at": "2026-08-29", "collected_at": "2026-08-30T01:08:33Z", "raw_text": "Galaxy Research shows coins untouched for 10-plus years moving at an unusual pace in 2026, with six ancient wallets shifting $40 million in a single 10-day stretch this month.", "abstract": "Galaxy Research shows coins untouched for 10-plus years moving at an unusual pace in 2026, with six ancient wallets shifting $40 million in a single 10-day stretch this month.", "content_hash": "42cb39bf6263d97bfab82a3f7c1251f3b824953556e5fb57e66a67193b5059c1", "category": "Crypto Quant", "tags": ["bitcoin"], "language": "en", "metadata": {"feed_url": "https://decrypt.co/feed"}, "one_line_summary": "比特币10年未动老币异动，10天内6个远古钱包转移4000万美元，链上供给压力信号重要性上升", "technical_summary": "Galaxy Research 的链上数据显示，10年以上未移动的比特币在2026年正以罕见速度苏醒。本月一个10天窗口内，6个远古钱包转移约4000万美元，规模在历史上很少见。这可能代表长期持有者在重新配置资产、卖出或迁移托管地址。对量化交易者而言，这是可纳入供给压力监控的链上前瞻指标，但原始报道缺少钱包身份和交易方向细节。", "key_points": ["10年以上未动比特币在2026年异动，10天内6个远古钱包转移4000万美元，规模罕见。", "可监控10年以上币龄UTXO数据，作为供给压力或长期持有者行为变化的链上信号。", "缺少钱包身份和卖出或转入交易所细节，难以判断是真实卖出还是托管转移。"], "quant_relevance": "链上数据信号 / 风险建模", "possible_use_case": "可作为BTC中短期波动风险参考：当10年以上地址异动激增时，可用于调整仓位或纳入链上因子回测。", "limitations": "这是新闻快讯，来源单一为Galaxy Research摘要，缺少原始数据集和完整方法；未披露转移方向、钱包归属、是否OTC交易；样本期仅一个月，需结合更多链上数据验证。这是市场新闻，需用数据验证后才能用于研究结论。", "read_priority": "高", "key_figures_md": "", "relevance_score": 4.2, "novelty_score": 9.78, "academic_score": 5.719, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.274, "display_title": "加密资产量化加密市场新闻情报", "tldr": "比特币10年未动老币异动，10天内6个远古钱包转移4000万美元，链上供给压力信号重要性上升", "core_value": "对你的量化工作帮助：围绕加密资产量化补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["10年以上未动比特币在2026年异动，10天内6个远古钱包转移4000万美元，规模罕见。", "可监控10年以上币龄UTXO数据，作为供给压力或长期持有者行为变化的链上信号。", "缺少钱包身份和卖出或转入交易所细节，难以判断是真实卖出还是托管转移。"], "reference_url": "https://decrypt.co/376866/bitcoin-oldest-coins-waking-up-2026", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "97ae3a352159d3ea869c56343edb805f90cb17fb632b77c5461b40a275d10693", "source": "CoinDesk", "source_type": "crypto_news", "title": "Ditching 'digital gold': BPI study suggests everyday Americans prefer control and micro-investing", "url": "https://www.coindesk.com/business/2026/08/28/ditch-digital-gold-bpi-study-suggests-everyday-americans-prefer-control-and-micro-investing", "authors": [], "published_at": "2026-08-29", "collected_at": "2026-08-30T01:08:32Z", "raw_text": "A new survey suggests some of bitcoin's most familiar sales pitches of changing the world may be poorly suited to a majority of prospective buyers.", "abstract": "A new survey suggests some of bitcoin's most familiar sales pitches of changing the world may be poorly suited to a majority of prospective buyers.", "content_hash": "6017b304490c7d0a7986d6e9d595b9de3d135d545fa857f6cc535410bd1e28eb", "category": "Crypto Quant", "tags": ["bitcoin"], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "BPI 调查：普通美国人偏好控制权与小额定投，比特币「数字黄金」叙事对潜在买家吸引力不足", "technical_summary": "BPI 发布针对普通美国投资者的调查，测试比特币主流销售叙事与潜在买家实际偏好的匹配度。核心发现是，多数潜在买家更看重投资控制权和小额定投（micro-investing）等实际使用功能，而非「数字黄金」「改变世界」之类的宏大叙事。这表明比特币面向大众市场的定位可能需要从意识形态叙事转向实用工具叙事。原文未提供样本量、调查时间和具体百分比等量化细节。", "key_points": ["BPI 调查显示普通美国人更偏好控制权和小额定投，比特币「数字黄金」叙事对多数潜在买家缺乏吸引力。", "叙事错配可能抑制 BTC 散户新增需求，小额定投偏好或利好稳定币/定投类产品，可用链上小额交易笔数验证。", "原文为标题级摘要，无样本量、调查日期和统计显著性数据；偏好调查不等于实际交易行为，存在社会期望偏差。"], "quant_relevance": "因子/alpha信号；风险建模", "possible_use_case": "作为评估比特币散户叙事吸引力的定性参考，配合链上小额交易笔数、交易所零售资金流入数据交叉验证；待完整报告发布后，可将调查结果纳入加密情绪指标体系。", "limitations": "原文仅有标题级摘要，实际文章正文未展开，缺少样本量、调查时间、具体百分比等关键数据；这是偏好调查而非实盘交易行为，可能受社会期望偏差影响；需用链上小额交易数据或券商散户流量数据独立验证。", "read_priority": "中", "key_figures_md": "", "relevance_score": 4.2, "novelty_score": 9.78, "academic_score": 5.684, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.269, "display_title": "加密资产量化加密市场新闻情报", "tldr": "BPI 调查：普通美国人偏好控制权与小额定投，比特币「数字黄金」叙事对潜在买家吸引力不足", "core_value": "对你的量化工作帮助：围绕加密资产量化补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["BPI 调查显示普通美国人更偏好控制权和小额定投，比特币「数字黄金」叙事对多数潜在买家缺乏吸引力。", "叙事错配可能抑制 BTC 散户新增需求，小额定投偏好或利好稳定币/定投类产品，可用链上小额交易笔数验证。", "原文为标题级摘要，无样本量、调查日期和统计显著性数据；偏好调查不等于实际交易行为，存在社会期望偏差。"], "reference_url": "https://www.coindesk.com/business/2026/08/28/ditch-digital-gold-bpi-study-suggests-everyday-americans-prefer-control-and-micro-investing", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "加密资产量化", "priority_label": "中", "source_type_label": "加密市场新闻"}], "source_stats": {"CoinDesk": 4, "The Block": 1, "Decrypt": 2, "CoinTelegraph": 1}, "category_counts": {"Crypto Quant": 4, "Alpha / Factor Research": 3, "Options / Volatility": 1}, "section_counts": {"daily_news": 5, "ai_quant_tools": 3}, "sections": [{"key": "deep_learning_quant", "label": "深度学习量化未来", "description": "技术主线：深度学习、强化学习、Transformer、图神经网络、表征学习、订单簿预测、金融时间序列大模型等在量化里的应用。"}, {"key": "ai_quant_tools", "label": "AI 量化工具", "description": "工具主线：能提升量化研究效率的 AI 工具、代码仓库、研究自动化、智能体、回测/数据工程工具和可接入团队工作流的基础设施。"}, {"key": "daily_news", "label": "Crypto 市场每日 Top 5", "description": "加密市场新闻主线：来自 CoinDesk、CoinTelegraph、The Block、Decrypt、Blockworks 等主流媒体当日最重要的 Crypto 市场报道。"}], "category_labels": {"Alpha / Factor Research": "阿尔法 / 因子研究", "Statistical Arbitrage": "统计套利", "Portfolio Construction": "组合构建", "Risk Management": "风险管理", "Options / Volatility": "期权 / 波动率", "Market Microstructure": "市场微观结构", "Execution / Transaction Cost": "交易执行 / 交易成本", "Machine Learning for Finance": "金融机器学习", "LLM / Agents for Quant": "量化大模型 / 智能体", "Crypto Quant": "加密资产量化", "Data Engineering": "数据工程", "Backtesting / Research Tools": "回测 / 研究工具", "Industry / Career": "行业 / 职业 / 合规", "Unclassified": "未分类"}, "priority_labels": {"High": "高", "Medium": "中", "Low": "低", "高": "高", "中": "中", "低": "低"}, "source_type_labels": {"paper": "论文", "forum": "论坛", "github": "代码仓库", "blog": "博客", "news": "新闻", "social": "社交媒体", "zhihu": "知乎", "x": "X", "quantml": "QuantML", "crypto_news": "加密市场新闻"}, "report_config": {"max_items_per_category": 5, "max_total_items": 60, "executive_brief_items": 5}}</script>
+  <script>
+    const payload = JSON.parse(document.getElementById('dashboard-data').textContent);
+    const items = payload.items || [];
+    const categoryLabels = payload.category_labels || {};
+    const priorityLabels = payload.priority_labels || {};
+    const sourceTypeLabels = payload.source_type_labels || {};
+    const state = {
+      query: '',
+      section: 'All',
+      category: 'All',
+      sort: 'score',
+      activeId: items[0]?.id || null,
+    };
+
+    const priorityRank = { High: 3, Medium: 2, Low: 1, '高': 3, '中': 2, '低': 1 };
+    const $ = (id) => document.getElementById(id);
+
+    // --- Feedback ---
+    const _feedbackStore = JSON.parse(localStorage.getItem('quant-feedback') || '{}');
+    function getFeedback(id) { return _feedbackStore[id] || 0; }
+    function setFeedback(id, signal) {
+      if (_feedbackStore[id] === signal) { delete _feedbackStore[id]; signal = 0; }
+      else { _feedbackStore[id] = signal; }
+      localStorage.setItem('quant-feedback', JSON.stringify(_feedbackStore));
+      fetch('http://localhost:8080/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, signal }),
+      }).catch(() => {});
+    }
+
+    function init() {
+      $('report-date').textContent = payload.report_date + ' - 主力源：arXiv / 知乎 / QuantML / 大型论坛 - 生成时间 ' + payload.generated_at;
+      $('metric-items').textContent = items.length;
+      $('metric-categories').textContent = new Set(items.map((item) => item.category)).size;
+      $('metric-high').textContent = items.filter((item) => priorityLabel(item.read_priority) === '高').length;
+      $('metric-avg').textContent = averageScore(items).toFixed(1);
+
+      buildSectionControls();
+      buildCategoryControls();
+      buildSourceList();
+      bindControls();
+      render();
+    }
+
+    function bindControls() {
+      $('search').addEventListener('input', (event) => {
+        state.query = event.target.value.trim().toLowerCase();
+        render();
+      });
+      $('category-select').addEventListener('change', (event) => {
+        state.category = event.target.value;
+        render();
+      });
+      $('section-select').addEventListener('change', (event) => {
+        state.section = event.target.value;
+        render();
+      });
+      $('sort-select').addEventListener('change', (event) => {
+        state.sort = event.target.value;
+        render();
+      });
+    }
+
+    function buildCategoryControls() {
+      const counts = countBy(items, 'category');
+      const categories = Object.keys(counts).sort();
+      const select = $('category-select');
+      select.innerHTML = option('All', `全部细分标签 (${items.length})`) +
+        categories.map((category) => option(category, `${categoryLabel(category)} (${counts[category]})`)).join('');
+
+      const list = $('category-list');
+      list.innerHTML = categoryButton('All', items.length) +
+        categories.map((category) => categoryButton(category, counts[category])).join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.category = button.dataset.category;
+          select.value = state.category;
+          if (state.category === 'All') {
+            state.section = 'All';
+            $('section-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSectionControls() {
+      const counts = payload.section_counts || {};
+      const sections = payload.sections || [];
+      const select = $('section-select');
+      select.innerHTML = option('All', `全部主线 (${items.length})`) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => option(section.key, `${section.label} (${counts[section.key]})`))
+          .join('');
+
+      const list = $('section-list');
+      list.innerHTML = sectionButton('All', '全部', items.length) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => sectionButton(section.key, section.label, counts[section.key]))
+          .join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.section = button.dataset.section;
+          select.value = state.section;
+          if (state.section === 'All') {
+            state.category = 'All';
+            $('category-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSourceList() {
+      const stats = payload.source_stats || {};
+      const entries = Object.entries(stats)
+        .filter(([source]) => !source.startsWith('fetched:'))
+        .sort((a, b) => b[1] - a[1]);
+      $('source-list').innerHTML = entries.length
+        ? entries.map(([source, count]) => `<li><span>${escapeHtml(source)}</span><b>${count}</b></li>`).join('')
+        : '<li><span>暂无来源统计</span><b>0</b></li>';
+    }
+
+    function render() {
+      let visible = items.filter(matchesFilters);
+      visible = sortItems(visible);
+      if (!visible.some((item) => item.id === state.activeId)) {
+        state.activeId = visible[0]?.id || null;
+      }
+
+      $('feed-title').textContent = feedTitle();
+      $('result-count').textContent = `展示 ${visible.length} 条 - 两条主线每条最多 ${payload.report_config.max_items_per_category} 条`;
+      renderSectionActive();
+      renderCategoryActive();
+      renderItems(visible);
+      renderDetail(visible.find((item) => item.id === state.activeId) || visible[0]);
+    }
+
+    function matchesFilters(item) {
+      const sectionMatch = state.section === 'All' || (item.report_sections || []).includes(state.section);
+      if (!sectionMatch) return false;
+      const categoryMatch = state.category === 'All' || item.category === state.category;
+      if (!categoryMatch) return false;
+      if (!state.query) return true;
+      const haystack = [
+        item.title,
+        item.display_title,
+        item.source,
+        item.source_type,
+        item.category,
+        categoryLabel(item.category),
+        sectionLabel(item.report_sections?.[0]),
+        sourceTypeLabel(item.source_type),
+        priorityLabel(item.read_priority),
+        item.one_line_summary,
+        item.technical_summary,
+        item.quant_relevance,
+        item.possible_use_case,
+        item.tldr,
+        item.core_value,
+        ...(item.key_points_list || []),
+        item.reference_url,
+      ].join(' ').toLowerCase();
+      return haystack.includes(state.query);
+    }
+
+    function sortItems(list) {
+      return [...list].sort((a, b) => {
+        if (state.sort === 'priority') {
+          return (priorityRank[b.read_priority] || 0) - (priorityRank[a.read_priority] || 0)
+            || b.final_score - a.final_score;
+        }
+        if (state.sort === 'source') {
+          return a.source.localeCompare(b.source) || b.final_score - a.final_score;
+        }
+        return b.final_score - a.final_score;
+      });
+    }
+
+    function renderCategoryActive() {
+      document.querySelectorAll('.category-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.category === state.category);
+      });
+    }
+
+    function renderSectionActive() {
+      document.querySelectorAll('.section-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.section === state.section);
+      });
+    }
+
+    function itemCard(item) {
+      const sec = item.report_sections?.[0] || 'other';
+      const sig = getFeedback(item.id);
+      return `
+        <article class="item ${item.id === state.activeId ? 'active' : ''}"
+                 data-id="${escapeAttr(item.id)}"
+                 data-section="${escapeAttr(sec)}">
+          <div class="item-top">
+            <h3>${escapeHtml(item.display_title || item.title)}</h3>
+            <div class="score">${Number(item.final_score).toFixed(1)}</div>
+          </div>
+          <div class="meta">
+            <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+            <span class="tag">${escapeHtml(item.source)}</span>
+            <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+          </div>
+          ${readerFormat(item, true)}
+          <div class="feedback-row">
+            <button class="feedback-btn ${sig === 1 ? 'active-up' : ''}" data-feedback="1" title="有用">👍</button>
+            <button class="feedback-btn ${sig === -1 ? 'active-down' : ''}" data-feedback="-1" title="跳过">👎</button>
+            <span class="feedback-hint">${sig === 1 ? '已标记有用' : sig === -1 ? '已标记跳过' : ''}</span>
+          </div>
+        </article>
+      `;
+    }
+
+    function sectionGroupHeader(section, count) {
+      return `
+        <div class="section-group-header" data-section="${escapeAttr(section.key)}">
+          <span class="section-group-title">${escapeHtml(section.label)}</span>
+          <span class="section-group-count">${count} 条</span>
+        </div>
+      `;
+    }
+
+    function renderItems(visible) {
+      const container = $('items');
+      if (!visible.length) {
+        container.innerHTML = '<div class="empty">当前筛选条件下没有匹配内容。</div>';
+        return;
+      }
+
+      let html = '';
+      if (state.section === 'All') {
+        // Group by section in defined order, with a header for each group
+        const grouped = {};
+        for (const item of visible) {
+          const sec = item.report_sections?.[0] || 'other';
+          if (!grouped[sec]) grouped[sec] = [];
+          grouped[sec].push(item);
+        }
+        for (const section of (payload.sections || [])) {
+          const group = grouped[section.key];
+          if (!group || !group.length) continue;
+          html += sectionGroupHeader(section, group.length);
+          html += group.map((item) => itemCard(item)).join('');
+        }
+        // Append any items that fell into 'other' (shouldn't normally happen)
+        if (grouped['other']?.length) {
+          html += grouped['other'].map((item) => itemCard(item)).join('');
+        }
+      } else {
+        html = visible.map((item) => itemCard(item)).join('');
+      }
+
+      container.innerHTML = html;
+      container.querySelectorAll('.item').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.activeId = node.dataset.id;
+          render();
+        });
+      });
+      container.querySelectorAll('.feedback-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const itemNode = btn.closest('.item');
+          setFeedback(itemNode.dataset.id, parseInt(btn.dataset.feedback, 10));
+          render();
+        });
+      });
+    }
+
+    function renderDetail(item) {
+      const detail = $('detail');
+      if (!item) {
+        detail.innerHTML = '<div class="empty">选择一条内容查看详情。</div>';
+        return;
+      }
+
+      detail.innerHTML = `
+        <h2>${escapeHtml(item.display_title || item.title)}</h2>
+        <div class="meta">
+          <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+          <span class="tag">${escapeHtml(sourceTypeLabel(item.source_type))}</span>
+          <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+        </div>
+
+        ${readerFormat(item, false)}
+
+        <div class="detail-block">
+          <h3>评分拆解</h3>
+          <div class="breakdown">
+            ${bar('相关性', item.relevance_score)}
+            ${bar('新颖度', item.novelty_score)}
+            ${bar('学术性', item.academic_score)}
+            ${bar('讨论度', item.discussion_score)}
+            ${bar('可行动性', item.actionable_score)}
+          </div>
+        </div>
+
+      `;
+    }
+
+    function readerFormat(item, compact) {
+      const points = itemKeyPoints(item);
+      return `
+        <div class="reader-format ${compact ? 'compact' : ''}">
+          <div class="reader-block">
+            <h4>1. 这篇文章的太长不读</h4>
+            <p>${escapeHtml(item.tldr || item.one_line_summary || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>2. 核心价值，对我量化的工作能够提供什么样的帮助</h4>
+            <p>${escapeHtml(item.core_value || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>3. 关键核心点 / 论文或帖子摘要</h4>
+            <ol>${points.map((point) => `<li>${escapeHtml(point)}</li>`).join('')}</ol>
+          </div>
+          <div class="reader-block">
+            <h4>4. 原文链接</h4>
+            ${referenceHtml(item)}
+          </div>
+        </div>
+      `;
+    }
+
+    function itemKeyPoints(item) {
+      const points = Array.isArray(item.key_points_list)
+        ? item.key_points_list
+        : (Array.isArray(item.key_points) ? item.key_points : []);
+      const clean = points.filter(Boolean).slice(0, 3);
+      return clean.length ? clean : ['需要打开原文进一步确认方法、数据和适用边界。'];
+    }
+
+    function referenceHtml(item) {
+      const url = item.reference_url || '';
+      if (!url) return '<p>暂无可打开链接</p>';
+      return `
+        <a class="reader-reference" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">打开原文</a>
+        <small class="reference-url">${escapeHtml(url)}</small>
+      `;
+    }
+
+    function bar(label, value) {
+      const score = Number(value || 0);
+      const width = Math.max(0, Math.min(100, score * 10));
+      return `
+        <div class="bar">
+          <span>${label}</span>
+          <div class="bar-track"><div class="bar-fill" style="width: ${width}%"></div></div>
+          <b>${score.toFixed(1)}</b>
+        </div>
+      `;
+    }
+
+    function countBy(list, key) {
+      return list.reduce((acc, item) => {
+        acc[item[key]] = (acc[item[key]] || 0) + 1;
+        return acc;
+      }, {});
+    }
+
+    function averageScore(list) {
+      if (!list.length) return 0;
+      return list.reduce((sum, item) => sum + Number(item.final_score || 0), 0) / list.length;
+    }
+
+    function option(value, label) {
+      return `<option value="${escapeAttr(value)}">${escapeHtml(label)}</option>`;
+    }
+
+    function sectionButton(section, label, count) {
+      return `
+        <button class="category-button section-button" type="button" data-section="${escapeAttr(section)}">
+          <span>${escapeHtml(label)}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryButton(category, count) {
+      return `
+        <button class="category-button" type="button" data-category="${escapeAttr(category)}">
+          <span>${escapeHtml(category === 'All' ? '全部' : categoryLabel(category))}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryLabel(category) {
+      return categoryLabels[category] || category;
+    }
+
+    function sectionLabel(sectionKey) {
+      const section = (payload.sections || []).find((item) => item.key === sectionKey);
+      return section ? section.label : '其他';
+    }
+
+    function feedTitle() {
+      const parts = [];
+      if (state.section !== 'All') parts.push(sectionLabel(state.section));
+      if (state.category !== 'All') parts.push(categoryLabel(state.category));
+      return parts.length ? parts.join(' / ') : '今日情报';
+    }
+
+    function priorityLabel(priority) {
+      return priorityLabels[priority] || priority;
+    }
+
+    function sourceTypeLabel(sourceType) {
+      return sourceTypeLabels[sourceType] || sourceType;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replaceAll('`', '&#096;');
+    }
+
+    init();
+  </script>
+</body>
+</html>
