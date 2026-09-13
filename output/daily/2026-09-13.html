@@ -1,0 +1,1086 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>samson 量化情报台 - 2026-09-13</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --panel: #ffffff;
+      --ink: #202124;
+      --muted: #5f6368;
+      --line: #dadce0;
+      --blue: #1a73e8;
+      --red: #ea4335;
+      --yellow: #fbbc04;
+      --green: #34a853;
+      --blue-soft: #e8f0fe;
+      --green-soft: #e6f4ea;
+      --yellow-soft: #fef7e0;
+      --red-soft: #fce8e6;
+      --shadow: 0 1px 2px rgba(60, 64, 67, 0.16), 0 8px 24px rgba(60, 64, 67, 0.10);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(66, 133, 244, 0.07), transparent 30%),
+        radial-gradient(circle at top right, rgba(251, 188, 4, 0.08), transparent 26%),
+        var(--bg);
+      color: var(--ink);
+      font-family: "Google Sans", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(280px, 620px);
+      gap: 24px;
+      align-items: center;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand h1 {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin: 0;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+
+    .brand h1::before {
+      content: "";
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background:
+        conic-gradient(from 0deg, var(--blue) 0 25%, var(--red) 0 50%, var(--yellow) 0 75%, var(--green) 0 100%);
+      box-shadow: inset 0 0 0 7px #fff;
+    }
+
+    .date-pill {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 170px 170px 150px;
+      gap: 10px;
+    }
+
+    .control {
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 12px;
+      outline: none;
+    }
+
+    .control:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.14);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 260px minmax(420px, 1fr) 420px;
+      gap: 22px;
+      padding: 24px 32px 36px;
+    }
+
+    .rail,
+    .detail {
+      position: sticky;
+      top: 86px;
+      height: calc(100vh - 112px);
+      overflow: auto;
+    }
+
+    .rail,
+    .detail,
+    .feed {
+      min-width: 0;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      padding: 12px;
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
+    }
+
+    .metric:nth-child(1) { border-top: 3px solid var(--blue); }
+    .metric:nth-child(2) { border-top: 3px solid var(--red); }
+    .metric:nth-child(3) { border-top: 3px solid var(--yellow); }
+    .metric:nth-child(4) { border-top: 3px solid var(--green); }
+
+    .metric b {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .section-label {
+      margin: 18px 0 8px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .category-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .category-button {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--ink);
+      padding: 8px 10px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .category-button:hover,
+    .category-button.active {
+      border-color: transparent;
+      background: var(--blue-soft);
+      color: #174ea6;
+    }
+
+    .count {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .source-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .source-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .feed-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .feed-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .result-count {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .items {
+      display: grid;
+      gap: 10px;
+    }
+
+    .section-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 2px 4px;
+      margin-top: 10px;
+      border-bottom: 2px solid var(--line);
+    }
+
+    .section-group-header:first-child {
+      margin-top: 0;
+    }
+
+    .section-group-title {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .section-group-header[data-section="deep_learning_quant"] .section-group-title { color: var(--blue); }
+    .section-group-header[data-section="ai_quant_tools"] .section-group-title { color: var(--green); }
+    .section-group-header[data-section="daily_news"] .section-group-title { color: var(--yellow); }
+
+    .section-group-count {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .item {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.10);
+      padding: 18px;
+      cursor: pointer;
+      transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+    }
+
+    .item::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--blue), var(--red), var(--yellow), var(--green));
+    }
+
+    .item[data-section="deep_learning_quant"]::before { background: var(--blue); }
+    .item[data-section="ai_quant_tools"]::before { background: var(--green); }
+    .item[data-section="daily_news"]::before { background: var(--yellow); }
+
+    .item:hover,
+    .item.active {
+      border-color: #c6dafc;
+      box-shadow: var(--shadow);
+      transform: translateY(-2px);
+    }
+
+    .item-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .item h3 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.28;
+    }
+
+    .score {
+      min-width: 54px;
+      border-radius: 999px;
+      background: var(--blue-soft);
+      color: #174ea6;
+      padding: 6px 8px;
+      text-align: center;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .tag {
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: #f1f3f4;
+      padding: 3px 8px;
+    }
+
+    .tag:nth-child(1) { background: var(--blue-soft); color: #174ea6; }
+    .tag:nth-child(2) { background: var(--green-soft); color: #137333; }
+    .tag:nth-child(3) { background: var(--yellow-soft); color: #8a5a00; }
+    .tag:nth-child(4) { background: var(--red-soft); color: #b3261e; }
+
+    .summary {
+      margin: 0;
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .reference-link {
+      display: inline-flex;
+      width: fit-content;
+      border-top: 1px solid var(--line);
+      color: var(--blue);
+      padding-top: 9px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .reader-format {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .reader-format.compact {
+      gap: 8px;
+    }
+
+    .reader-block {
+      border-top: 1px solid var(--line);
+      padding-top: 9px;
+    }
+
+    .reader-block:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .reader-block h4 {
+      margin: 0 0 5px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .reader-block p,
+    .reader-block li {
+      margin: 0;
+      color: #30342d;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .reader-block ol {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .reader-reference {
+      color: var(--blue);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
+    .reference-url {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .detail {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .detail h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+
+    .detail-block {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .detail-block h3 {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+
+    .detail-block p,
+    .detail-block li {
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .detail-block ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .breakdown {
+      display: grid;
+      gap: 8px;
+    }
+
+    .bar {
+      display: grid;
+      grid-template-columns: 118px 1fr 40px;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .bar-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e7eadf;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--blue), var(--green), var(--yellow), var(--red));
+    }
+
+    .open-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      margin-top: 16px;
+      border: 1px solid var(--blue);
+      border-radius: var(--radius);
+      color: var(--blue);
+      text-decoration: none;
+      padding: 0 12px;
+      font-weight: 700;
+    }
+
+    .feedback-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+    }
+
+    .feedback-btn {
+      background: #f1f3f4;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 120ms, border-color 120ms;
+    }
+
+    .feedback-btn:hover { background: var(--blue-soft); }
+    .feedback-btn.active-up { background: var(--green-soft); border-color: var(--green); }
+    .feedback-btn.active-down { background: var(--red-soft); border-color: var(--red); }
+
+    .feedback-hint {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      padding: 28px;
+      color: var(--muted);
+      background: var(--panel);
+    }
+
+    @media (max-width: 1180px) {
+      .layout {
+        grid-template-columns: 220px 1fr;
+      }
+
+      .detail {
+        position: static;
+        grid-column: 1 / -1;
+        height: auto;
+      }
+    }
+
+    @media (max-width: 820px) {
+      .topbar {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .brand {
+        display: grid;
+        gap: 4px;
+      }
+
+      .brand h1 {
+        white-space: normal;
+        font-size: 21px;
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .rail,
+      .detail {
+        position: static;
+        height: auto;
+      }
+
+      .metric-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <h1>samson 量化情报台</h1>
+        <span class="date-pill" id="report-date"></span>
+      </div>
+      <div class="controls">
+        <input class="control" id="search" type="search" placeholder="搜索标题、摘要、分类..." />
+        <select class="control" id="section-select"></select>
+        <select class="control" id="category-select"></select>
+        <select class="control" id="sort-select">
+          <option value="score">按评分排序</option>
+          <option value="priority">按优先级排序</option>
+          <option value="source">按来源排序</option>
+        </select>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="rail">
+        <div class="metric-grid">
+          <div class="metric"><b id="metric-items">0</b><span>报告条目</span></div>
+          <div class="metric"><b id="metric-categories">0</b><span>分类数量</span></div>
+          <div class="metric"><b id="metric-high">0</b><span>高优先级</span></div>
+          <div class="metric"><b id="metric-avg">0.0</b><span>平均评分</span></div>
+        </div>
+
+        <div class="section-label">两条主线</div>
+        <div class="category-list" id="section-list"></div>
+
+        <div class="section-label">细分标签</div>
+        <div class="category-list" id="category-list"></div>
+
+        <div class="section-label">主力来源</div>
+        <ul class="source-list" id="source-list"></ul>
+      </aside>
+
+      <section class="feed">
+        <div class="feed-header">
+          <h2 id="feed-title">今日情报</h2>
+          <span class="result-count" id="result-count"></span>
+        </div>
+        <div class="items" id="items"></div>
+      </section>
+
+      <aside class="detail" id="detail"></aside>
+    </main>
+  </div>
+
+  <script id="dashboard-data" type="application/json">{"report_date": "2026-09-13", "generated_at": "2026-09-13T00:48:33Z", "items": [{"id": "05b2e95fd976cd0b8c7e32dd2bfde425d644cd584266154a2bef4fbf6ad7a592", "source": "Reddit algotrading", "source_type": "forum", "title": "Using iPhone Shortcuts to collect 6+ months of crypto candles for backtesting — valid approach?", "url": "https://www.reddit.com/r/algotrading/comments/1welk47/using_iphone_shortcuts_to_collect_6_months_of/", "authors": ["/u/Interesting_Gold_792"], "published_at": "2026-09-12", "collected_at": "2026-09-13T00:47:53Z", "raw_text": "I’ve been testing a mobile-only workflow for collecting historical crypto data and I’m curious how others would judge it. When I’m away from my computer, I use iOS Shortcuts to call market-data APIs, paginate through historical candle data, and save enough history to later run isolated backtests. Right now I can build 6+ months of candle history this way. The phone is not running the strategy or trading live. It’s just acting as a lightweight data collection tool. The rough flow is: API request → pagination through historical candles → save raw responses → merge the history → verify timestamps, gaps and duplicates → backtest separately. My main question is whether there is anything inherently unreliable about collecting the data through Shortcuts instead of doing the same requests in Python. If the API source is the same, and I verify the resulting dataset carefully, does the collection method really matter? I’m especially interested in hidden issues people may have run into with: pagination boundaries, missing or duplicated candles, rate limits, timestamp alignment, historical coverage, API revisions, or silent gaps in the dataset. Would you consider this a useful lightweight research workflow for early strategy testing, or would you avoid it and go straight to a more traditional data pipeline? I’m trying to understand where the real limitation is: the fact that it’s done from a phone, or the quality and validation of the data itself. submitted by /u/Interesting_Gold_792 [link] [comments]", "abstract": "I’ve been testing a mobile-only workflow for collecting historical crypto data and I’m curious how others would judge it. When I’m away from my computer, I use iOS Shortcuts to call market-data APIs, paginate through historical candle data, and save enough history to later run isolated backtests. Right now I can build 6+ months of candle history this way. The phone is not running the strategy or trading live. It’s just acting as a lightweight data collection tool. The rough flow is: API request → pagination through historical candles → save raw responses → merge the history → verify timestamps, gaps and duplicates → backtest separately. My main question is whether there is anything inherently unreliable about collecting the data through Shortcuts instead of doing the same requests in Python. If the API source is the same, and I verify the resulting dataset carefully, does the collection method really matter? I’m especially interested in hidden issues people may have run into with: pagination boundaries, missing or duplicated candles, rate limits, timestamp alignment, historical coverage, API revisions, or silent gaps in the dataset. Would you consider this a useful lightweight research workflow for early strategy testing, or would you avoid it and go straight to a more traditional data pipeline? I’m trying to understand where the real limitation is: the fact that it’s done from a phone, or the quality and validation of the data itself. submitted by /u/Interesting_Gold_792 [link] [comments]", "content_hash": "80d61c9f7b9eef618dbe31f5748d668d6fcaa600b59835652532160f76eec5ed", "category": "Backtesting / Research Tools", "tags": ["backtest", "backtesting", "crypto", "data pipeline", "dataset"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "I’ve been testing a mobile-only workflow for collecting historical crypto data and I’m curious how others would judge it.", "technical_summary": "I’ve been testing a mobile-only workflow for collecting historical crypto data and I’m curious how others would judge it. When I’m away from my computer, I use iOS Shortcuts to call market-data APIs, paginate through historical candle data, and save enough history to later run isolated backtests. Right now I can build 6+ months of candle history this way. The phone is not running the strategy or trading live.", "key_points": ["I’ve been testing a mobile-only workflow for collecting historical crypto data and I’m curious how others would judge it.", "When I’m away from my computer, I use iOS Shortcuts to call market-data APIs, paginate through historical candle data, and save enough history to later run isolated backtests.", "Right now I can build 6+ months of candle history this way."], "quant_relevance": "和实验效率、可复现性、仿真质量以及研究基础设施相关。", "possible_use_case": "可以先在沙盒环境里试用，评估接口、复现性和维护风险。", "limitations": "论坛观点先视为经验性信息，只有经过可复现数据、成本和风控验证后才能进入研究结论。", "read_priority": "中", "key_figures_md": "", "relevance_score": 6.1, "novelty_score": 9.78, "academic_score": 5.5, "discussion_score": 3.0, "actionable_score": 7.5, "final_score": 6.561, "display_title": "回测、加密资产、测试实践讨论", "tldr": "I’ve been testing a mobile-only workflow for collecting historical crypto data and I’m curious how others would judge it.", "core_value": "对你的量化工作帮助：把它当作回测、加密资产、测试的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["I’ve been testing a mobile-only workflow for collecting historical 加密资产 data and I’m curious how others would judge it.", "When I’m away from my computer, I use iOS Shortcuts to call market-data 接口s, paginate through historical candle data, and save enough history to later run isolated backtests.", "Right now I can build 6+ months of candle history this way."], "reference_url": "https://www.reddit.com/r/algotrading/comments/1welk47/using_iphone_shortcuts_to_collect_6_months_of/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "回测 / 研究工具", "priority_label": "中", "source_type_label": "论坛"}, {"id": "90def9f1a93c972d64ffad86ae4e062bb59115869b610e66e6c002041d4caa99", "source": "Reddit algotrading", "source_type": "forum", "title": "How to handle historical and live screening", "url": "https://www.reddit.com/r/algotrading/comments/1wed53l/how_to_handle_historical_and_live_screening/", "authors": ["/u/tru3relativity"], "published_at": "2026-09-12", "collected_at": "2026-09-13T00:47:53Z", "raw_text": "One thing I do not understand is how to handle both historical and live screening. For example if I want to backtest a strategy that is based on a pre market volume spike on the 5 min chart, how in the world do you find all those cases in historical data? Do most people here focus on a small basket of stocks or do you have a bot that is constantly looking across all stocks for a specific entry? This is the part I least understand about algorithmic trading. submitted by /u/tru3relativity [link] [comments]", "abstract": "One thing I do not understand is how to handle both historical and live screening. For example if I want to backtest a strategy that is based on a pre market volume spike on the 5 min chart, how in the world do you find all those cases in historical data? Do most people here focus on a small basket of stocks or do you have a bot that is constantly looking across all stocks for a specific entry? This is the part I least understand about algorithmic trading. submitted by /u/tru3relativity [link] [comments]", "content_hash": "22b6a45636810bdb777f0e541dc00f176b1904375a47aca6028a68337473eb4b", "category": "Data Engineering", "tags": ["backtest", "historical data"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "One thing I do not understand is how to handle both historical and live screening.", "technical_summary": "One thing I do not understand is how to handle both historical and live screening. For example if I want to backtest a strategy that is based on a pre market volume spike on the 5 min chart, how in the world do you find all those cases in historical data? Do most people here focus on a small basket of stocks or do you have a bot that is constantly looking across all stocks for a specific entry? This is the part I least understand about algorithmic trading.", "key_points": ["One thing I do not understand is how to handle both historical and live screening.", "For example if I want to backtest a strategy that is based on a pre market volume spike on the 5 min chart, how in the world do you find all those cases in historical data?", "Do most people here focus on a small basket of stocks or do you have a bot that is constantly looking across all stocks for a specific entry?"], "quant_relevance": "和市场数据采集、特征流水线、数据质量以及研究基础设施相关。", "possible_use_case": "可以用于数据采集、校验、血缘追踪或特征生成。", "limitations": "论坛观点先视为经验性信息，只有经过可复现数据、成本和风控验证后才能进入研究结论。", "read_priority": "中", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.78, "academic_score": 4.636, "discussion_score": 3.0, "actionable_score": 7.5, "final_score": 6.071, "display_title": "回测实践讨论", "tldr": "One thing I do not understand is how to handle both historical and live screening.", "core_value": "对你的量化工作帮助：把它当作回测的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["One thing I do not understand is how to handle both historical and live screening.", "For example if I want to backtest a strategy that is based on a pre market volume spike on the 5 min chart, how in the world do you find all those cases in historical data?", "Do most people here focus on a small basket of stocks or do you have a bot that is constantly looking across all stocks for a specific entry?"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1wed53l/how_to_handle_historical_and_live_screening/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "数据工程", "priority_label": "中", "source_type_label": "论坛"}, {"id": "cd4f4379ae652feca2427fe503c2f128ea0b977827c21d64fa8a527f01c3b707", "source": "Reddit algotrading", "source_type": "forum", "title": "Can an individual use NinjaTrader API for real-time CME market data?", "url": "https://www.reddit.com/r/algotrading/comments/1we6qvr/can_an_individual_use_ninjatrader_api_for/", "authors": ["/u/fnoyanisi"], "published_at": "2026-09-12", "collected_at": "2026-09-13T00:47:53Z", "raw_text": "I’m building a personal automated trading system and am considering replacing IBKR market data feed with NinjaTrader (which uses Tradovate’s feed). I only need real-time CME Level I data and plan to build 1min or 5min bars from it. NinjaTrader’s documentation points to the Tradovate Partner API, but it appears to require Organization Admin credentials and API approval, which I couldn't find any clear definitions for. Can an individual with a funded NinjaTrader account use this API for a personal server-side application? Specifically: Is a funded account plus the $12/month non-professional CME Level I bundle enough? Are there separate API/partner fees, minimum funding requirements, or CME redistribution/licensing requirements? Is this permitted for a personal automated system that only consumes data and does not redistribute it? TIA submitted by /u/fnoyanisi [link] [comments]", "abstract": "I’m building a personal automated trading system and am considering replacing IBKR market data feed with NinjaTrader (which uses Tradovate’s feed). I only need real-time CME Level I data and plan to build 1min or 5min bars from it. NinjaTrader’s documentation points to the Tradovate Partner API, but it appears to require Organization Admin credentials and API approval, which I couldn't find any clear definitions for. Can an individual with a funded NinjaTrader account use this API for a personal server-side application? Specifically: Is a funded account plus the $12/month non-professional CME Level I bundle enough? Are there separate API/partner fees, minimum funding requirements, or CME redistribution/licensing requirements? Is this permitted for a personal automated system that only consumes data and does not redistribute it? TIA submitted by /u/fnoyanisi [link] [comments]", "content_hash": "75167b110a4acff2b9c6751832b4b9d51e355bfd8c0ccfb09785913f16e1a301", "category": "Data Engineering", "tags": ["market data"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "I’m building a personal automated trading system and am considering replacing IBKR market data feed with NinjaTrader (which uses Tradovate’s feed).", "technical_summary": "I’m building a personal automated trading system and am considering replacing IBKR market data feed with NinjaTrader (which uses Tradovate’s feed). I only need real-time CME Level I data and plan to build 1min or 5min bars from it. NinjaTrader’s documentation points to the Tradovate Partner API, but it appears to require Organization Admin credentials and API approval, which I couldn't find any clear definitions for. Can an individual with a funded NinjaTrader account use this API for a personal server-side application?", "key_points": ["I’m building a personal automated trading system and am considering replacing IBKR market data feed with NinjaTrader (which uses Tradovate’s feed).", "I only need real-time CME Level I data and plan to build 1min or 5min bars from it.", "NinjaTrader’s documentation points to the Tradovate Partner API, but it appears to require Organization Admin credentials and API approval, which I couldn't find any clear definit..."], "quant_relevance": "和市场数据采集、特征流水线、数据质量以及研究基础设施相关。", "possible_use_case": "可以用于数据采集、校验、血缘追踪或特征生成。", "limitations": "论坛观点先视为经验性信息，只有经过可复现数据、成本和风控验证后才能进入研究结论。", "read_priority": "中", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.78, "academic_score": 5.109, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 5.942, "display_title": "市场数据实践讨论", "tldr": "I’m building a personal automated trading system and am considering replacing IBKR market data feed with NinjaTrader (which uses Tradovate’s feed).", "core_value": "对你的量化工作帮助：把它当作市场数据的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["I’m building a personal automated trading system and am considering replacing IBKR market data feed with NinjaTrader (which uses Tradovate’s feed).", "I only need real-time CME Level I data and plan to build 1min or 5min bars from it.", "NinjaTrader’s documentation points to the Tradovate Partner 接口, but it appears to require Organization Admin credentials and 接口 approval, which I couldn't find any clear definit..."], "reference_url": "https://www.reddit.com/r/algotrading/comments/1we6qvr/can_an_individual_use_ninjatrader_api_for/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "数据工程", "priority_label": "中", "source_type_label": "论坛"}, {"id": "bbb7305049472100a78c986c9e6009250ee213969692a2f4442dc4bc263afa92", "source": "CoinDesk", "source_type": "crypto_news", "title": "Staked ether should be seen as the benchmark of the decentralized economy", "url": "https://www.coindesk.com/opinion/2026/09/12/staked-ether-should-be-seen-as-the-benchmark-of-the-decentralized-economy", "authors": [], "published_at": "2026-09-12", "collected_at": "2026-09-13T00:47:54Z", "raw_text": "The yield-generating asset has a special place in the digital asset investor’s portfolio, argues GlobalStake’s Ryan Haczynski.", "abstract": "The yield-generating asset has a special place in the digital asset investor’s portfolio, argues GlobalStake’s Ryan Haczynski.", "content_hash": "a6f0a8d8022aad41561de0ccff64dbaa94dc555e1278ed8ffe9996d1d55bbcb7", "category": "Portfolio Construction", "tags": ["portfolio"], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "The yield-generating asset has a special place in the digital asset investor’s portfolio, argues GlobalStake’s Ryan Haczynski.", "technical_summary": "The yield-generating asset has a special place in the digital asset investor’s portfolio, argues GlobalStake’s Ryan Haczynski.", "key_points": ["The yield-generating asset has a special place in the digital asset investor’s portfolio, argues GlobalStake’s Ryan Haczynski.", "来源类型：加密市场新闻。", "进入研究或生产前需要进一步人工复核。"], "quant_relevance": "和资产配置、组合约束、再平衡以及风险调整优化相关。", "possible_use_case": "可以和当前配置、约束以及风险预算流程做对比测试。", "limitations": "在成为研究或交易决策前，需要人工复核。", "read_priority": "中", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.78, "academic_score": 5.657, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.875, "display_title": "组合加密市场新闻情报", "tldr": "The yield-generating asset has a special place in the digital asset investor’s portfolio, argues GlobalStake’s Ryan Haczynski.", "core_value": "对你的量化工作帮助：围绕组合补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["内容抓手：这条加密市场新闻围绕组合展开，归入组合构建。", "研究动作：先作为组合构建候选线索，判断是否值得进入研究待办。", "验证重点：检查数据可得性、可复现性、样本外稳定性和生产约束。"], "reference_url": "https://www.coindesk.com/opinion/2026/09/12/staked-ether-should-be-seen-as-the-benchmark-of-the-decentralized-economy", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "组合构建", "priority_label": "中", "source_type_label": "加密市场新闻"}, {"id": "930637b37651499d28aa3927e542f3ab02359bd229faadc390d53e4d0a422648", "source": "CoinDesk", "source_type": "crypto_news", "title": "Ditching bonds for bitcoin: How crypto can tackle the AI-heavy portfolio dilemma", "url": "https://www.coindesk.com/business/2026/09/12/ditching-bonds-for-bitcoin-how-crypto-can-tackle-the-ai-heavy-portfolio-dilemma", "authors": [], "published_at": "2026-09-12", "collected_at": "2026-09-13T00:47:54Z", "raw_text": "Bitcoin Suisse says rising AI investment, government debt and weakening stock-bond diversification strengthen the case for adding bitcoin to traditional portfolios.", "abstract": "Bitcoin Suisse says rising AI investment, government debt and weakening stock-bond diversification strengthen the case for adding bitcoin to traditional portfolios.", "content_hash": "e38a6708bab6ffee71e21646e3439f5c453d7da0763913107fcc3d1b93334443", "category": "Crypto Quant", "tags": ["bitcoin", "crypto", "portfolio"], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "Bitcoin Suisse says rising AI investment, government debt and weakening stock-bond diversification strengthen the case for adding bitcoin to traditional portfolios.", "technical_summary": "Bitcoin Suisse says rising AI investment, government debt and weakening stock-bond diversification strengthen the case for adding bitcoin to traditional portfolios.", "key_points": ["Bitcoin Suisse says rising AI investment, government debt and weakening stock-bond diversification strengthen the case for adding bitcoin to traditional portfolios.", "来源类型：加密市场新闻。", "进入研究或生产前需要进一步人工复核。"], "quant_relevance": "和加密资产市场结构、链上信号、衍生品以及跨交易所交易相关。", "possible_use_case": "可以在高流动性交易所上验证，并纳入手续费、资金费率和滑点。", "limitations": "在成为研究或交易决策前，需要人工复核。", "read_priority": "中", "key_figures_md": "", "relevance_score": 6.1, "novelty_score": 9.78, "academic_score": 5.705, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.842, "display_title": "加密资产、组合、人工智能加密市场新闻情报", "tldr": "Bitcoin Suisse says rising AI investment, government debt and weakening stock-bond diversification strengthen the case for adding bitcoin to traditional portfolios.", "core_value": "对你的量化工作帮助：围绕加密资产、组合、人工智能补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["内容抓手：这条加密市场新闻围绕加密资产、组合、人工智能展开，归入加密资产量化。", "研究动作：先作为加密资产量化候选线索，判断是否值得进入研究待办。", "验证重点：检查数据可得性、可复现性、样本外稳定性和生产约束。"], "reference_url": "https://www.coindesk.com/business/2026/09/12/ditching-bonds-for-bitcoin-how-crypto-can-tackle-the-ai-heavy-portfolio-dilemma", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "加密资产量化", "priority_label": "中", "source_type_label": "加密市场新闻"}, {"id": "8d1575da5e1df56a1ead675531f999ca8bb321088b71fd605eadc8693c72df12", "source": "Quant StackExchange", "source_type": "forum", "title": "Treasury futures Net Basis / Implied Repo Rate", "url": "https://quant.stackexchange.com/questions/85840/treasury-futures-net-basis-implied-repo-rate", "authors": ["Vish"], "published_at": "2026-09-12", "collected_at": "2026-09-13T00:47:53Z", "raw_text": "I’m trying to work this out every day but when I calculate the below clients are saying that it does not look right based just wondered if any one could help me work out if what it should be? Contract CTD CUSIP Coupon Conversion Factor Bond clean price Futures price Accrued interest (today) Delivery date used Days to delivery Repo rate Gross Basis (32nds) Net Basis (32nds) Implied Repo TUZ6 91282CNY3 3.375% 0.9569 97.603516 102.066406 1.6736 2026-12-01 80 3.294% -2.0425 -2.0154 3.5795% 3YZ6 91282CLN9 3.5% 0.9374 96.578125 103.066406 1.5918 2026-12-01 80 3.454% -1.1624 -1.1383 3.6170% FVZ6 91282CQD6 3.5% 0.9090 94.962891 104.507813 0.1438 2026-12-01 80 3.630% -1.1108 -1.1077 3.7939% TYZ6 91282CRJ2 4.5% 0.9202 97.851563 106.109375 0.1479 2026-12-31 110 4.377% 6.7109 5.2543 3.8286% UXYZ6 91282CQQ7 4.375% 0.8858 95.542969 107.625000 1.4384 2026-12-31 110 4.250% 6.6798 5.3618 3.6843% USZ6 912810UL0 5.0% 0.8899 95.541016 106.750000 1.6438 2026-12-31 110 4.794% 17.4141 15.4095 3.1726% WNZ6 912810TL2 4.0% 0.7393 80.322266 108.250000 1.3151 2026-12-31 110 4.666% 9.3773 8.5734 3.5919% Repo used: general collateral (GC) repo for TU/3Y/FV/TY/UXY; Bloomberg's FUT_ACTUAL_REPO_RT field for US/WN specifically. Day count is Act/360 throughout. Inputs (as of 2026-09-12): • Futures: TYZ6 (10-Year T-Note, December 2026) • CTD bond: CUSIP 91282CRJ2, 4.5% coupon, maturity 2033-08-31 • Conversion factor (Bloomberg native field): 0.9202 • Bond clean price: 97.8515625 • Futures price: 106.109375 • Repo rate used (live GC repo): 4.3769% • Trade/\"as of\" date: 2026-09-12 Step 1 — Coupon cycle. Coupons are semi-annual, anchored on the bond's maturity month/day (Aug 31 / Feb 28-29). Last coupon: 2026-08-31. Next coupon: 2027-02-28. So there is no coupon payment date falling between today and delivery. Step 2 — Accrued interest today. AI(today) = (days since last coupon / 182.5) × (coupon/2) = (12 / 182.5) × 2.25 = 0.147945 Step 3 — Delivery date selection. The contract's delivery window runs across the whole December 2026 delivery month (first delivery day 2026-12-01, last delivery day 2026-12-31). The convention we use: test the sign of net carry assuming the position is held to the last delivery day. If carry over that full window is negative, use the first delivery day instead (deliver ASAP to stop bleeding negative carry); if positive, hold to the last delivery day. Carry to 2026-12-31 comes out positive (Step 6 below), so the last delivery day is used. Delivery date: 2026-12-31 Days to delivery: 110 Step 4 — Coupons/accrued interest at delivery. No coupon payment falls in the window (coupons received = 0), so: AI(delivery) = (days from last coupon to delivery / 182.5) × (coupon/2) = (122 / 182.5) × 2.25 = 1.504110 Step 5 — Coupon income. Coupon income = Coupons received + AI(delivery) − AI(today) = 0 + 1.504110 − 0.147945 = 1.356164 Step 6 — Financing cost. Financing cost = (Clean price + AI(today)) × repo × (days/360) = (97.8515625 + 0.147945) × 0.043769 × (110/360) = 98.0 (approx.) × 0.043769 × 0.305556 = 1.310646 Step 7 — Net carry. Net carry = Coupon income − Financing cost = 1.356164 − 1.310646 = 0.045519 (points) → confirms Step 3's assumption (positive, so last delivery day is correct) Step 8 — Gross Basis. Gross Basis = (Clean price − Futures price × Conversion factor) × 32 = (97.8515625 − 106.109375 × 0.9202) × 32 = 6.7109 (32nds) Step 9 — Net Basis. Net Basis = Gross Basis − (Net carry × 32) = 6.7109 − 1.4566 = 5.2543 (32nds) Step 10 — Implied repo (IRR). IRR = [ (Futures price × CF + AI(delivery) + Coupons received) / (Clean price + AI(today)) − 1 ] × (360/days) × 100 = [ (106.109375 × 0.9202 + 1.504110 + 0) / 98.0 (approx.) − 1 ] × (360/110) × 100 = 3.8286%", "abstract": "I’m trying to work this out every day but when I calculate the below clients are saying that it does not look right based just wondered if any one could help me work out if what it should be? Contract CTD CUSIP Coupon Conversion Factor Bond clean price Futures price Accrued interest (today) Delivery date used Days to delivery Repo rate Gross Basis (32nds) Net Basis (32nds) Implied Repo TUZ6 91282CNY3 3.375% 0.9569 97.603516 102.066406 1.6736 2026-12-01 80 3.294% -2.0425 -2.0154 3.5795% 3YZ6 91282CLN9 3.5% 0.9374 96.578125 103.066406 1.5918 2026-12-01 80 3.454% -1.1624 -1.1383 3.6170% FVZ6 91282CQD6 3.5% 0.9090 94.962891 104.507813 0.1438 2026-12-01 80 3.630% -1.1108 -1.1077 3.7939% TYZ6 91282CRJ2 4.5% 0.9202 97.851563 106.109375 0.1479 2026-12-31 110 4.377% 6.7109 5.2543 3.8286% UXYZ6 91282CQQ7 4.375% 0.8858 95.542969 107.625000 1.4384 2026-12-31 110 4.250% 6.6798 5.3618 3.6843% USZ6 912810UL0 5.0% 0.8899 95.541016 106.750000 1.6438 2026-12-31 110 4.794% 17.4141 15.4095 3.1726% WNZ6 912810TL2 4.0% 0.7393 80.322266 108.250000 1.3151 2026-12-31 110 4.666% 9.3773 8.5734 3.5919% Repo used: general collateral (GC) repo for TU/3Y/FV/TY/UXY; Bloomberg's FUT_ACTUAL_REPO_RT field for US/WN specifically. Day count is Act/360 throughout. Inputs (as of 2026-09-12): • Futures: TYZ6 (10-Year T-Note, December 2026) • CTD bond: CUSIP 91282CRJ2, 4.5% coupon, maturity 2033-08-31 • Conversion factor (Bloomberg native field): 0.9202 • Bond clean price: 97.8515625 • Futures price: 106.109375 • Repo rate used (live GC repo): 4.3769% • Trade/\"as of\" date: 2026-09-12 Step 1 — Coupon cycle. Coupons are semi-annual, anchored on the bond's maturity month/day (Aug 31 / Feb 28-29). Last coupon: 2026-08-31. Next coupon: 2027-02-28. So there is no coupon payment date falling between today and delivery. Step 2 — Accrued interest today. AI(today) = (days since last coupon / 182.5) × (coupon/2) = (12 / 182.5) × 2.25 = 0.147945 Step 3 — Delivery date selection. The contract's delivery window runs across the whole December 2026 delivery month (first delivery day 2026-12-01, last delivery day 2026-12-31). The convention we use: test the sign of net carry assuming the position is held to the last delivery day. If carry over that full window is negative, use the first delivery day instead (deliver ASAP to stop bleeding negative carry); if positive, hold to the last delivery day. Carry to 2026-12-31 comes out positive (Step 6 below), so the last delivery day is used. Delivery date: 2026-12-31 Days to delivery: 110 Step 4 — Coupons/accrued interest at delivery. No coupon payment falls in the window (coupons received = 0), so: AI(delivery) = (days from last coupon to delivery / 182.5) × (coupon/2) = (122 / 182.5) × 2.25 = 1.504110 Step 5 — Coupon income. Coupon income = Coupons received + AI(delivery) − AI(today) = 0 + 1.504110 − 0.147945 = 1.356164 Step 6 — Financing cost. Financing cost = (Clean price + AI(today)) × repo × (days/360) = (97.8515625 + 0.147945) × 0.043769 × (110/360) = 98.0 (approx.) × 0.043769 × 0.305556 = 1.310646 Step 7 — Net carry. Net carry = Coupon income − Financing cost = 1.356164 − 1.310646 = 0.045519 (points) → confirms Step 3's assumption (positive, so last delivery day is correct) Step 8 — Gross Basis. Gross Basis = (Clean price − Futures price × Conversion factor) × 32 = (97.8515625 − 106.109375 × 0.9202) × 32 = 6.7109 (32nds) Step 9 — Net Basis. Net Basis = Gross Basis − (Net carry × 32) = 6.7109 − 1.4566 = 5.2543 (32nds) Step 10 — Implied repo (IRR). IRR = [ (Futures price × CF + AI(delivery) + Coupons received) / (Clean price + AI(today)) − 1 ] × (360/days) × 100 = [ (106.109375 × 0.9202 + 1.504110 + 0) / 98.0 (approx.) − 1 ] × (360/110) × 100 = 3.8286%", "content_hash": "1b1eff80fc0d79234b43de89f03eeb092171fca53d3793c815069426770512e6", "category": "Alpha / Factor Research", "tags": ["factor"], "language": "en", "metadata": {"feed_url": "https://quant.stackexchange.com/feeds"}, "one_line_summary": "I’m trying to work this out every day but when I calculate the below clients are saying that it does not look right based just wondered if any one could help me work out if what it should be?", "technical_summary": "I’m trying to work this out every day but when I calculate the below clients are saying that it does not look right based just wondered if any one could help me work out if what it should be? Contract CTD CUSIP Coupon Conversion Factor Bond clean price Futures price Accrued interest (today) Delivery date used Days to delivery Repo rate Gross Basis (32nds) Net Basis (32nds) Implied Repo TUZ6 91282CNY3 3.375% 0.9569 97.603516 102.066406 1.6736 2026-12-01 80 3.294% -2.0425 -2.0154 3.5795% 3YZ6 91282CLN9 3.5% 0.9374 96.578125 103.066406 1.5918 2026-12-01 80 3.454% -1.1624 -1.1383 3.6170% FVZ6 91282CQD6 3.5% 0.9090 94.962891 104.507813 0.1438 2026-12-01 80 3.630% -1.1108 -1.1077 3.7939% TYZ6 91282CRJ2 4.5% 0.9202 97.851563 106.109375 0.1479 2026-12-31 110 4.377% 6.7109 5.2543 3.8286% UXYZ6 91282CQQ7 4.375% 0.8858 95.542969 107.625000 1.4384 2026-12-31 110 4.250% 6.6798 5.3618 3.6843% USZ6 91...", "key_points": ["I’m trying to work this out every day but when I calculate the below clients are saying that it does not look right based just wondered if any one could help me work out if what i...", "Contract CTD CUSIP Coupon Conversion Factor Bond clean price Futures price Accrued interest (today) Delivery date used Days to delivery Repo rate Gross Basis (32nds) Net Basis (32...", "Day count is Act/360 throughout."], "quant_relevance": "适合进入阿尔法发现、特征研究或因子有效性验证流程。", "possible_use_case": "可以放入研究待办池，作为候选信号或因子族继续验证。", "limitations": "论坛观点先视为经验性信息，只有经过可复现数据、成本和风控验证后才能进入研究结论。", "read_priority": "中", "key_figures_md": "", "relevance_score": 4.2, "novelty_score": 9.78, "academic_score": 5.5, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 5.791, "display_title": "因子、人工智能实践讨论", "tldr": "I’m trying to work this out every day but when I calculate the below clients are saying that it does not look right based just wondered if any one could help me work out if what it should be?", "core_value": "对你的量化工作帮助：把它当作因子、人工智能的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["I’m trying to work this out every day but when I calculate the below clients are saying that it does not look right based just wondered if any one could help me work out if what i...", "Contract CTD CUSIP Coupon Conversion Factor Bond clean price Futures price Accrued interest (today) Delivery date used Days to delivery Repo rate Gross Basis (32nds) Net Basis (32...", "Day count is Act/360 throughout."], "reference_url": "https://quant.stackexchange.com/questions/85840/treasury-futures-net-basis-implied-repo-rate", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "阿尔法 / 因子研究", "priority_label": "中", "source_type_label": "论坛"}, {"id": "fa2d4f5d5d4e6272218b75a5df5a4fceb90ca14ef1ebcd6b12a13c2e6482a1ea", "source": "Decrypt", "source_type": "crypto_news", "title": "Revolut Leaks Passports, Bitcoin Transaction Histories to Fake Government Request", "url": "https://decrypt.co/378114/revolut-passports-bitcoin-activity-data-breach", "authors": [], "published_at": "2026-09-12", "collected_at": "2026-09-13T00:47:54Z", "raw_text": "The fintech company fulfilled a fraudulent information request sent from a government agency's own email domain, exposing ID documents and full crypto transaction histories for a \"limited\" number of users.", "abstract": "The fintech company fulfilled a fraudulent information request sent from a government agency's own email domain, exposing ID documents and full crypto transaction histories for a \"limited\" number of users.", "content_hash": "ad6c431af2bb110145117b46fb1877399e55f2a599cb68a6a57974210af12f4a", "category": "Crypto Quant", "tags": ["bitcoin", "crypto"], "language": "en", "metadata": {"feed_url": "https://decrypt.co/feed"}, "one_line_summary": "The fintech company fulfilled a fraudulent information request sent from a government agency's own email domain, exposing ID documents and full crypto transaction histories for a \"limited\" number of users.", "technical_summary": "The fintech company fulfilled a fraudulent information request sent from a government agency's own email domain, exposing ID documents and full crypto transaction histories for a \"limited\" number of users.", "key_points": ["The fintech company fulfilled a fraudulent information request sent from a government agency's own email domain, exposing ID documents and full crypto transaction histories for a...", "来源类型：加密市场新闻。", "进入研究或生产前需要进一步人工复核。"], "quant_relevance": "和加密资产市场结构、链上信号、衍生品以及跨交易所交易相关。", "possible_use_case": "可以在高流动性交易所上验证，并纳入手续费、资金费率和滑点。", "limitations": "在成为研究或交易决策前，需要人工复核。", "read_priority": "中", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.78, "academic_score": 5.756, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.639, "display_title": "加密资产加密市场新闻情报", "tldr": "The fintech company fulfilled a fraudulent information request sent from a government agency's own email domain, exposing ID documents and full crypto transaction histories for a \"limited\" number of users.", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["内容抓手：这条加密市场新闻围绕加密资产展开，归入加密资产量化。", "研究动作：先作为加密资产量化候选线索，判断是否值得进入研究待办。", "验证重点：检查数据可得性、可复现性、样本外稳定性和生产约束。"], "reference_url": "https://decrypt.co/378114/revolut-passports-bitcoin-activity-data-breach", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "中", "source_type_label": "加密市场新闻"}, {"id": "e2ab4a8642d8122f58ed095cab49e6ef653946e4c2aa61387c101fe5e18d042e", "source": "CoinDesk", "source_type": "crypto_news", "title": "Ripple stablecoin chief sees $13 trillion corporate treasury opportunity for RLUSD", "url": "https://www.coindesk.com/business/2026/09/12/ripple-stablecoin-chief-sees-usd13-trillion-corporate-treasury-opportunity-for-rlusd", "authors": [], "published_at": "2026-09-12", "collected_at": "2026-09-13T00:47:54Z", "raw_text": "Payments and capital markets are driving growth for Ripple's $2.4 billion digital dollar as it looks to bring RLUSD to Europe under MiCA, the firm's Jack McDonald said.", "abstract": "Payments and capital markets are driving growth for Ripple's $2.4 billion digital dollar as it looks to bring RLUSD to Europe under MiCA, the firm's Jack McDonald said.", "content_hash": "1998a6c78aaa327bf5625846e99ea319dac8be61d04d79b4a351d7547bfa3a75", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "Payments and capital markets are driving growth for Ripple's $2.4 billion digital dollar as it looks to bring RLUSD to Europe under MiCA, the firm's Jack McDonald said.", "technical_summary": "Payments and capital markets are driving growth for Ripple's $2.4 billion digital dollar as it looks to bring RLUSD to Europe under MiCA, the firm's Jack McDonald said.", "key_points": ["Payments and capital markets are driving growth for Ripple's $2.4 billion digital dollar as it looks to bring RLUSD to Europe under MiCA, the firm's Jack McDonald said.", "来源类型：加密市场新闻。", "进入研究或生产前需要进一步人工复核。"], "quant_relevance": "适合进入阿尔法发现、特征研究或因子有效性验证流程。", "possible_use_case": "可以放入研究待办池，作为候选信号或因子族继续验证。", "limitations": "在成为研究或交易决策前，需要人工复核。", "read_priority": "低", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 5.71, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.313, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "Payments and capital markets are driving growth for Ripple's $2.4 billion digital dollar as it looks to bring RLUSD to Europe under MiCA, the firm's Jack McDonald said.", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["内容抓手：这条加密市场新闻围绕阿尔法 / 因子研究展开，归入阿尔法 / 因子研究。", "研究动作：先作为阿尔法 / 因子研究候选线索，判断是否值得进入研究待办。", "验证重点：检查数据可得性、可复现性、样本外稳定性和生产约束。"], "reference_url": "https://www.coindesk.com/business/2026/09/12/ripple-stablecoin-chief-sees-usd13-trillion-corporate-treasury-opportunity-for-rlusd", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "低", "source_type_label": "加密市场新闻"}, {"id": "572d5805262ee87d9250d84d764f33f494a922b666535eda0c94c7a8bc35f19a", "source": "CoinTelegraph", "source_type": "crypto_news", "title": "North Korea using foreign talent to help infiltrate US companies: Report", "url": "https://cointelegraph.com/news/north-korea-using-foreign-talent-to-help-infiltrate-us-companies-report?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "authors": [], "published_at": "2026-09-12", "collected_at": "2026-09-13T00:47:54Z", "raw_text": "The DPRK has turned to third-country IT workers to pass job interviews, after which, the positions are usually taken over by North Korean operatives.", "abstract": "The DPRK has turned to third-country IT workers to pass job interviews, after which, the positions are usually taken over by North Korean operatives.", "content_hash": "51e34e281252720fff1030abeb5005490259e21e84ff926418dad62fe6047d15", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://cointelegraph.com/rss"}, "one_line_summary": "The DPRK has turned to third-country IT workers to pass job interviews, after which, the positions are usually taken over by North Korean operatives.", "technical_summary": "The DPRK has turned to third-country IT workers to pass job interviews, after which, the positions are usually taken over by North Korean operatives.", "key_points": ["The DPRK has turned to third-country IT workers to pass job interviews, after which, the positions are usually taken over by North Korean operatives.", "来源类型：加密市场新闻。", "进入研究或生产前需要进一步人工复核。"], "quant_relevance": "适合进入阿尔法发现、特征研究或因子有效性验证流程。", "possible_use_case": "可以放入研究待办池，作为候选信号或因子族继续验证。", "limitations": "在成为研究或交易决策前，需要人工复核。", "read_priority": "低", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 5.686, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.309, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "The DPRK has turned to third-country IT workers to pass job interviews, after which, the positions are usually taken over by North Korean operatives.", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["内容抓手：这条加密市场新闻围绕阿尔法 / 因子研究展开，归入阿尔法 / 因子研究。", "研究动作：先作为阿尔法 / 因子研究候选线索，判断是否值得进入研究待办。", "验证重点：检查数据可得性、可复现性、样本外稳定性和生产约束。"], "reference_url": "https://cointelegraph.com/news/north-korea-using-foreign-talent-to-help-infiltrate-us-companies-report?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "低", "source_type_label": "加密市场新闻"}, {"id": "72857c160e2f4b36215fe3c7256596aeb6458b33f0ad023681d3c136ff02ee7f", "source": "Decrypt", "source_type": "crypto_news", "title": "GTA Mod Adds Flock Cameras—And Lets Players Destroy Them", "url": "https://decrypt.co/377997/gta-mod-flock-cameras-players-destroy", "authors": [], "published_at": "2026-09-12", "collected_at": "2026-09-13T00:47:54Z", "raw_text": "The surveillance mod on GTA V brings the privacy fight to Los Santos, where players can demolish the cameras tracking them.", "abstract": "The surveillance mod on GTA V brings the privacy fight to Los Santos, where players can demolish the cameras tracking them.", "content_hash": "e94cf4e7c9e3b42914c581f6b22594786015007a8d7873d157731c285734e3e8", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://decrypt.co/feed"}, "one_line_summary": "The surveillance mod on GTA V brings the privacy fight to Los Santos, where players can demolish the cameras tracking them.", "technical_summary": "The surveillance mod on GTA V brings the privacy fight to Los Santos, where players can demolish the cameras tracking them.", "key_points": ["The surveillance mod on GTA V brings the privacy fight to Los Santos, where players can demolish the cameras tracking them.", "来源类型：加密市场新闻。", "进入研究或生产前需要进一步人工复核。"], "quant_relevance": "适合进入阿尔法发现、特征研究或因子有效性验证流程。", "possible_use_case": "可以放入研究待办池，作为候选信号或因子族继续验证。", "limitations": "在成为研究或交易决策前，需要人工复核。", "read_priority": "低", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 5.654, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.304, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "The surveillance mod on GTA V brings the privacy fight to Los Santos, where players can demolish the cameras tracking them.", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["内容抓手：这条加密市场新闻围绕阿尔法 / 因子研究展开，归入阿尔法 / 因子研究。", "研究动作：先作为阿尔法 / 因子研究候选线索，判断是否值得进入研究待办。", "验证重点：检查数据可得性、可复现性、样本外稳定性和生产约束。"], "reference_url": "https://decrypt.co/377997/gta-mod-flock-cameras-players-destroy", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "低", "source_type_label": "加密市场新闻"}], "source_stats": {"Reddit algotrading": 3, "CoinDesk": 3, "Quant StackExchange": 1, "Decrypt": 2, "CoinTelegraph": 1}, "category_counts": {"Backtesting / Research Tools": 1, "Data Engineering": 2, "Portfolio Construction": 1, "Crypto Quant": 2, "Alpha / Factor Research": 4}, "section_counts": {"ai_quant_tools": 5, "daily_news": 5}, "sections": [{"key": "deep_learning_quant", "label": "深度学习量化未来", "description": "技术主线：深度学习、强化学习、Transformer、图神经网络、表征学习、订单簿预测、金融时间序列大模型等在量化里的应用。"}, {"key": "ai_quant_tools", "label": "AI 量化工具", "description": "工具主线：能提升量化研究效率的 AI 工具、代码仓库、研究自动化、智能体、回测/数据工程工具和可接入团队工作流的基础设施。"}, {"key": "daily_news", "label": "Crypto 市场每日 Top 5", "description": "加密市场新闻主线：来自 CoinDesk、CoinTelegraph、The Block、Decrypt、Blockworks 等主流媒体当日最重要的 Crypto 市场报道。"}], "category_labels": {"Alpha / Factor Research": "阿尔法 / 因子研究", "Statistical Arbitrage": "统计套利", "Portfolio Construction": "组合构建", "Risk Management": "风险管理", "Options / Volatility": "期权 / 波动率", "Market Microstructure": "市场微观结构", "Execution / Transaction Cost": "交易执行 / 交易成本", "Machine Learning for Finance": "金融机器学习", "LLM / Agents for Quant": "量化大模型 / 智能体", "Crypto Quant": "加密资产量化", "Data Engineering": "数据工程", "Backtesting / Research Tools": "回测 / 研究工具", "Industry / Career": "行业 / 职业 / 合规", "Unclassified": "未分类"}, "priority_labels": {"High": "高", "Medium": "中", "Low": "低", "高": "高", "中": "中", "低": "低"}, "source_type_labels": {"paper": "论文", "forum": "论坛", "github": "代码仓库", "blog": "博客", "news": "新闻", "social": "社交媒体", "zhihu": "知乎", "x": "X", "quantml": "QuantML", "crypto_news": "加密市场新闻"}, "report_config": {"max_items_per_category": 5, "max_total_items": 60, "executive_brief_items": 5}}</script>
+  <script>
+    const payload = JSON.parse(document.getElementById('dashboard-data').textContent);
+    const items = payload.items || [];
+    const categoryLabels = payload.category_labels || {};
+    const priorityLabels = payload.priority_labels || {};
+    const sourceTypeLabels = payload.source_type_labels || {};
+    const state = {
+      query: '',
+      section: 'All',
+      category: 'All',
+      sort: 'score',
+      activeId: items[0]?.id || null,
+    };
+
+    const priorityRank = { High: 3, Medium: 2, Low: 1, '高': 3, '中': 2, '低': 1 };
+    const $ = (id) => document.getElementById(id);
+
+    // --- Feedback ---
+    const _feedbackStore = JSON.parse(localStorage.getItem('quant-feedback') || '{}');
+    function getFeedback(id) { return _feedbackStore[id] || 0; }
+    function setFeedback(id, signal) {
+      if (_feedbackStore[id] === signal) { delete _feedbackStore[id]; signal = 0; }
+      else { _feedbackStore[id] = signal; }
+      localStorage.setItem('quant-feedback', JSON.stringify(_feedbackStore));
+      fetch('http://localhost:8080/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, signal }),
+      }).catch(() => {});
+    }
+
+    function init() {
+      $('report-date').textContent = payload.report_date + ' - 主力源：arXiv / 知乎 / QuantML / 大型论坛 - 生成时间 ' + payload.generated_at;
+      $('metric-items').textContent = items.length;
+      $('metric-categories').textContent = new Set(items.map((item) => item.category)).size;
+      $('metric-high').textContent = items.filter((item) => priorityLabel(item.read_priority) === '高').length;
+      $('metric-avg').textContent = averageScore(items).toFixed(1);
+
+      buildSectionControls();
+      buildCategoryControls();
+      buildSourceList();
+      bindControls();
+      render();
+    }
+
+    function bindControls() {
+      $('search').addEventListener('input', (event) => {
+        state.query = event.target.value.trim().toLowerCase();
+        render();
+      });
+      $('category-select').addEventListener('change', (event) => {
+        state.category = event.target.value;
+        render();
+      });
+      $('section-select').addEventListener('change', (event) => {
+        state.section = event.target.value;
+        render();
+      });
+      $('sort-select').addEventListener('change', (event) => {
+        state.sort = event.target.value;
+        render();
+      });
+    }
+
+    function buildCategoryControls() {
+      const counts = countBy(items, 'category');
+      const categories = Object.keys(counts).sort();
+      const select = $('category-select');
+      select.innerHTML = option('All', `全部细分标签 (${items.length})`) +
+        categories.map((category) => option(category, `${categoryLabel(category)} (${counts[category]})`)).join('');
+
+      const list = $('category-list');
+      list.innerHTML = categoryButton('All', items.length) +
+        categories.map((category) => categoryButton(category, counts[category])).join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.category = button.dataset.category;
+          select.value = state.category;
+          if (state.category === 'All') {
+            state.section = 'All';
+            $('section-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSectionControls() {
+      const counts = payload.section_counts || {};
+      const sections = payload.sections || [];
+      const select = $('section-select');
+      select.innerHTML = option('All', `全部主线 (${items.length})`) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => option(section.key, `${section.label} (${counts[section.key]})`))
+          .join('');
+
+      const list = $('section-list');
+      list.innerHTML = sectionButton('All', '全部', items.length) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => sectionButton(section.key, section.label, counts[section.key]))
+          .join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.section = button.dataset.section;
+          select.value = state.section;
+          if (state.section === 'All') {
+            state.category = 'All';
+            $('category-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSourceList() {
+      const stats = payload.source_stats || {};
+      const entries = Object.entries(stats)
+        .filter(([source]) => !source.startsWith('fetched:'))
+        .sort((a, b) => b[1] - a[1]);
+      $('source-list').innerHTML = entries.length
+        ? entries.map(([source, count]) => `<li><span>${escapeHtml(source)}</span><b>${count}</b></li>`).join('')
+        : '<li><span>暂无来源统计</span><b>0</b></li>';
+    }
+
+    function render() {
+      let visible = items.filter(matchesFilters);
+      visible = sortItems(visible);
+      if (!visible.some((item) => item.id === state.activeId)) {
+        state.activeId = visible[0]?.id || null;
+      }
+
+      $('feed-title').textContent = feedTitle();
+      $('result-count').textContent = `展示 ${visible.length} 条 - 两条主线每条最多 ${payload.report_config.max_items_per_category} 条`;
+      renderSectionActive();
+      renderCategoryActive();
+      renderItems(visible);
+      renderDetail(visible.find((item) => item.id === state.activeId) || visible[0]);
+    }
+
+    function matchesFilters(item) {
+      const sectionMatch = state.section === 'All' || (item.report_sections || []).includes(state.section);
+      if (!sectionMatch) return false;
+      const categoryMatch = state.category === 'All' || item.category === state.category;
+      if (!categoryMatch) return false;
+      if (!state.query) return true;
+      const haystack = [
+        item.title,
+        item.display_title,
+        item.source,
+        item.source_type,
+        item.category,
+        categoryLabel(item.category),
+        sectionLabel(item.report_sections?.[0]),
+        sourceTypeLabel(item.source_type),
+        priorityLabel(item.read_priority),
+        item.one_line_summary,
+        item.technical_summary,
+        item.quant_relevance,
+        item.possible_use_case,
+        item.tldr,
+        item.core_value,
+        ...(item.key_points_list || []),
+        item.reference_url,
+      ].join(' ').toLowerCase();
+      return haystack.includes(state.query);
+    }
+
+    function sortItems(list) {
+      return [...list].sort((a, b) => {
+        if (state.sort === 'priority') {
+          return (priorityRank[b.read_priority] || 0) - (priorityRank[a.read_priority] || 0)
+            || b.final_score - a.final_score;
+        }
+        if (state.sort === 'source') {
+          return a.source.localeCompare(b.source) || b.final_score - a.final_score;
+        }
+        return b.final_score - a.final_score;
+      });
+    }
+
+    function renderCategoryActive() {
+      document.querySelectorAll('.category-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.category === state.category);
+      });
+    }
+
+    function renderSectionActive() {
+      document.querySelectorAll('.section-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.section === state.section);
+      });
+    }
+
+    function itemCard(item) {
+      const sec = item.report_sections?.[0] || 'other';
+      const sig = getFeedback(item.id);
+      return `
+        <article class="item ${item.id === state.activeId ? 'active' : ''}"
+                 data-id="${escapeAttr(item.id)}"
+                 data-section="${escapeAttr(sec)}">
+          <div class="item-top">
+            <h3>${escapeHtml(item.display_title || item.title)}</h3>
+            <div class="score">${Number(item.final_score).toFixed(1)}</div>
+          </div>
+          <div class="meta">
+            <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+            <span class="tag">${escapeHtml(item.source)}</span>
+            <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+          </div>
+          ${readerFormat(item, true)}
+          <div class="feedback-row">
+            <button class="feedback-btn ${sig === 1 ? 'active-up' : ''}" data-feedback="1" title="有用">👍</button>
+            <button class="feedback-btn ${sig === -1 ? 'active-down' : ''}" data-feedback="-1" title="跳过">👎</button>
+            <span class="feedback-hint">${sig === 1 ? '已标记有用' : sig === -1 ? '已标记跳过' : ''}</span>
+          </div>
+        </article>
+      `;
+    }
+
+    function sectionGroupHeader(section, count) {
+      return `
+        <div class="section-group-header" data-section="${escapeAttr(section.key)}">
+          <span class="section-group-title">${escapeHtml(section.label)}</span>
+          <span class="section-group-count">${count} 条</span>
+        </div>
+      `;
+    }
+
+    function renderItems(visible) {
+      const container = $('items');
+      if (!visible.length) {
+        container.innerHTML = '<div class="empty">当前筛选条件下没有匹配内容。</div>';
+        return;
+      }
+
+      let html = '';
+      if (state.section === 'All') {
+        // Group by section in defined order, with a header for each group
+        const grouped = {};
+        for (const item of visible) {
+          const sec = item.report_sections?.[0] || 'other';
+          if (!grouped[sec]) grouped[sec] = [];
+          grouped[sec].push(item);
+        }
+        for (const section of (payload.sections || [])) {
+          const group = grouped[section.key];
+          if (!group || !group.length) continue;
+          html += sectionGroupHeader(section, group.length);
+          html += group.map((item) => itemCard(item)).join('');
+        }
+        // Append any items that fell into 'other' (shouldn't normally happen)
+        if (grouped['other']?.length) {
+          html += grouped['other'].map((item) => itemCard(item)).join('');
+        }
+      } else {
+        html = visible.map((item) => itemCard(item)).join('');
+      }
+
+      container.innerHTML = html;
+      container.querySelectorAll('.item').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.activeId = node.dataset.id;
+          render();
+        });
+      });
+      container.querySelectorAll('.feedback-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const itemNode = btn.closest('.item');
+          setFeedback(itemNode.dataset.id, parseInt(btn.dataset.feedback, 10));
+          render();
+        });
+      });
+    }
+
+    function renderDetail(item) {
+      const detail = $('detail');
+      if (!item) {
+        detail.innerHTML = '<div class="empty">选择一条内容查看详情。</div>';
+        return;
+      }
+
+      detail.innerHTML = `
+        <h2>${escapeHtml(item.display_title || item.title)}</h2>
+        <div class="meta">
+          <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+          <span class="tag">${escapeHtml(sourceTypeLabel(item.source_type))}</span>
+          <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+        </div>
+
+        ${readerFormat(item, false)}
+
+        <div class="detail-block">
+          <h3>评分拆解</h3>
+          <div class="breakdown">
+            ${bar('相关性', item.relevance_score)}
+            ${bar('新颖度', item.novelty_score)}
+            ${bar('学术性', item.academic_score)}
+            ${bar('讨论度', item.discussion_score)}
+            ${bar('可行动性', item.actionable_score)}
+          </div>
+        </div>
+
+      `;
+    }
+
+    function readerFormat(item, compact) {
+      const points = itemKeyPoints(item);
+      return `
+        <div class="reader-format ${compact ? 'compact' : ''}">
+          <div class="reader-block">
+            <h4>1. 这篇文章的太长不读</h4>
+            <p>${escapeHtml(item.tldr || item.one_line_summary || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>2. 核心价值，对我量化的工作能够提供什么样的帮助</h4>
+            <p>${escapeHtml(item.core_value || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>3. 关键核心点 / 论文或帖子摘要</h4>
+            <ol>${points.map((point) => `<li>${escapeHtml(point)}</li>`).join('')}</ol>
+          </div>
+          <div class="reader-block">
+            <h4>4. 原文链接</h4>
+            ${referenceHtml(item)}
+          </div>
+        </div>
+      `;
+    }
+
+    function itemKeyPoints(item) {
+      const points = Array.isArray(item.key_points_list)
+        ? item.key_points_list
+        : (Array.isArray(item.key_points) ? item.key_points : []);
+      const clean = points.filter(Boolean).slice(0, 3);
+      return clean.length ? clean : ['需要打开原文进一步确认方法、数据和适用边界。'];
+    }
+
+    function referenceHtml(item) {
+      const url = item.reference_url || '';
+      if (!url) return '<p>暂无可打开链接</p>';
+      return `
+        <a class="reader-reference" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">打开原文</a>
+        <small class="reference-url">${escapeHtml(url)}</small>
+      `;
+    }
+
+    function bar(label, value) {
+      const score = Number(value || 0);
+      const width = Math.max(0, Math.min(100, score * 10));
+      return `
+        <div class="bar">
+          <span>${label}</span>
+          <div class="bar-track"><div class="bar-fill" style="width: ${width}%"></div></div>
+          <b>${score.toFixed(1)}</b>
+        </div>
+      `;
+    }
+
+    function countBy(list, key) {
+      return list.reduce((acc, item) => {
+        acc[item[key]] = (acc[item[key]] || 0) + 1;
+        return acc;
+      }, {});
+    }
+
+    function averageScore(list) {
+      if (!list.length) return 0;
+      return list.reduce((sum, item) => sum + Number(item.final_score || 0), 0) / list.length;
+    }
+
+    function option(value, label) {
+      return `<option value="${escapeAttr(value)}">${escapeHtml(label)}</option>`;
+    }
+
+    function sectionButton(section, label, count) {
+      return `
+        <button class="category-button section-button" type="button" data-section="${escapeAttr(section)}">
+          <span>${escapeHtml(label)}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryButton(category, count) {
+      return `
+        <button class="category-button" type="button" data-category="${escapeAttr(category)}">
+          <span>${escapeHtml(category === 'All' ? '全部' : categoryLabel(category))}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryLabel(category) {
+      return categoryLabels[category] || category;
+    }
+
+    function sectionLabel(sectionKey) {
+      const section = (payload.sections || []).find((item) => item.key === sectionKey);
+      return section ? section.label : '其他';
+    }
+
+    function feedTitle() {
+      const parts = [];
+      if (state.section !== 'All') parts.push(sectionLabel(state.section));
+      if (state.category !== 'All') parts.push(categoryLabel(state.category));
+      return parts.length ? parts.join(' / ') : '今日情报';
+    }
+
+    function priorityLabel(priority) {
+      return priorityLabels[priority] || priority;
+    }
+
+    function sourceTypeLabel(sourceType) {
+      return sourceTypeLabels[sourceType] || sourceType;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replaceAll('`', '&#096;');
+    }
+
+    init();
+  </script>
+</body>
+</html>
