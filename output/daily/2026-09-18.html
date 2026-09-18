@@ -1,0 +1,1086 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>samson 量化情报台 - 2026-09-18</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --panel: #ffffff;
+      --ink: #202124;
+      --muted: #5f6368;
+      --line: #dadce0;
+      --blue: #1a73e8;
+      --red: #ea4335;
+      --yellow: #fbbc04;
+      --green: #34a853;
+      --blue-soft: #e8f0fe;
+      --green-soft: #e6f4ea;
+      --yellow-soft: #fef7e0;
+      --red-soft: #fce8e6;
+      --shadow: 0 1px 2px rgba(60, 64, 67, 0.16), 0 8px 24px rgba(60, 64, 67, 0.10);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(66, 133, 244, 0.07), transparent 30%),
+        radial-gradient(circle at top right, rgba(251, 188, 4, 0.08), transparent 26%),
+        var(--bg);
+      color: var(--ink);
+      font-family: "Google Sans", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(280px, 620px);
+      gap: 24px;
+      align-items: center;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand h1 {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin: 0;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+
+    .brand h1::before {
+      content: "";
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background:
+        conic-gradient(from 0deg, var(--blue) 0 25%, var(--red) 0 50%, var(--yellow) 0 75%, var(--green) 0 100%);
+      box-shadow: inset 0 0 0 7px #fff;
+    }
+
+    .date-pill {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 170px 170px 150px;
+      gap: 10px;
+    }
+
+    .control {
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 12px;
+      outline: none;
+    }
+
+    .control:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.14);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 260px minmax(420px, 1fr) 420px;
+      gap: 22px;
+      padding: 24px 32px 36px;
+    }
+
+    .rail,
+    .detail {
+      position: sticky;
+      top: 86px;
+      height: calc(100vh - 112px);
+      overflow: auto;
+    }
+
+    .rail,
+    .detail,
+    .feed {
+      min-width: 0;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      padding: 12px;
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
+    }
+
+    .metric:nth-child(1) { border-top: 3px solid var(--blue); }
+    .metric:nth-child(2) { border-top: 3px solid var(--red); }
+    .metric:nth-child(3) { border-top: 3px solid var(--yellow); }
+    .metric:nth-child(4) { border-top: 3px solid var(--green); }
+
+    .metric b {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .section-label {
+      margin: 18px 0 8px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .category-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .category-button {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--ink);
+      padding: 8px 10px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .category-button:hover,
+    .category-button.active {
+      border-color: transparent;
+      background: var(--blue-soft);
+      color: #174ea6;
+    }
+
+    .count {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .source-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .source-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .feed-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .feed-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .result-count {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .items {
+      display: grid;
+      gap: 10px;
+    }
+
+    .section-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 2px 4px;
+      margin-top: 10px;
+      border-bottom: 2px solid var(--line);
+    }
+
+    .section-group-header:first-child {
+      margin-top: 0;
+    }
+
+    .section-group-title {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .section-group-header[data-section="deep_learning_quant"] .section-group-title { color: var(--blue); }
+    .section-group-header[data-section="ai_quant_tools"] .section-group-title { color: var(--green); }
+    .section-group-header[data-section="daily_news"] .section-group-title { color: var(--yellow); }
+
+    .section-group-count {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .item {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.10);
+      padding: 18px;
+      cursor: pointer;
+      transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+    }
+
+    .item::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--blue), var(--red), var(--yellow), var(--green));
+    }
+
+    .item[data-section="deep_learning_quant"]::before { background: var(--blue); }
+    .item[data-section="ai_quant_tools"]::before { background: var(--green); }
+    .item[data-section="daily_news"]::before { background: var(--yellow); }
+
+    .item:hover,
+    .item.active {
+      border-color: #c6dafc;
+      box-shadow: var(--shadow);
+      transform: translateY(-2px);
+    }
+
+    .item-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .item h3 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.28;
+    }
+
+    .score {
+      min-width: 54px;
+      border-radius: 999px;
+      background: var(--blue-soft);
+      color: #174ea6;
+      padding: 6px 8px;
+      text-align: center;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .tag {
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: #f1f3f4;
+      padding: 3px 8px;
+    }
+
+    .tag:nth-child(1) { background: var(--blue-soft); color: #174ea6; }
+    .tag:nth-child(2) { background: var(--green-soft); color: #137333; }
+    .tag:nth-child(3) { background: var(--yellow-soft); color: #8a5a00; }
+    .tag:nth-child(4) { background: var(--red-soft); color: #b3261e; }
+
+    .summary {
+      margin: 0;
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .reference-link {
+      display: inline-flex;
+      width: fit-content;
+      border-top: 1px solid var(--line);
+      color: var(--blue);
+      padding-top: 9px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .reader-format {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .reader-format.compact {
+      gap: 8px;
+    }
+
+    .reader-block {
+      border-top: 1px solid var(--line);
+      padding-top: 9px;
+    }
+
+    .reader-block:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .reader-block h4 {
+      margin: 0 0 5px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .reader-block p,
+    .reader-block li {
+      margin: 0;
+      color: #30342d;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .reader-block ol {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .reader-reference {
+      color: var(--blue);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
+    .reference-url {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .detail {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .detail h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+
+    .detail-block {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .detail-block h3 {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+
+    .detail-block p,
+    .detail-block li {
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .detail-block ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .breakdown {
+      display: grid;
+      gap: 8px;
+    }
+
+    .bar {
+      display: grid;
+      grid-template-columns: 118px 1fr 40px;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .bar-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e7eadf;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--blue), var(--green), var(--yellow), var(--red));
+    }
+
+    .open-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      margin-top: 16px;
+      border: 1px solid var(--blue);
+      border-radius: var(--radius);
+      color: var(--blue);
+      text-decoration: none;
+      padding: 0 12px;
+      font-weight: 700;
+    }
+
+    .feedback-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+    }
+
+    .feedback-btn {
+      background: #f1f3f4;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 120ms, border-color 120ms;
+    }
+
+    .feedback-btn:hover { background: var(--blue-soft); }
+    .feedback-btn.active-up { background: var(--green-soft); border-color: var(--green); }
+    .feedback-btn.active-down { background: var(--red-soft); border-color: var(--red); }
+
+    .feedback-hint {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      padding: 28px;
+      color: var(--muted);
+      background: var(--panel);
+    }
+
+    @media (max-width: 1180px) {
+      .layout {
+        grid-template-columns: 220px 1fr;
+      }
+
+      .detail {
+        position: static;
+        grid-column: 1 / -1;
+        height: auto;
+      }
+    }
+
+    @media (max-width: 820px) {
+      .topbar {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .brand {
+        display: grid;
+        gap: 4px;
+      }
+
+      .brand h1 {
+        white-space: normal;
+        font-size: 21px;
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .rail,
+      .detail {
+        position: static;
+        height: auto;
+      }
+
+      .metric-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <h1>samson 量化情报台</h1>
+        <span class="date-pill" id="report-date"></span>
+      </div>
+      <div class="controls">
+        <input class="control" id="search" type="search" placeholder="搜索标题、摘要、分类..." />
+        <select class="control" id="section-select"></select>
+        <select class="control" id="category-select"></select>
+        <select class="control" id="sort-select">
+          <option value="score">按评分排序</option>
+          <option value="priority">按优先级排序</option>
+          <option value="source">按来源排序</option>
+        </select>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="rail">
+        <div class="metric-grid">
+          <div class="metric"><b id="metric-items">0</b><span>报告条目</span></div>
+          <div class="metric"><b id="metric-categories">0</b><span>分类数量</span></div>
+          <div class="metric"><b id="metric-high">0</b><span>高优先级</span></div>
+          <div class="metric"><b id="metric-avg">0.0</b><span>平均评分</span></div>
+        </div>
+
+        <div class="section-label">两条主线</div>
+        <div class="category-list" id="section-list"></div>
+
+        <div class="section-label">细分标签</div>
+        <div class="category-list" id="category-list"></div>
+
+        <div class="section-label">主力来源</div>
+        <ul class="source-list" id="source-list"></ul>
+      </aside>
+
+      <section class="feed">
+        <div class="feed-header">
+          <h2 id="feed-title">今日情报</h2>
+          <span class="result-count" id="result-count"></span>
+        </div>
+        <div class="items" id="items"></div>
+      </section>
+
+      <aside class="detail" id="detail"></aside>
+    </main>
+  </div>
+
+  <script id="dashboard-data" type="application/json">{"report_date": "2026-09-18", "generated_at": "2026-09-18T01:11:20Z", "items": [{"id": "c666a3f43d60bf1d3ab4f9919ab52c7ce7b124f3a613f0fc591a026aad6c20a7", "source": "arXiv", "source_type": "paper", "title": "Model-Free Passive Execution via Order-Level Shadowing", "url": "http://arxiv.org/abs/2609.18019v1", "authors": ["Vincent Maciejewski"], "published_at": "2026-09-16", "collected_at": "2026-09-18T01:03:20Z", "raw_text": "Automated execution algorithms are organized into schedule-based and liquidity-seeking families. This paper concerns the first, whose members -- Time-Weighted Average Price (TWAP), Volume-Weighted Average Price (VWAP), Percentage of Volume (POV) and Implementation Shortfall -- are all model-based: each derives its decisions from an explicit model, forecast, schedule or control rule. We introduce Shadow-PPOV, a passive POV whose order-placement rate is set from observed order flow rather than from traded volume. Placing a passive order to fill efficiently conventionally involves an order-book model and a fill prediction. Shadow-PPOV replaces that prediction with tracking: on observing a third-party add, it may transmit its own limit order at the same price on the same venue, recording a single association between the observed order's exchange identifier and its own. Cancellation is then identifier-driven -- the shadow is withdrawn when the order it follows ends, at once on a cancel and after a brief grace window on a trade. The placement decision is thus model-free: price and venue are read off the observed order. Model-free is not information-free. Shadow-PPOV reads every order-book message and places only where a participant has just committed capital, while computing nothing from what it reads. Information is inherited from the flow rather than derived from a model. We evaluate Shadow-PPOV on a full calendar year of replayed Chicago Mercantile Exchange (CME) ES futures in a deterministic market-replay simulator, reporting its slippage and latency sensitivity and comparing it against the aggressive equivalent POV. We propose it as a model-free benchmark for passive-order placement, against which a predictive placement model can be scored. The algorithm and the order-book simulator are implemented in the open-source kaspar-hft project.", "abstract": "Automated execution algorithms are organized into schedule-based and liquidity-seeking families. This paper concerns the first, whose members -- Time-Weighted Average Price (TWAP), Volume-Weighted Average Price (VWAP), Percentage of Volume (POV) and Implementation Shortfall -- are all model-based: each derives its decisions from an explicit model, forecast, schedule or control rule. We introduce Shadow-PPOV, a passive POV whose order-placement rate is set from observed order flow rather than from traded volume. Placing a passive order to fill efficiently conventionally involves an order-book model and a fill prediction. Shadow-PPOV replaces that prediction with tracking: on observing a third-party add, it may transmit its own limit order at the same price on the same venue, recording a single association between the observed order's exchange identifier and its own. Cancellation is then identifier-driven -- the shadow is withdrawn when the order it follows ends, at once on a cancel and after a brief grace window on a trade. The placement decision is thus model-free: price and venue are read off the observed order. Model-free is not information-free. Shadow-PPOV reads every order-book message and places only where a participant has just committed capital, while computing nothing from what it reads. Information is inherited from the flow rather than derived from a model. We evaluate Shadow-PPOV on a full calendar year of replayed Chicago Mercantile Exchange (CME) ES futures in a deterministic market-replay simulator, reporting its slippage and latency sensitivity and comparing it against the aggressive equivalent POV. We propose it as a model-free benchmark for passive-order placement, against which a predictive placement model can be scored. The algorithm and the order-book simulator are implemented in the open-source kaspar-hft project.", "content_hash": "c5266b00256c67b7e0975825d626cbbf9a0e1a208974eecb89fcbd2c548d14e7", "category": "Execution / Transaction Cost", "tags": ["execution", "liquidity", "simulator", "slippage", "twap", "vwap"], "language": "en", "metadata": {"arxiv_categories": ["q-fin.TR", "q-fin.CP"]}, "one_line_summary": "Shadow-PPOV 用「订单级影子跟随」替代订单簿成交预测做被动执行，在 CME ES 全年回放中与激进 POV 对比滑点和延迟敏感性", "technical_summary": "问题：被动挂单要成交通常需要订单簿模型和成交概率预测，模型错了就会被逆向选择。方法：Shadow-PPOV 放弃预测，改为「跟踪」——每读一条订单簿消息，一旦看到第三方新增挂单，就以相同价格、相同交易所、相同方向发出自己的限价单，并把对方的交易所订单 ID 与自己的订单建立一对一绑定；对方撤单则立即撤自己的单，对方成交则在短暂 grace window 后撤单。价格和交易所直接从被跟随订单读出，因此挂单决策无模型，但并非无信息：信息来自「有人刚刚投入了资金」这一事件本身，而非从消息里计算出的量。评测：在确定性市场回放模拟器中回放整整一个自然年的 CME ES 期货，报告滑点与延迟敏感性，并与激进版 POV 对照。算法与订单簿模拟器都在开源项目 kaspar-hft 中实现。注意：摘要只说明报告了滑点和延迟敏感性，未给出任何具体数值。", "key_points": ["滑动跟随不建订单簿模型：观察第三方挂单后同价同所下单，撤单完全由交易所订单 ID 驱动，跟随单撤销时同步撤销、成交后经 grace window 撤销", "可复现性高：算法和确定性订单簿回放器均在开源 kaspar-hft 中实现，需完整的 level-2/逐笔订单簿消息流（含交易所订单 ID）和一年 CME ES 数据即可复刻", "只测了 CME ES 单一品种且回放器自身的排队位置与部分成交假设决定被动单能否成交，摘要未公布任何滑点或延迟敏感性的具体数值，结论无法直接外推"], "quant_relevance": "执行/交易成本；研究工具/工作流提效（提供了可复现的被动挂单基准，用于给预测型挂单模型打分）", "possible_use_case": "把 kaspar-hft 中的 Shadow-PPOV 拉下来作为基线执行模块，接入自有的 level-2 逐笔数据（需含交易所订单 ID），在自己的标的池上跑一遍滑点对照，再拿现有预测型被动挂单模型和它比——跑不赢基线的模型直接下掉", "limitations": "摘要未披露任何滑点、夏普或延迟敏感性的具体数字，无法判断相对激进 POV 到底赢多少；仅覆盖 CME ES 一个品种、一个自然年，存在单一市场与单一行情区间过拟合风险；被动成交结果高度依赖回放器的队列位置和部分成交建模，与真实撮合差异未知；grace window 长度是人为超参数，未见敏感性分析；跟踪第三方挂单会继承对方的撤单行为和毒性订单流风险；在缺乏交易所订单 ID 的市场（如部分 A 股逐笔委托口径）无法直接实现。", "read_priority": "中", "key_figures_md": "- **滑点对比图（见 HTML 版）**：Shadow-PPOV 与激进等价 POV 在一个自然年 CME ES 回放中的滑点分布对比\n- **延迟敏感性图（见 HTML 版）**：订单到达延迟变化下 Shadow-PPOV 滑点的衰减曲线，用于刻画影子跟随对延迟的依赖\n- **HTML 版全文与原图**：https://arxiv.org/html/2609.18019\n- [原文图表（HTML版）](https://arxiv.org/html/2609.18019)", "relevance_score": 7.8, "novelty_score": 9.565, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 7.5, "final_score": 7.553, "display_title": "交易执行、流动性、滑点研究论文", "tldr": "Shadow-PPOV 用「订单级影子跟随」替代订单簿成交预测做被动执行，在 CME ES 全年回放中与激进 POV 对比滑点和延迟敏感性", "core_value": "对你的量化工作帮助：把它拆成一个交易执行 / 交易成本复现任务，先验证交易执行、流动性、滑点是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["滑动跟随不建订单簿模型：观察第三方挂单后同价同所下单，撤单完全由交易所订单 ID 驱动，跟随单撤销时同步撤销、成交后经 grace window 撤销", "可复现性高：算法和确定性订单簿回放器均在开源 kaspar-hft 中实现，需完整的 level-2/逐笔订单簿消息流（含交易所订单 ID）和一年 CME ES 数据即可复刻", "只测了 CME ES 单一品种且回放器自身的排队位置与部分成交假设决定被动单能否成交，摘要未公布任何滑点或延迟敏感性的具体数值，结论无法直接外推"], "reference_url": "http://arxiv.org/abs/2609.18019v1", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "交易执行 / 交易成本", "priority_label": "中", "source_type_label": "论文"}, {"id": "595314eb860ce535f6ef7b08e143867a5e77d2556e0d071d10a9f38fc6d4c0e6", "source": "Reddit algotrading", "source_type": "forum", "title": "Am I still overfitting, or is this a genuine edge? 169-trade crypto algorithm [Long post, TL;DR at top]", "url": "https://www.reddit.com/r/algotrading/comments/1witlif/am_i_still_overfitting_or_is_this_a_genuine_edge/", "authors": ["/u/RX8_MMA_420"], "published_at": "2026-09-17", "collected_at": "2026-09-18T01:05:12Z", "raw_text": "TL;DR: I previously overfit my trading by applying filters until only small groups of historical winners remained. I have now stripped the deployment back to two mostly raw trend algorithms based on liquidation and momentum data. I researched roughly 100 signal generators, many of which were AI-assisted combinations of conventional technical indicators. Around half produced genuine live alerts, while the other half were retrospectively generated research results. The algorithm that consistently ranked highest was not one of the AI-generated indicator strategies. It was my own liquidity-hunting algorithm, which I had created and run before conducting the wider comparison. The primary algorithm has 169 resolved trades over roughly a year, a 76.92% win rate, 2.236 profit factor and 10.40% maximum drawdown. It remains profitable across multiple stop/target configurations, including tests from 1:1 through to 1:5. I’m running both deployed systems at half exposure with no discretionary interference. My question is whether selecting the best-performing algorithm and exit configuration is still cherry-picking, despite the larger sample, profitability across different settings and the fact that its logic existed before the broader comparison. Full post I’ve been developing automated crypto trading systems for about 18 months. I previously traded them profitably for more than six months, averaging over 1% per week, but after changing exchanges due to the Drift incident, I went down the rabbit hole of trying to improve everything. A major contributor during that profitable period was an earlier, less productive Supertrend-filtered version of the liquidity algorithm I am using now. I eventually assembled around 100 different signal generators, which I call snipers. Around 50 of these had produced genuine live alerts as the market developed. The other 50 were retrospectively generated research results, meaning their alerts were created from historical data rather than recorded live at the time. AI helped me create many of the candidates. A lot of them used conventional technical indicators and patterns, including moving averages, volatility, Supertrend, RSI and candle formations. Many were mean-reversion systems because my natural preference was to buy after a decline and sell after a rise. I also developed analysis software that can compare around 100 signal files simultaneously, then examine individual files or selected combinations in considerably greater detail. The strategy that repeatedly appeared near the top of these comparisons was not one of the AI-generated combinations of conventional indicators. It was my own algorithm and trading logic, originally created before I conducted the wider comparison. This algorithm is a liquidity hunter. It uses live liquidation heat-map data to assess liquidity above and below the market, then waits for price and momentum to confirm which side the market appears to be targeting. It is a trend-continuation system rather than a mean-reversion system. I would personally feel more comfortable buying after a drop and selling after a rise, but my data consistently shows that the trend systems perform better. Whether I prefer mean reversion is therefore irrelevant. The mistake I made Although my liquidity algorithm kept ranking highly, I tried to improve my overall trading by applying combinations of volatility, Supertrend and moving-average filters to numerous signal generators. The results looked incredible on paper, sometimes approaching 1% per day. The problem was that I had taken systems with perhaps 200 raw signals and filtered them down to around 20 historical winners. I thought I had identified the best market conditions, but in reality I had mostly removed the historical losses. Those tiny filtered samples did not perform similarly going forward. It was not intentional dishonesty, but I had still built a very attractive picture by selecting the pieces that looked best. I have now stripped everything back to two trend-following algorithms with no additional volatility, Supertrend or moving-average filters applied after the signals are generated. The algorithms naturally contain their own entry conditions. However, once either deployed algorithm produces an alert, I take it. I am no longer applying additional filters because similar historical trades happened to lose. Both systems trade long and short. Primary algorithm: approximately one year My primary algorithm has approximately one year of recorded data. Its current report covers 382 assessment days and contains 169 resolved trades: Winners: 130 Stop losses: 39 Win rate: 76.92% Long win rate: 77.46% from 71 trades Short win rate: 76.53% from 98 trades Average net winning trade: +2.07% Average stopped trade: −3.09% Profit factor: 2.236 Maximum drawdown: 10.40% Trades per assessment day: 0.442 Modified expectancy per trade: +0.71% Modified expected return per assessment day: +0.32% (This includes all days of assessment period, not just days traded) The calculation includes 0.0864% round-trip taker fees. I also apply a further 10% reduction for slippage and another 10% for differences between signal prices and live execution. The +0.71% expectancy is after those modifiers. The deployed exit uses a 3% initial stop. The first profit level is 2%, but this is not a fixed 2% take-profit. Reaching it activates a stepped trailing stop, allowing stronger trades to continue. The targets and trailing distances become more conservative when a trade remains open for 24 and 48 hours. The completed monthly results in this report are all positive, but they vary considerably. The best complete month was +22.12%, while the weakest was +1.22%. Maximum peak-to-trough drawdown was −10.40%, lasting 19 days and recovering 30 days after the previous peak. I have also stress-tested the underlying signals using simpler fixed stop/target combinations. They remained profitable at 1:1 and 1:2, and were still profitable when tested with a 1% stop and a 5% target. Therefore, the edge does not appear to exist solely at the selected 3% stop and trailing configuration. However, the current configuration produced the best combination of return, accuracy and drawdown, which raises my main concern: Have I simply moved from cherry-picking signals to cherry-picking the best exit strategy? Second algorithm and combined results The second deployed algorithm combines two separately generated signals. Its base trend signal has approximately a year of profitable history, but the additional confirmation signal has only existed since June, so I cannot honestly claim a year of history for the combined version. I attempted to reproduce the confirmation signal retrospectively, but the recreated historical alerts did not exactly match signals generated live. I rejected that reconstruction rather than treating it as valid backtest data. Tested independently, the confirmed algorithm has produced more than 30 resolved trades. Its standalone accuracy is slightly lower than it appears in the combined report below, but it remains profitable. Across the period in which both deployed algorithms were available, the combined report contains 49 resolved trades: Winners: 42 Stop losses: 7 Win rate: 85.71% Average net winning trade: +1.81% Average stopped trade: −2.80% Profit factor: 3.870 Maximum drawdown: 2.50% Modified expectancy per trade: +0.93% Modified expected return per assessment day: +0.48% Broken down by source within this particular combined report: Primary algorithm: 28 winners from 33 trades, or 84.85% New confirmed algorithm: 14 winners from 16 trades, or 87.50% The 16 trades above are only the second algorithm’s contribution during the shared reporting period. They are not its entire standalone sample. The new algorithm uses a 2% initial stop and a 2% first profit level with trailing logic. The confirmation process has so far removed considerably more losing base signals than winning ones because it requires separate evidence that the move has begun. The primary algorithm has also performed unusually well during this shorter period, so I am not treating the combined 85.71% accuracy or 3.870 profit factor as the long-term expectation. Live deployment I am currently running only these two algorithms at half of my intended maximum exposure. Half exposure is primarily a behavioural control. At full exposure I would currently be more tempted to interfere with trades, whereas my job should be limited to ensuring the bot executes the frozen rules correctly. The live bot uses exchange-side stop orders, an independent emergency stop and monitoring that alerts me to operational problems. I am recording actual fills so that I can compare fees, slippage, signal prices and live results with the analysis. I have also developed mean-reversion algorithms that appear to possess positive expectancy. However, their accuracy, drawdown and overall returns are worse than the trend systems. Adding them would create more trades and occasional conflicts without necessarily improving the combined portfolio, so they remain in development rather than being included in the deployed strategy. What I am concerned about Comparing approximately 100 candidates creates selection risk, even though they were not all developed or tested in the same way. Around half were genuine live signal histories and around half were retrospectively generated research results. Many of the conventional indicator-based candidates were created with AI assistance, while the eventual winner was my own pre-existing liquidity-hunting logic and had already contributed to profitable live trading. That distinction makes me more confident than I would be if I had simply generated 100 retrospective strategies and selected the best equity curve. However, I recognise that repeatedly comparing systems can still create selection bias. I have also tested several stop-loss, target and trailing configurations before choosing the one with the best historical result. The neighbouring configurations remain profitable, but this specific configuration was still selected using historical data. I would appreciate opinions on the following: Does profitability across substantially different exit structures, including 1:1 through to a profitable 1:5 test, provide reasonable evidence that the entry signals contain a genuine edge? Is selecting the 3% stop and trailing configuration still likely to be meaningful overfitting if nearby configurations are also profitable? How should I account for testing approximately 100 signal generators when around half were genuine live histories, half were retrospectively generated, and the eventual winner was a pre-existing algorithm that had already contributed to profitable live trading? Is 169 resolved trades over roughly a year enough to justify limited live deployment, assuming the risk is acceptable, or would you consider that inadequate? Since I have already examined the complete historical sample, is freezing the rules and treating all future signals as the true out-of-sample test now the cleanest option? What would be the most appropriate robustness testing from here? Walk-forward analysis, Monte Carlo reshuffling, parameter sensitivity, bootstrapping, regime segmentation, or something else? How would you define evidence that the edge has degraded rather than the system merely experiencing an ordinary drawdown? Would you consider the newer confirmation algorithm deployable at reduced exposure given that it has more than 30 independently tested trades, remains profitable on its own and is based on a profitable year-long base signal? Or would you keep it entirely in shadow mode until it has a substantially larger independent sample? I have detailed HTML analysis containing every trade, entry, outcome, monthly breakdown, drawdown period and buy/sell split. I can post additional tables or screenshots if any particular information would help. I’m not looking for certainty. I mainly want to know whether I have finally removed the selection error that affected my earlier systems, or whether I am still flattering myself in a less obvious way. submitted by /u/RX8_MMA_420 [link] [comments]", "abstract": "TL;DR: I previously overfit my trading by applying filters until only small groups of historical winners remained. I have now stripped the deployment back to two mostly raw trend algorithms based on liquidation and momentum data. I researched roughly 100 signal generators, many of which were AI-assisted combinations of conventional technical indicators. Around half produced genuine live alerts, while the other half were retrospectively generated research results. The algorithm that consistently ranked highest was not one of the AI-generated indicator strategies. It was my own liquidity-hunting algorithm, which I had created and run before conducting the wider comparison. The primary algorithm has 169 resolved trades over roughly a year, a 76.92% win rate, 2.236 profit factor and 10.40% maximum drawdown. It remains profitable across multiple stop/target configurations, including tests from 1:1 through to 1:5. I’m running both deployed systems at half exposure with no discretionary interference. My question is whether selecting the best-performing algorithm and exit configuration is still cherry-picking, despite the larger sample, profitability across different settings and the fact that its logic existed before the broader comparison. Full post I’ve been developing automated crypto trading systems for about 18 months. I previously traded them profitably for more than six months, averaging over 1% per week, but after changing exchanges due to the Drift incident, I went down the rabbit hole of trying to improve everything. A major contributor during that profitable period was an earlier, less productive Supertrend-filtered version of the liquidity algorithm I am using now. I eventually assembled around 100 different signal generators, which I call snipers. Around 50 of these had produced genuine live alerts as the market developed. The other 50 were retrospectively generated research results, meaning their alerts were created from historical data rather than recorded live at the time. AI helped me create many of the candidates. A lot of them used conventional technical indicators and patterns, including moving averages, volatility, Supertrend, RSI and candle formations. Many were mean-reversion systems because my natural preference was to buy after a decline and sell after a rise. I also developed analysis software that can compare around 100 signal files simultaneously, then examine individual files or selected combinations in considerably greater detail. The strategy that repeatedly appeared near the top of these comparisons was not one of the AI-generated combinations of conventional indicators. It was my own algorithm and trading logic, originally created before I conducted the wider comparison. This algorithm is a liquidity hunter. It uses live liquidation heat-map data to assess liquidity above and below the market, then waits for price and momentum to confirm which side the market appears to be targeting. It is a trend-continuation system rather than a mean-reversion system. I would personally feel more comfortable buying after a drop and selling after a rise, but my data consistently shows that the trend systems perform better. Whether I prefer mean reversion is therefore irrelevant. The mistake I made Although my liquidity algorithm kept ranking highly, I tried to improve my overall trading by applying combinations of volatility, Supertrend and moving-average filters to numerous signal generators. The results looked incredible on paper, sometimes approaching 1% per day. The problem was that I had taken systems with perhaps 200 raw signals and filtered them down to around 20 historical winners. I thought I had identified the best market conditions, but in reality I had mostly removed the historical losses. Those tiny filtered samples did not perform similarly going forward. It was not intentional dishonesty, but I had still built a very attractive picture by selecting the pieces that looked best. I have now stripped everything back to two trend-following algorithms with no additional volatility, Supertrend or moving-average filters applied after the signals are generated. The algorithms naturally contain their own entry conditions. However, once either deployed algorithm produces an alert, I take it. I am no longer applying additional filters because similar historical trades happened to lose. Both systems trade long and short. Primary algorithm: approximately one year My primary algorithm has approximately one year of recorded data. Its current report covers 382 assessment days and contains 169 resolved trades: Winners: 130 Stop losses: 39 Win rate: 76.92% Long win rate: 77.46% from 71 trades Short win rate: 76.53% from 98 trades Average net winning trade: +2.07% Average stopped trade: −3.09% Profit factor: 2.236 Maximum drawdown: 10.40% Trades per assessment day: 0.442 Modified expectancy per trade: +0.71% Modified expected return per assessment day: +0.32% (This includes all days of assessment period, not just days traded) The calculation includes 0.0864% round-trip taker fees. I also apply a further 10% reduction for slippage and another 10% for differences between signal prices and live execution. The +0.71% expectancy is after those modifiers. The deployed exit uses a 3% initial stop. The first profit level is 2%, but this is not a fixed 2% take-profit. Reaching it activates a stepped trailing stop, allowing stronger trades to continue. The targets and trailing distances become more conservative when a trade remains open for 24 and 48 hours. The completed monthly results in this report are all positive, but they vary considerably. The best complete month was +22.12%, while the weakest was +1.22%. Maximum peak-to-trough drawdown was −10.40%, lasting 19 days and recovering 30 days after the previous peak. I have also stress-tested the underlying signals using simpler fixed stop/target combinations. They remained profitable at 1:1 and 1:2, and were still profitable when tested with a 1% stop and a 5% target. Therefore, the edge does not appear to exist solely at the selected 3% stop and trailing configuration. However, the current configuration produced the best combination of return, accuracy and drawdown, which raises my main concern: Have I simply moved from cherry-picking signals to cherry-picking the best exit strategy? Second algorithm and combined results The second deployed algorithm combines two separately generated signals. Its base trend signal has approximately a year of profitable history, but the additional confirmation signal has only existed since June, so I cannot honestly claim a year of history for the combined version. I attempted to reproduce the confirmation signal retrospectively, but the recreated historical alerts did not exactly match signals generated live. I rejected that reconstruction rather than treating it as valid backtest data. Tested independently, the confirmed algorithm has produced more than 30 resolved trades. Its standalone accuracy is slightly lower than it appears in the combined report below, but it remains profitable. Across the period in which both deployed algorithms were available, the combined report contains 49 resolved trades: Winners: 42 Stop losses: 7 Win rate: 85.71% Average net winning trade: +1.81% Average stopped trade: −2.80% Profit factor: 3.870 Maximum drawdown: 2.50% Modified expectancy per trade: +0.93% Modified expected return per assessment day: +0.48% Broken down by source within this particular combined report: Primary algorithm: 28 winners from 33 trades, or 84.85% New confirmed algorithm: 14 winners from 16 trades, or 87.50% The 16 trades above are only the second algorithm’s contribution during the shared reporting period. They are not its entire standalone sample. The new algorithm uses a 2% initial stop and a 2% first profit level with trailing logic. The confirmation process has so far removed considerably more losing base signals than winning ones because it requires separate evidence that the move has begun. The primary algorithm has also performed unusually well during this shorter period, so I am not treating the combined 85.71% accuracy or 3.870 profit factor as the long-term expectation. Live deployment I am currently running only these two algorithms at half of my intended maximum exposure. Half exposure is primarily a behavioural control. At full exposure I would currently be more tempted to interfere with trades, whereas my job should be limited to ensuring the bot executes the frozen rules correctly. The live bot uses exchange-side stop orders, an independent emergency stop and monitoring that alerts me to operational problems. I am recording actual fills so that I can compare fees, slippage, signal prices and live results with the analysis. I have also developed mean-reversion algorithms that appear to possess positive expectancy. However, their accuracy, drawdown and overall returns are worse than the trend systems. Adding them would create more trades and occasional conflicts without necessarily improving the combined portfolio, so they remain in development rather than being included in the deployed strategy. What I am concerned about Comparing approximately 100 candidates creates selection risk, even though they were not all developed or tested in the same way. Around half were genuine live signal histories and around half were retrospectively generated research results. Many of the conventional indicator-based candidates were created with AI assistance, while the eventual winner was my own pre-existing liquidity-hunting logic and had already contributed to profitable live trading. That distinction makes me more confident than I would be if I had simply generated 100 retrospective strategies and selected the best equity curve. However, I recognise that repeatedly comparing systems can still create selection bias. I have also tested several stop-loss, target and trailing configurations before choosing the one with the best historical result. The neighbouring configurations remain profitable, but this specific configuration was still selected using historical data. I would appreciate opinions on the following: Does profitability across substantially different exit structures, including 1:1 through to a profitable 1:5 test, provide reasonable evidence that the entry signals contain a genuine edge? Is selecting the 3% stop and trailing configuration still likely to be meaningful overfitting if nearby configurations are also profitable? How should I account for testing approximately 100 signal generators when around half were genuine live histories, half were retrospectively generated, and the eventual winner was a pre-existing algorithm that had already contributed to profitable live trading? Is 169 resolved trades over roughly a year enough to justify limited live deployment, assuming the risk is acceptable, or would you consider that inadequate? Since I have already examined the complete historical sample, is freezing the rules and treating all future signals as the true out-of-sample test now the cleanest option? What would be the most appropriate robustness testing from here? Walk-forward analysis, Monte Carlo reshuffling, parameter sensitivity, bootstrapping, regime segmentation, or something else? How would you define evidence that the edge has degraded rather than the system merely experiencing an ordinary drawdown? Would you consider the newer confirmation algorithm deployable at reduced exposure given that it has more than 30 independently tested trades, remains profitable on its own and is based on a profitable year-long base signal? Or would you keep it entirely in shadow mode until it has a substantially larger independent sample? I have detailed HTML analysis containing every trade, entry, outcome, monthly breakdown, drawdown period and buy/sell split. I can post additional tables or screenshots if any particular information would help. I’m not looking for certainty. I mainly want to know whether I have finally removed the selection error that affected my earlier systems, or whether I am still flattering myself in a less obvious way. submitted by /u/RX8_MMA_420 [link] [comments]", "content_hash": "6ac39db689b45346610d36ba366e5e8954e84b5c5a390b9a815053f99b9c5f32", "category": "Alpha / Factor Research", "tags": ["backtest", "crypto", "drawdown", "execution", "exposure", "factor", "historical data", "liquidity"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "加密流动性猎手趋势算法169笔交易胜率76.92%、盈利因子2.236，作者自问按历史最优挑选算法是否仍是过拟合", "technical_summary": "作者做了18个月加密自动交易，一度把约100个信号生成器（很多是AI辅助的技术指标组合）过滤到只剩历史赢家，纸面接近1%日收益但实盘失效。现在剥离为两个基于清算热力图和动量的趋势延续算法，主算法约一年169笔已结算交易：胜率76.92%、盈利因子2.236、最大回撤10.40%、平均净盈利+2.07%、平均止损-3.09%，扣除0.0864%往返手续费后再加10%滑点和10%信号执行差异，修正期望+0.71%/笔。核心争论是：在更大样本和跨止损/止盈配置稳健的前提下，挑选历史表现最好的算法和退出参数是否仍算cherry-picking。", "key_points": ["主算法169笔交易胜率76.92%、盈利因子2.236、回撤10.40%，1:1至1:5止损止盈配置均盈利。", "用liquidation heat-map判断上下方流动性，等价格和动量确认后做趋势延续，不再加波动率/Supertrend/均线过滤器。", "选择历史最优算法和退出配置可能仍是事后挑选，一年169笔不足以排除运气，缺真正样本外验证，多重检验偏差仍在。"], "quant_relevance": "因子/alpha 信号：直接警示多重检验和事后过滤会制造虚假 alpha；研究工具/工作流提效：提供了一套从约100个信号生成器中做比较筛选的复盘流程。", "possible_use_case": "把「先固定信号逻辑和参数，再在留出集上评估，禁止用过滤器把原始信号砍到只剩历史赢家」写成因子研究SOP；或用清算热力图+动量确认构建加密永续趋势延续因子，在独立时间段做样本外测试。", "limitations": "这是社区讨论，需用数据验证后才能用于研究结论；一年169笔交易样本有限，未提供真正的样本外或前向验证；费用假设虽包含0.0864%手续费和20%滑点/执行折减，但未披露不同交易所和流动性下的滑点敏感性；作者在同一批约100个信号上比较并选出最优，存在多重比较和选择偏差；AI辅助生成大量指标组合进一步放大了过拟合风险。", "read_priority": "高", "key_figures_md": "", "relevance_score": 8.7, "novelty_score": 9.78, "academic_score": 5.5, "discussion_score": 3.0, "actionable_score": 7.5, "final_score": 7.341, "display_title": "回测、加密资产、回撤、交易执行实践讨论", "tldr": "加密流动性猎手趋势算法169笔交易胜率76.92%、盈利因子2.236，作者自问按历史最优挑选算法是否仍是过拟合", "core_value": "对你的量化工作帮助：把它当作回测、加密资产、回撤、交易执行的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["主算法169笔交易胜率76.92%、盈利因子2.236、回撤10.40%，1:1至1:5止损止盈配置均盈利。", "用liquidation heat-map判断上下方流动性，等价格和动量确认后做趋势延续，不再加波动率/Supertrend/均线过滤器。", "选择历史最优算法和退出配置可能仍是事后挑选，一年169笔不足以排除运气，缺真正样本外验证，多重检验偏差仍在。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1witlif/am_i_still_overfitting_or_is_this_a_genuine_edge/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "论坛"}, {"id": "7dc0d521853459e8a37cf2faa9f016b11371a343f8d83291d9cd1e7125258a2c", "source": "arXiv", "source_type": "paper", "title": "Optimal entry and exit for variance swaps: closed-form rules for the perpetual contract", "url": "http://arxiv.org/abs/2609.19102v1", "authors": ["Jun Maeda"], "published_at": "2026-09-16", "collected_at": "2026-09-18T01:03:20Z", "raw_text": "Variance swaps are a convenient instrument for trading vega and convexity, and a listed contract now trades on Cboe. We ask when a trader should put such a position on and when she should take it off, and for a perpetual, continuously settled contract we answer both in closed form: each threshold is the unique root of a smooth-pasting equation in confluent hypergeometric functions. Under the pricing measure the question has no content, the mark-to-market being a martingale. Under the physical measure with a variance risk premium it becomes meaningful, and then reduces: the accrued variance separates exactly, the maturity, strike and costs are absorbed into a single forcing term whose sign fixes the geometry of the exercise region, and what is left on the perpetual is an affine reward on a CIR process, which the optimal-stopping literature already solves. Entering the position and exiting it are not mirror images. An exit rule follows from the premium and the trading spread, both observable. For the short --- the only side worth opening under the empirical sign of the premium --- an entry rule exists only for an interval of carrying charges, and even there triggers only deep in the upper tail of the physical law: a trader who is out of the market pays nothing to stay out, so an operational entry rule needs a cost of idle capital that the exit rule does not.", "abstract": "Variance swaps are a convenient instrument for trading vega and convexity, and a listed contract now trades on Cboe. We ask when a trader should put such a position on and when she should take it off, and for a perpetual, continuously settled contract we answer both in closed form: each threshold is the unique root of a smooth-pasting equation in confluent hypergeometric functions. Under the pricing measure the question has no content, the mark-to-market being a martingale. Under the physical measure with a variance risk premium it becomes meaningful, and then reduces: the accrued variance separates exactly, the maturity, strike and costs are absorbed into a single forcing term whose sign fixes the geometry of the exercise region, and what is left on the perpetual is an affine reward on a CIR process, which the optimal-stopping literature already solves. Entering the position and exiting it are not mirror images. An exit rule follows from the premium and the trading spread, both observable. For the short --- the only side worth opening under the empirical sign of the premium --- an entry rule exists only for an interval of carrying charges, and even there triggers only deep in the upper tail of the physical law: a trader who is out of the market pays nothing to stay out, so an operational entry rule needs a cost of idle capital that the exit rule does not.", "content_hash": "7899d889780ceea49736bfa27d5ac0d4eff840263d134b8fca319ba26c7025a6", "category": "Options / Volatility", "tags": ["perpetual", "pricing", "risk", "spread", "variance"], "language": "en", "metadata": {"arxiv_categories": ["q-fin.MF"]}, "one_line_summary": "用 CIR 过程上的平滑粘贴方程给出永续方差互换进出场阈值的闭式解，发现出场阈值只依赖可观测的方差风险溢价与买卖价差，而进场规则在上尾之外基本失效", "technical_summary": "解决的是持有永续、连续结算方差互换时「何时开仓、何时平仓」的最优停时问题。方法上，在定价测度下 mark-to-market 是鞅、问题无内容；转到物理测度并引入方差风险溢价后，累计方差可精确分离，到期、行权价与交易成本被吸收进单一 forcing 项（其符号决定 exercise region 的几何形状），剩下的只是 CIR 过程上的仿射奖励，最优停止文献已有解法：两个阈值都是 confluent 超几何函数构成的平滑粘贴方程的唯一根。核心结论是进出场并非镜像对称——出场规则由溢价和买卖价差决定，二者均可观测；在方差风险溢价的经验符号下，做空方差是唯一值得开仓的一侧，但进场规则只在某个 carry 区间内存在，且触发点深居物理分布上尾。全文为纯理论推导，未给出任何数值校准、回测或夏普类指标。", "key_points": ["永续方差互换的进出场阈值均为 confluent 超几何平滑粘贴方程的唯一根；进出场不对称，且做空方差的进场规则只在 carry 的有限区间内存在", "只需方差风险溢价与买卖价差两个可观测输入即可求出场阈值，CIR + 仿射奖励结构有成熟数值解法，实现路径清晰、可复现", "纯理论闭式解，无实证校准、无样本外回测、无交易成本数值；进场规则另需「闲置资金成本」这一未在市场上观测到的参数，且触发点落在物理分布上尾，实盘可能长期不触发"], "quant_relevance": "执行 / 交易成本：为方差互换（Cboe 上市合约）提供可直接计算的平仓与触发阈值；交易时机 / 仓位择时：界定做空方差策略的开平仓边界。", "possible_use_case": "用 Cboe 上市方差合约的隐含方差与已实现方差之差滚动估计方差风险溢价，代入平滑粘贴方程数值求根得到平仓阈值，写进做空方差头的减仓规则；随后在回测中显式加入闲置资金成本项，再判断进场规则是否值得启用。", "limitations": "纯理论结果，原文没有任何数值校准、回测或样本外检验，无法判断参数化后的阈值在真实数据上的稳定性；假设方差服从 CIR 过程，跳变与粗糙波动率下结论可能失效；方差风险溢价符号随样本变化，经验符号一旦反转则「只做空」的方向性结论被推翻；进场规则依赖不可直接观测的 idle capital 成本参数，且触发区域位于物理分布上尾，实操中可能近似永不触发；原文缺乏量化指标，摘要基于推导结构而非实证结论。", "read_priority": "中", "key_figures_md": "- **Figure（见 HTML 版）**：进出场阈值/触发边界随方差风险溢价与 carry 的变化，展示进场区域仅在 carry 的有限区间内非空\n- **HTML 全文**：https://arxiv.org/html/2609.19102（原文为闭式解推导，未在正文摘要给出图表编号与数值）\n- [原文图表（HTML版）](https://arxiv.org/html/2609.19102)", "relevance_score": 6.8, "novelty_score": 9.565, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 6.653, "display_title": "定价、风险、价差、方差研究论文", "tldr": "用 CIR 过程上的平滑粘贴方程给出永续方差互换进出场阈值的闭式解，发现出场阈值只依赖可观测的方差风险溢价与买卖价差，而进场规则在上尾之外基本失效", "core_value": "对你的量化工作帮助：把它拆成一个期权 / 波动率复现任务，先验证定价、风险、价差、方差是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["永续方差互换的进出场阈值均为 confluent 超几何平滑粘贴方程的唯一根；进出场不对称，且做空方差的进场规则只在 carry 的有限区间内存在", "只需方差风险溢价与买卖价差两个可观测输入即可求出场阈值，CIR + 仿射奖励结构有成熟数值解法，实现路径清晰、可复现", "纯理论闭式解，无实证校准、无样本外回测、无交易成本数值；进场规则另需「闲置资金成本」这一未在市场上观测到的参数，且触发点落在物理分布上尾，实盘可能长期不触发"], "reference_url": "http://arxiv.org/abs/2609.19102v1", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "期权 / 波动率", "priority_label": "中", "source_type_label": "论文"}, {"id": "e9b6b2dab60888988734f96de87dea98832d806964a600da8dde9541e4164eda", "source": "Reddit algotrading", "source_type": "forum", "title": "Better analogies than book/sleeve for a multi-strategy system", "url": "https://www.reddit.com/r/algotrading/comments/1wiuf03/better_analogies_than_booksleeve_for_a/", "authors": ["/u/BeerAandLoathing"], "published_at": "2026-09-17", "collected_at": "2026-09-18T01:05:12Z", "raw_text": "I've been working on a massive project for the better part of a year now, and it's been iterative with many improvements made along the way, but recently I decided to take a step back and evaluate how the full book of strategies operates and how to improve the process going forward so I can backtest new ideas, variants on existing strategies, etc. and I came up with an analogy that I like. (Yes, I'm using AI tools to code, and this is how I was able to convey my idea to Claude and Codex...) Originally it was just book and sleeve. The book is the full suite of strategies and each strategy is a sleeve, but when you want to go back and make changes to a sleeve does it become a new sleeve? If you want to set limitations for certain sleeves that perform best in RTH hours and others that are allowed to run overnight, how do you classify those criteria? The new analogy I came up with was building a gaming console. The console is the architecture that can load and play a strategy, so each strategy becomes a cartridge that is played on the console. This gives us a set of rules that are needed to allow the cartridge to play and every strategy needs to have this rule set. From there every cartridge can also have an options menu and you can have different presets or playable characters that you can use to play a level on that cartridge. Those settings can be saved and each character and options menu choice that you choose are what is used for the walk forward and replay to confirm the results, and the score that you get. Each daily session is a level that needs to be cleared and the state of the market along with any of the defined dimensions used by the cartridge are saved in a 'save state' that can be quickly loaded to resume play when you move on to the next level. This avoids pre-warming and can know exactly where you left off. The importance of this shows up in the replays and backtesting. It takes a lot more time to replay a single strategy over a long period of time (I'm using MBP1 data so it replays each tick) and then do the same thing over and over again for each strategy and variant when testing different parameters. The faster method is to use these save states and load a single session (level) and then play each cartridge and character for that level, save the game, and then load the next level and repeat. Does anyone else do something similar? How has it worked out for you if so? submitted by /u/BeerAandLoathing [link] [comments]", "abstract": "I've been working on a massive project for the better part of a year now, and it's been iterative with many improvements made along the way, but recently I decided to take a step back and evaluate how the full book of strategies operates and how to improve the process going forward so I can backtest new ideas, variants on existing strategies, etc. and I came up with an analogy that I like. (Yes, I'm using AI tools to code, and this is how I was able to convey my idea to Claude and Codex...) Originally it was just book and sleeve. The book is the full suite of strategies and each strategy is a sleeve, but when you want to go back and make changes to a sleeve does it become a new sleeve? If you want to set limitations for certain sleeves that perform best in RTH hours and others that are allowed to run overnight, how do you classify those criteria? The new analogy I came up with was building a gaming console. The console is the architecture that can load and play a strategy, so each strategy becomes a cartridge that is played on the console. This gives us a set of rules that are needed to allow the cartridge to play and every strategy needs to have this rule set. From there every cartridge can also have an options menu and you can have different presets or playable characters that you can use to play a level on that cartridge. Those settings can be saved and each character and options menu choice that you choose are what is used for the walk forward and replay to confirm the results, and the score that you get. Each daily session is a level that needs to be cleared and the state of the market along with any of the defined dimensions used by the cartridge are saved in a 'save state' that can be quickly loaded to resume play when you move on to the next level. This avoids pre-warming and can know exactly where you left off. The importance of this shows up in the replays and backtesting. It takes a lot more time to replay a single strategy over a long period of time (I'm using MBP1 data so it replays each tick) and then do the same thing over and over again for each strategy and variant when testing different parameters. The faster method is to use these save states and load a single session (level) and then play each cartridge and character for that level, save the game, and then load the next level and repeat. Does anyone else do something similar? How has it worked out for you if so? submitted by /u/BeerAandLoathing [link] [comments]", "content_hash": "7d34210a6b7956d8de61dd32ca4844889c168021a569987cd9d41b8fdc2f5626", "category": "Backtesting / Research Tools", "tags": ["backtest", "backtesting"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "用游戏主机-卡带-存档类比重构多策略回测，MBP1 tick 级按交易日 save state 快速重放", "technical_summary": "多策略系统里 book/sleeve 分类不够用：修改 sleeve 后是否算新 sleeve、RTH 与 overnight 策略如何归类都难处理。作者改用游戏主机类比——console 是策略运行架构，cartridge 是策略，character/options 是参数预设，daily session 是 level，save state 保存市场状态和策略维度。回测时不再对每个策略变体重放全年 MBP1 tick 数据，而是按交易日加载 save state，在同一 session 上跑完所有 cartridge/character，再进入下一日。作者认为这能避免 pre-warming、精确恢复状态、加速 walk-forward 和 replay，但原文没有给出速度提升、夏普或实盘验证数字。", "key_points": ["最有价值的观点是用 console/cartridge/save state 统一多策略回测抽象，尤其适合 MBP1 tick 级数据按交易日切片重放。", "可操作做法：把每日 session 设为一个 level，保存市场状态和策略维度，加载后遍历所有策略及其参数变体，再存下一日；用 Claude/Codex 辅助实现该架构。", "原文未提供速度提升、夏普或实盘结果，save state 必须保证状态完整且无未来函数，MBP1 数据存储和恢复成本可能很高，社区讨论需用数据验证后才能用于研究结论。"], "quant_relevance": "研究工具/工作流提效；数据工程与回测框架状态管理。", "possible_use_case": "在现有回测框架中加入按交易日 save/load 状态接口：对每个交易日冻结订单簿/行情快照和策略内部状态，然后并行或串行运行所有策略及参数变体，记录结果后释放内存再进入下一日。", "limitations": "这是社区讨论，需用数据验证后才能用于研究结论；没有代码、基准测试或收益指标；MBP1 数据量大，存档与恢复可能成为新瓶颈；状态隔离不当会引入跨策略污染或未来函数。", "read_priority": "高", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.78, "academic_score": 5.5, "discussion_score": 3.0, "actionable_score": 7.5, "final_score": 6.351, "display_title": "回测、期权、测试、人工智能实践讨论", "tldr": "用游戏主机-卡带-存档类比重构多策略回测，MBP1 tick 级按交易日 save state 快速重放", "core_value": "对你的量化工作帮助：把它当作回测、期权、测试、人工智能的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["最有价值的观点是用 console/cartridge/save state 统一多策略回测抽象，尤其适合 MBP1 tick 级数据按交易日切片重放。", "可操作做法：把每日 session 设为一个 level，保存市场状态和策略维度，加载后遍历所有策略及其参数变体，再存下一日；用 Claude/Codex 辅助实现该架构。", "原文未提供速度提升、夏普或实盘结果，save state 必须保证状态完整且无未来函数，MBP1 数据存储和恢复成本可能很高，社区讨论需用数据验证后才能用于研究结论。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1wiuf03/better_analogies_than_booksleeve_for_a/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "回测 / 研究工具", "priority_label": "高", "source_type_label": "论坛"}, {"id": "0d9a89032d78973d4fbb5d216408a6bacaccc6612fbaacf1729e9d66ff9f76d3", "source": "arXiv", "source_type": "paper", "title": "SAiFE-gym: Model-based Environments for Automated Market Making with Concentrated Liquidity", "url": "http://arxiv.org/abs/2609.17788v1", "authors": ["Georgios Chionas", "Charalampos Kleitsikas", "Stefanos Leonardos", "Leandro Sánchez-Betancourt", "Carmine Ventre"], "published_at": "2026-09-15", "collected_at": "2026-09-18T01:03:20Z", "raw_text": "We present SAiFE_gym, a Python module that provides a collection of simulation environments for studying trading problems in Constant Product Markets (CPMs) with Concentrated Liquidity (CL). These markets give Liquidity Providers (LPs) granular control over how their capital is allocated and enable them to adjust their range of liquidity provision dynamically based on market conditions, which in turn, dictates how they earn fees. We decompose the microstructure of CPMs with CL in interactive components that allow researchers and practitioners to capture various economic settings. We employ a vectorized approach to optimize our environments, making them scalable for high dimensional Reinforcement Learning (RL) workflows that best describe sequential decision problems. We demonstrate the benefits of our environments by evaluating the performance of RL agents in CPMs with CL under uncertainty in market parameters.", "abstract": "We present SAiFE_gym, a Python module that provides a collection of simulation environments for studying trading problems in Constant Product Markets (CPMs) with Concentrated Liquidity (CL). These markets give Liquidity Providers (LPs) granular control over how their capital is allocated and enable them to adjust their range of liquidity provision dynamically based on market conditions, which in turn, dictates how they earn fees. We decompose the microstructure of CPMs with CL in interactive components that allow researchers and practitioners to capture various economic settings. We employ a vectorized approach to optimize our environments, making them scalable for high dimensional Reinforcement Learning (RL) workflows that best describe sequential decision problems. We demonstrate the benefits of our environments by evaluating the performance of RL agents in CPMs with CL under uncertainty in market parameters.", "content_hash": "54e7666d5e68c27728feb2357d106a3a89ff4ef1e295dd6bb66c84630acd160d", "category": "Market Microstructure", "tags": ["liquidity", "microstructure", "reinforcement learning"], "language": "en", "metadata": {"arxiv_categories": ["q-fin.TR", "cs.AI", "cs.LG", "q-fin.CP", "q-fin.MF"]}, "one_line_summary": "SAiFE_gym 开源集中流动性 AMM 的向量化 RL 仿真环境，用于训练 LP 动态调整流动性区间，但原文未披露任何收益或夏普结果", "technical_summary": "解决的问题是：集中流动性做市商（CL LP）需要在不同市场条件下动态选择流动性提供区间，而这一序贯决策问题缺乏标准化的可训练仿真环境。做法是提供一个 Python 模块 SAiFE_gym，把 CPM（恒定乘积市场）叠加集中流动性的微观结构拆解成可交互组件，让研究者自行组合出不同的经济设定；并对环境做向量化实现以支持高维 RL 工作流的并行采样。示例部分仅说明用 RL agent 在市场参数存在不确定性时评估做市表现，未报告任何收益、费用、无常损失或夏普数值。", "key_points": ["原文缺乏量化指标，结论待复核：摘要仅描述环境架构（CPM + 集中流动性组件化、向量化加速）和 RL agent 在参数不确定下的评估流程，未给出任何收益率、费用捕获、无常损失或夏普数字", "量化可用性：以 Python 模块形式提供，向量化设计面向高维 RL 并行采样，与主流 gym 接口风格一致，接入门槛主要在 CL 微观结构建模与 RL 训练基础设施；原文未给出代码仓库链接、基准数据集和超参，复现需自行补全", "局限性批判：未披露是否建模 gas 成本、MEV / 抢跑、池子 tick 粒度与手续费层级，也未见样本外或跨池验证；CL LP 收益对 gas 与再平衡频率极端敏感，缺这些假设的结果容易系统性偏乐观"], "quant_relevance": "研究工具 / 工作流提效；执行 / 交易成本（LP 费用捕获与区间选择的权衡）", "possible_use_case": "用于搭建 CL LP 区间调整的 RL 原型：以某一 ETH/USDC 池（如 0.05% 费率档）的历史 swap 事件回放为环境，用 PPO 训练「何时重新设定 tick 区间」策略，对照组为被动全区间提供，比较净费用收益减去 rebalance gas 后的差额。", "limitations": "原文仅提供摘要，无图表、无实验数值、无代码仓库与许可证信息，任何量化结论都无法从现有材料中验证；CL 做市结果高度依赖 gas 成本、MEV 损失与再平衡频率建模，环境若未包含这些，训练出的策略在实盘会明显劣于仿真；AMM 参数（费率档、tick spacing、交易量分布）由使用者自行标定，跨研究结果不可直接比较；社交媒体/二次解读风险存在，需以论文正文与代码为准。", "read_priority": "低", "key_figures_md": "", "relevance_score": 6.1, "novelty_score": 9.355, "academic_score": 9.655, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 6.349, "display_title": "流动性、市场微观结构、强化学习研究论文", "tldr": "SAiFE_gym 开源集中流动性 AMM 的向量化 RL 仿真环境，用于训练 LP 动态调整流动性区间，但原文未披露任何收益或夏普结果", "core_value": "对你的量化工作帮助：把它拆成一个市场微观结构复现任务，先验证流动性、市场微观结构、强化学习是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["原文缺乏量化指标，结论待复核：摘要仅描述环境架构（CPM + 集中流动性组件化、向量化加速）和 RL agent 在参数不确定下的评估流程，未给出任何收益率、费用捕获、无常损失或夏普数字", "量化可用性：以 Python 模块形式提供，向量化设计面向高维 RL 并行采样，与主流 gym 接口风格一致，接入门槛主要在 CL 微观结构建模与 RL 训练基础设施；原文未给出代码仓库链接、基准数据集和超参，复现需自行补全", "局限性批判：未披露是否建模 gas 成本、MEV / 抢跑、池子 tick 粒度与手续费层级，也未见样本外或跨池验证；CL LP 收益对 gas 与再平衡频率极端敏感，缺这些假设的结果容易系统性偏乐观"], "reference_url": "http://arxiv.org/abs/2609.17788v1", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "市场微观结构", "priority_label": "低", "source_type_label": "论文"}, {"id": "66641af279779addee91e8651324ce988c8f79357d76bb97d475e545cd4c493c", "source": "CoinDesk", "source_type": "crypto_news", "title": "Ratings giant S&P Global acquires OpenZeppelin in tokenized finance risk push", "url": "https://www.coindesk.com/business/2026/09/17/ratings-giant-s-and-p-global-acquires-openzeppelin-in-tokenized-finance-risk-push", "authors": [], "published_at": "2026-09-17", "collected_at": "2026-09-18T01:05:13Z", "raw_text": "Building on its recent market-data investment in Kaiko, S&P Global’s latest purchase targets the technological risks facing banks and asset managers onchain.", "abstract": "Building on its recent market-data investment in Kaiko, S&P Global’s latest purchase targets the technological risks facing banks and asset managers onchain.", "content_hash": "a91ce5775dc9bb6f9b3c2564ff41097583f9c20b6617962b1ec620c3206f3b32", "category": "Risk Management", "tags": ["risk"], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "标普全球收购智能合约审计公司 OpenZeppelin，继投资 Kaiko 后再补链上技术风险评级能力", "technical_summary": "传统信用评级机构标普全球正把业务延伸到代币化金融的技术风险层。收购对象 OpenZeppelin 是智能合约安全审计与开源合约库的主要提供方，此前标普已投资加密市场数据商 Kaiko，两条线分别对应数据与技术安全。目标客群是链上开展业务的银行和资产管理机构，需要有人为代币化资产、DeFi 协议的合约漏洞和治理风险打分。原报道未披露交易金额、审批进度与产品整合时间表。", "key_points": ["标普全球收购 OpenZeppelin，此前已投资加密数据商 Kaiko，切入代币化金融技术风险评级。", "对量化：合约审计记录与链上风险或被打包成评级数据，可用于 DeFi、代币化资产的准入筛选与风险因子。", "报道仅一段，未披露交易金额、监管审批与整合时间表，评级产品化节奏不明，短期难转化为可交易信号。"], "quant_relevance": "风险建模 / 数据工程：链上合约安全风险有望被纳入传统评级框架，形成协议级风险数据源。", "possible_use_case": "把 OpenZeppelin 审计覆盖率、标普后续评级输出做成协议级风险评分，接入 DeFi 或代币化 RWA 持仓限额与准入规则。", "limitations": "原文只有标题级别的信息，无交易金额、无整合细节、无产品时间表；评级类数据低频且披露滞后，不适合日内信号；媒体转述需用标普官方公告与链上数据交叉验证；机构收购到可用评级产品之间存在明显时滞。", "read_priority": "高", "key_figures_md": "", "relevance_score": 5.6, "novelty_score": 9.78, "academic_score": 5.696, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.69, "display_title": "风险加密市场新闻情报", "tldr": "标普全球收购智能合约审计公司 OpenZeppelin，继投资 Kaiko 后再补链上技术风险评级能力", "core_value": "对你的量化工作帮助：围绕风险补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["标普全球收购 OpenZeppelin，此前已投资加密数据商 Kaiko，切入代币化金融技术风险评级。", "对量化：合约审计记录与链上风险或被打包成评级数据，可用于 DeFi、代币化资产的准入筛选与风险因子。", "报道仅一段，未披露交易金额、监管审批与整合时间表，评级产品化节奏不明，短期难转化为可交易信号。"], "reference_url": "https://www.coindesk.com/business/2026/09/17/ratings-giant-s-and-p-global-acquires-openzeppelin-in-tokenized-finance-risk-push", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "风险管理", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "16221f47b762582fae6056d8921d6137ecc611d917553cd530d7051a67bdce27", "source": "Decrypt", "source_type": "crypto_news", "title": "Bitcoin Bounces as Markets Brace for the Fed’s Next Move", "url": "https://decrypt.co/378506/bitcoin-bounces-wall-street-fed-next-move", "authors": [], "published_at": "2026-09-17", "collected_at": "2026-09-18T01:05:14Z", "raw_text": "The Federal Reserve's first rate increase since 2023 barely dented crypto prices, but what comes next could change calculations on Wall Street.", "abstract": "The Federal Reserve's first rate increase since 2023 barely dented crypto prices, but what comes next could change calculations on Wall Street.", "content_hash": "04d293d773bb135bdad1d9a2b92af6a0c2b585b26524f507c623864a59622b8d", "category": "Crypto Quant", "tags": ["bitcoin", "crypto"], "language": "en", "metadata": {"feed_url": "https://decrypt.co/feed"}, "one_line_summary": "美联储自 2023 年以来首次加息，BTC 小幅回撤后反弹，市场转向押注下一次议息会议方向", "technical_summary": "要解决的问题是利率政策转向对加密资产的冲击强度。事件本身是美联储自 2023 年以来第一次加息。结果是加密价格几乎未被撼动，BTC 在决议后反弹，说明当前加密市场的定价对单次加息不敏感，注意力已转移到下一次议息会议的政策路径上。原文只给出定性判断，没有加息基点、没有 BTC 点位和涨跌幅，无法量化冲击幅度。", "key_points": ["美联储自 2023 年以来首次加息，加密市场几乎未受冲击，BTC 回撤后反弹；原文未给出加息基点、BTC 点位与涨跌幅等任何数字。", "可操作方向：把 FOMC 声明时间戳作为事件锚点，回测决议前后 BTC 永续资金费率、1 分钟实现波动率和多空持仓比的变化，评估事件窗口内的降杠杆规则。", "原文仅标题加一段重复导语，无引述来源与数据支撑，且「2023 年以来首次加息」与市场此前普遍预期的降息路径相矛盾，方向与幅度均需用 CME FedWatch 和交易所行情独立核实。"], "quant_relevance": "因子 / alpha 信号：宏观事件驱动窗口（FOMC 决议）对 BTC 短期收益与波动率的影响；风险建模：利率路径变化对加密杠杆头寸的尾部风险", "possible_use_case": "可作为 BTC 日内波动信号参考：在 FOMC 声明发布前后 ±2 小时窗口内，用 BTC 永续合约资金费率与 1 分钟实现波动率做事件驱动开平仓，并与不加事件过滤的日内基线对比夏普和最大回撤。", "limitations": "原文信息密度极低，只有标题和一段自我重复的导语，没有加息基点、没有 BTC 价格、没有涨跌幅、没有引述来源，无法验证「几乎未受冲击」这一结论；「首次加息」的表述与市场此前定价的降息预期冲突，需确认是否为加息而非降息；宏观新闻转化为可交易信号之间仍需自行补齐利率期货隐含概率与交易所分钟级数据，否则不能直接用于策略。", "read_priority": "高", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.78, "academic_score": 5.679, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.628, "display_title": "加密资产加密市场新闻情报", "tldr": "美联储自 2023 年以来首次加息，BTC 小幅回撤后反弹，市场转向押注下一次议息会议方向", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["美联储自 2023 年以来首次加息，加密市场几乎未受冲击，BTC 回撤后反弹；原文未给出加息基点、BTC 点位与涨跌幅等任何数字。", "可操作方向：把 FOMC 声明时间戳作为事件锚点，回测决议前后 BTC 永续资金费率、1 分钟实现波动率和多空持仓比的变化，评估事件窗口内的降杠杆规则。", "原文仅标题加一段重复导语，无引述来源与数据支撑，且「2023 年以来首次加息」与市场此前普遍预期的降息路径相矛盾，方向与幅度均需用 CME FedWatch 和交易所行情独立核实。"], "reference_url": "https://decrypt.co/378506/bitcoin-bounces-wall-street-fed-next-move", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "8d5ee2bb449bdf2bef0f7178b2908d6bd9ceb15b3da1847104af791ed823ab62", "source": "The Block", "source_type": "crypto_news", "title": "Crypto.com registers with SEC for single-stock futures, plans US stock perps", "url": "https://www.theblock.co/news/business/2026-09-17-crypto-com-registers-with-sec-for-single-stock-futures-plans-us-stock-perps-415355", "authors": [], "published_at": "2026-09-17", "collected_at": "2026-09-18T01:05:14Z", "raw_text": "CEO Kris Marszalek said the company is also working with the SEC and CFTC to offer single-stock perpetual futures in the U.S.", "abstract": "CEO Kris Marszalek said the company is also working with the SEC and CFTC to offer single-stock perpetual futures in the U.S.", "content_hash": "b13bb92a3519ed0a78e1d8186336ff0ce2ab8b4f01a3420144443fd87267236f", "category": "Crypto Quant", "tags": ["crypto", "perpetual"], "language": "en", "metadata": {"feed_url": "https://www.theblock.co/rss.xml"}, "one_line_summary": "Crypto.com 向 SEC 注册单股期货并计划推出美股永续合约，打通加密衍生品结构与美股标的的通道", "technical_summary": "加密交易所 Crypto.com 向 SEC 提交单股期货注册申请，同时计划把加密市场特有的永续合约结构（无到期日、资金费率结算、接近 24/7 交易）搬到美股个股上，CEO Kris Marszalek 表示正与 SEC 和 CFTC 沟通落地路径。若获批，同一标的同时存在于美股现货、CME 单股期货与加密永续三个市场，价格发现时段被拉长，基差与资金费率套利窗口扩大。原文仅两句话，未给出任何产品规模、费率结构、杠杆上限、上线时间表或监管反馈细节，属于市场结构层面的方向性信号而非可量化事件。", "key_points": ["事件为 Crypto.com 向 SEC 注册单股期货、并计划在美推出单股永续合约，CEO Kris Marszalek 称正与 SEC、CFTC 双线沟通；原文未披露任何规模、费率、杠杆或上线时间数字。", "若落地，可在同一股票标的上做美股现货 / CME 单股期货 / 加密永续的三角价差与资金费率套利，需提前搭建标的映射表、公司行为调整逻辑和跨交易时段撮合与风控。", "SEC 与 CFTC 双重管辖下单股永续能否获批高度不确定，美股拆股分红与永续资金费率的耦合定价复杂，且原文信息量仅两句话，不足以支撑任何策略假设。"], "quant_relevance": "执行 / 交易成本：同一股票标的将同时存在于美股现货、CME 期货与加密式 24/7 永续三个市场，跨市场基差与资金费率套利的执行路径和滑点结构需要重新建模。数据工程：新增一类需处理公司行为（拆股、分红）的高频标的，行情与风控管线要支持跨时区、跨交易时段对齐。", "possible_use_case": "先把 Crypto.com 单股永续加入基差 / 资金费率监控列表，与 CME 单股期货、美股现货构建三角价差看板；上线前完成标的映射与公司行为（拆股、分红）调整表，并测试跨 24/7 与美股交易时段的行情对齐和滑点假设。", "limitations": "原文仅标题加一句重复正文，无产品结构、费率、杠杆、上线时间与监管结果，属于方向性信号；SEC / CFTC 审批结果未知，单股永续在美国的合法性本身存疑；来源为单一媒体 The Block，页面标注时间戳为 2026-09-17，需以 SEC / CFTC 官方文件核实后再纳入策略假设。", "read_priority": "高", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.78, "academic_score": 5.656, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.624, "display_title": "加密资产、监管调查加密市场新闻情报", "tldr": "Crypto.com 向 SEC 注册单股期货并计划推出美股永续合约，打通加密衍生品结构与美股标的的通道", "core_value": "对你的量化工作帮助：把它当作加密资产、监管调查案例，用来补充异常交易监控、市场操纵风险、大宗商品执行和合规审计的场景库。", "key_points_list": ["事件为 加密资产.com 向 SEC 注册单股期货、并计划在美推出单股永续合约，CEO Kris Marszalek 称正与 SEC、CFTC 双线沟通；原文未披露任何规模、费率、杠杆或上线时间数字。", "若落地，可在同一股票标的上做美股现货 / CME 单股期货 / 加密永续的三角价差与资金费率套利，需提前搭建标的映射表、公司行为调整逻辑和跨交易时段撮合与风控。", "SEC 与 CFTC 双重管辖下单股永续能否获批高度不确定，美股拆股分红与永续资金费率的耦合定价复杂，且原文信息量仅两句话，不足以支撑任何策略假设。"], "reference_url": "https://www.theblock.co/news/business/2026-09-17-crypto-com-registers-with-sec-for-single-stock-futures-plans-us-stock-perps-415355", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "eec7c1395020462807e80fff3b429eb4f6a41601eb626ab83e7a9957848e532e", "source": "The Block", "source_type": "crypto_news", "title": "US sanctions Iranian crypto exchange BitBank over alleged bitcoin transfers to IRGC", "url": "https://www.theblock.co/news/regulation/2026-09-17-us-sanctions-iranian-crypto-exchange-bitbank-alleged-bitcoin-transfers-to-irgc-415462", "authors": [], "published_at": "2026-09-17", "collected_at": "2026-09-18T01:05:14Z", "raw_text": "Treasury said the previously sanctioned Hormuz Safe platform used BitBank to transfer payments collected since June.", "abstract": "Treasury said the previously sanctioned Hormuz Safe platform used BitBank to transfer payments collected since June.", "content_hash": "6f567d7f7c678fc01702d57f27bab0306ce018af5db970824bcc54760c4367b8", "category": "Crypto Quant", "tags": ["bitcoin", "crypto"], "language": "en", "metadata": {"feed_url": "https://www.theblock.co/rss.xml"}, "one_line_summary": "美国财政部制裁伊朗交易所 BitBank，指其替已制裁平台 Hormuz Safe 转移自 6 月以来收取的比特币付款", "technical_summary": "美国财政部海外资产控制办公室将伊朗加密交易所 BitBank 列入制裁清单，理由是其为同样已被制裁的 Hormuz Safe 平台提供资金转移通道。财政部称 Hormuz Safe 自今年 6 月以来收取的款项通过 BitBank 完成比特币转移。事件本身延续了美方对伊朗加密资金网络的点名式制裁路径：先制裁收款平台，再追到承接资金流转的交易所。对量化交易者的直接含义是合规筛查名单与链上实体标签发生变更，涉及伊朗相关地址的资金流会被交易所和托管方加大拦截力度。", "key_points": ["美财政部制裁伊朗交易所 BitBank，指其转移 Hormuz Safe 自 6 月以来收取的比特币付款，此前 Hormuz Safe 已被制裁。", "量化侧需更新交易所实体标签与制裁地址黑名单，链上监控、KYT 规则和伊朗相关资金流的拦截阈值要同步调整。", "原文仅转述财政部声明，未给出涉事地址、转账金额或笔数，也无法验证资金规模，需靠链上数据独立复核。"], "quant_relevance": "风险建模：受制裁地址与交易平台的合规黑名单扩容，链上资金流筛查规则需更新；数据工程：交易所实体标签库需新增 BitBank 节点。", "possible_use_case": "把 BitBank 及其关联地址写入链上监控白/黑名单，重跑近 3 个月涉及伊朗标签地址的资金流回溯，检查现有套利或做市策略是否经过受制裁交易对手方。", "limitations": "原文不足百字，仅为财政部声明的转述，缺少涉事钱包地址、金额、时间序列等可用于建模的数据；单一来源、无第二方交叉验证；制裁对主流交易所价格与流动性的实际冲击尚无数据支撑，需等待链上数据与交易所公告确认。", "read_priority": "高", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.78, "academic_score": 5.645, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.623, "display_title": "加密资产加密市场新闻情报", "tldr": "美国财政部制裁伊朗交易所 BitBank，指其替已制裁平台 Hormuz Safe 转移自 6 月以来收取的比特币付款", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["美财政部制裁伊朗交易所 BitBank，指其转移 Hormuz Safe 自 6 月以来收取的比特币付款，此前 Hormuz Safe 已被制裁。", "量化侧需更新交易所实体标签与制裁地址黑名单，链上监控、KYT 规则和伊朗相关资金流的拦截阈值要同步调整。", "原文仅转述财政部声明，未给出涉事地址、转账金额或笔数，也无法验证资金规模，需靠链上数据独立复核。"], "reference_url": "https://www.theblock.co/news/regulation/2026-09-17-us-sanctions-iranian-crypto-exchange-bitbank-alleged-bitcoin-transfers-to-irgc-415462", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "8d0882de44e13bcecc5c81a7a28c5dd22f7b2d498fac7ecacee79ece513f3345", "source": "CoinDesk", "source_type": "crypto_news", "title": "Crypto for Advisors: Beyond bitcoin and ether", "url": "https://www.coindesk.com/coindesk-indices/2026/09/17/crypto-for-advisors-beyond-bitcoin-and-ether", "authors": [], "published_at": "2026-09-17", "collected_at": "2026-09-18T01:05:13Z", "raw_text": "", "abstract": "", "content_hash": "7250cacc27b2b14c1dbafc41e23fdce5fe80f5dc5b0e7b50ec64d5ddb3602c11", "category": "Crypto Quant", "tags": ["bitcoin", "crypto"], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "CoinDesk 顾问专栏提出把加密配置从 BTC、ETH 扩展到其他资产，抓取到的正文为空、无任何币种或权重数据", "technical_summary": "这条内容只有标题「Crypto for Advisors: Beyond bitcoin and ether」，来自 CoinDesk 的指数/顾问栏目，指向的议题是财务顾问在 BTC 与 ETH 之外扩展加密资产配置。抓取到的正文为空，因此无法确认讨论了哪些具体币种、推荐配置比例区间、覆盖的时间窗口，也没有任何资金流、收益率或波动率数据。从标题方向推断，其潜在价值在于揭示「顾问渠道」这一增量资金来源可能从两大主流币向更宽的加密资产扩散，但这一推断目前没有原文证据支撑。任何基于此条内容的量化结论都必须等正文抓取完整后再做。", "key_points": ["原文仅有一行标题，无价格、资金流或配置比例的任一数字，事件本身未量化", "若后续正文列出具体币种与配置比例，可据此构建顾问渠道资金流跟踪清单", "正文缺失导致无法核实币种、权重与时间区间，标题指向也可能与内容不符"], "quant_relevance": "组合构建 / 权重优化", "possible_use_case": "暂不接入；先把该系列的完整正文抓下来，若确认给出具体币种与配置比例，再考虑做成「顾问推荐币种」事件清单，与链上大额转入交易所数据做交叉验证。", "limitations": "原文缺乏量化证据，摘要基于定性描述——抓取内容只有标题，正文为空，无法确认提到的币种、权重、时间区间与引用数据。CoinDesk 顾问系列属于面向理财顾问的科普/观点栏目，即使拿到全文也可能不含可回测的量化结论。此外标题「Beyond bitcoin and ether」存在歧义：可能指扩展到 altcoin，也可能指加密之外的资产类别，需原文确认。", "read_priority": "低", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.78, "academic_score": 5.5, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.601, "display_title": "加密资产加密市场新闻情报", "tldr": "CoinDesk 顾问专栏提出把加密配置从 BTC、ETH 扩展到其他资产，抓取到的正文为空、无任何币种或权重数据", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["原文仅有一行标题，无价格、资金流或配置比例的任一数字，事件本身未量化", "若后续正文列出具体币种与配置比例，可据此构建顾问渠道资金流跟踪清单", "正文缺失导致无法核实币种、权重与时间区间，标题指向也可能与内容不符"], "reference_url": "https://www.coindesk.com/coindesk-indices/2026/09/17/crypto-for-advisors-beyond-bitcoin-and-ether", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "低", "source_type_label": "加密市场新闻"}], "source_stats": {"arXiv": 3, "Reddit algotrading": 2, "CoinDesk": 2, "Decrypt": 1, "The Block": 2}, "category_counts": {"Execution / Transaction Cost": 1, "Alpha / Factor Research": 1, "Options / Volatility": 1, "Backtesting / Research Tools": 1, "Market Microstructure": 1, "Risk Management": 1, "Crypto Quant": 4}, "section_counts": {"ai_quant_tools": 5, "daily_news": 5}, "sections": [{"key": "deep_learning_quant", "label": "深度学习量化未来", "description": "技术主线：深度学习、强化学习、Transformer、图神经网络、表征学习、订单簿预测、金融时间序列大模型等在量化里的应用。"}, {"key": "ai_quant_tools", "label": "AI 量化工具", "description": "工具主线：能提升量化研究效率的 AI 工具、代码仓库、研究自动化、智能体、回测/数据工程工具和可接入团队工作流的基础设施。"}, {"key": "daily_news", "label": "Crypto 市场每日 Top 5", "description": "加密市场新闻主线：来自 CoinDesk、CoinTelegraph、The Block、Decrypt、Blockworks 等主流媒体当日最重要的 Crypto 市场报道。"}], "category_labels": {"Alpha / Factor Research": "阿尔法 / 因子研究", "Statistical Arbitrage": "统计套利", "Portfolio Construction": "组合构建", "Risk Management": "风险管理", "Options / Volatility": "期权 / 波动率", "Market Microstructure": "市场微观结构", "Execution / Transaction Cost": "交易执行 / 交易成本", "Machine Learning for Finance": "金融机器学习", "LLM / Agents for Quant": "量化大模型 / 智能体", "Crypto Quant": "加密资产量化", "Data Engineering": "数据工程", "Backtesting / Research Tools": "回测 / 研究工具", "Industry / Career": "行业 / 职业 / 合规", "Unclassified": "未分类"}, "priority_labels": {"High": "高", "Medium": "中", "Low": "低", "高": "高", "中": "中", "低": "低"}, "source_type_labels": {"paper": "论文", "forum": "论坛", "github": "代码仓库", "blog": "博客", "news": "新闻", "social": "社交媒体", "zhihu": "知乎", "x": "X", "quantml": "QuantML", "crypto_news": "加密市场新闻"}, "report_config": {"max_items_per_category": 5, "max_total_items": 60, "executive_brief_items": 5}}</script>
+  <script>
+    const payload = JSON.parse(document.getElementById('dashboard-data').textContent);
+    const items = payload.items || [];
+    const categoryLabels = payload.category_labels || {};
+    const priorityLabels = payload.priority_labels || {};
+    const sourceTypeLabels = payload.source_type_labels || {};
+    const state = {
+      query: '',
+      section: 'All',
+      category: 'All',
+      sort: 'score',
+      activeId: items[0]?.id || null,
+    };
+
+    const priorityRank = { High: 3, Medium: 2, Low: 1, '高': 3, '中': 2, '低': 1 };
+    const $ = (id) => document.getElementById(id);
+
+    // --- Feedback ---
+    const _feedbackStore = JSON.parse(localStorage.getItem('quant-feedback') || '{}');
+    function getFeedback(id) { return _feedbackStore[id] || 0; }
+    function setFeedback(id, signal) {
+      if (_feedbackStore[id] === signal) { delete _feedbackStore[id]; signal = 0; }
+      else { _feedbackStore[id] = signal; }
+      localStorage.setItem('quant-feedback', JSON.stringify(_feedbackStore));
+      fetch('http://localhost:8080/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, signal }),
+      }).catch(() => {});
+    }
+
+    function init() {
+      $('report-date').textContent = payload.report_date + ' - 主力源：arXiv / 知乎 / QuantML / 大型论坛 - 生成时间 ' + payload.generated_at;
+      $('metric-items').textContent = items.length;
+      $('metric-categories').textContent = new Set(items.map((item) => item.category)).size;
+      $('metric-high').textContent = items.filter((item) => priorityLabel(item.read_priority) === '高').length;
+      $('metric-avg').textContent = averageScore(items).toFixed(1);
+
+      buildSectionControls();
+      buildCategoryControls();
+      buildSourceList();
+      bindControls();
+      render();
+    }
+
+    function bindControls() {
+      $('search').addEventListener('input', (event) => {
+        state.query = event.target.value.trim().toLowerCase();
+        render();
+      });
+      $('category-select').addEventListener('change', (event) => {
+        state.category = event.target.value;
+        render();
+      });
+      $('section-select').addEventListener('change', (event) => {
+        state.section = event.target.value;
+        render();
+      });
+      $('sort-select').addEventListener('change', (event) => {
+        state.sort = event.target.value;
+        render();
+      });
+    }
+
+    function buildCategoryControls() {
+      const counts = countBy(items, 'category');
+      const categories = Object.keys(counts).sort();
+      const select = $('category-select');
+      select.innerHTML = option('All', `全部细分标签 (${items.length})`) +
+        categories.map((category) => option(category, `${categoryLabel(category)} (${counts[category]})`)).join('');
+
+      const list = $('category-list');
+      list.innerHTML = categoryButton('All', items.length) +
+        categories.map((category) => categoryButton(category, counts[category])).join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.category = button.dataset.category;
+          select.value = state.category;
+          if (state.category === 'All') {
+            state.section = 'All';
+            $('section-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSectionControls() {
+      const counts = payload.section_counts || {};
+      const sections = payload.sections || [];
+      const select = $('section-select');
+      select.innerHTML = option('All', `全部主线 (${items.length})`) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => option(section.key, `${section.label} (${counts[section.key]})`))
+          .join('');
+
+      const list = $('section-list');
+      list.innerHTML = sectionButton('All', '全部', items.length) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => sectionButton(section.key, section.label, counts[section.key]))
+          .join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.section = button.dataset.section;
+          select.value = state.section;
+          if (state.section === 'All') {
+            state.category = 'All';
+            $('category-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSourceList() {
+      const stats = payload.source_stats || {};
+      const entries = Object.entries(stats)
+        .filter(([source]) => !source.startsWith('fetched:'))
+        .sort((a, b) => b[1] - a[1]);
+      $('source-list').innerHTML = entries.length
+        ? entries.map(([source, count]) => `<li><span>${escapeHtml(source)}</span><b>${count}</b></li>`).join('')
+        : '<li><span>暂无来源统计</span><b>0</b></li>';
+    }
+
+    function render() {
+      let visible = items.filter(matchesFilters);
+      visible = sortItems(visible);
+      if (!visible.some((item) => item.id === state.activeId)) {
+        state.activeId = visible[0]?.id || null;
+      }
+
+      $('feed-title').textContent = feedTitle();
+      $('result-count').textContent = `展示 ${visible.length} 条 - 两条主线每条最多 ${payload.report_config.max_items_per_category} 条`;
+      renderSectionActive();
+      renderCategoryActive();
+      renderItems(visible);
+      renderDetail(visible.find((item) => item.id === state.activeId) || visible[0]);
+    }
+
+    function matchesFilters(item) {
+      const sectionMatch = state.section === 'All' || (item.report_sections || []).includes(state.section);
+      if (!sectionMatch) return false;
+      const categoryMatch = state.category === 'All' || item.category === state.category;
+      if (!categoryMatch) return false;
+      if (!state.query) return true;
+      const haystack = [
+        item.title,
+        item.display_title,
+        item.source,
+        item.source_type,
+        item.category,
+        categoryLabel(item.category),
+        sectionLabel(item.report_sections?.[0]),
+        sourceTypeLabel(item.source_type),
+        priorityLabel(item.read_priority),
+        item.one_line_summary,
+        item.technical_summary,
+        item.quant_relevance,
+        item.possible_use_case,
+        item.tldr,
+        item.core_value,
+        ...(item.key_points_list || []),
+        item.reference_url,
+      ].join(' ').toLowerCase();
+      return haystack.includes(state.query);
+    }
+
+    function sortItems(list) {
+      return [...list].sort((a, b) => {
+        if (state.sort === 'priority') {
+          return (priorityRank[b.read_priority] || 0) - (priorityRank[a.read_priority] || 0)
+            || b.final_score - a.final_score;
+        }
+        if (state.sort === 'source') {
+          return a.source.localeCompare(b.source) || b.final_score - a.final_score;
+        }
+        return b.final_score - a.final_score;
+      });
+    }
+
+    function renderCategoryActive() {
+      document.querySelectorAll('.category-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.category === state.category);
+      });
+    }
+
+    function renderSectionActive() {
+      document.querySelectorAll('.section-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.section === state.section);
+      });
+    }
+
+    function itemCard(item) {
+      const sec = item.report_sections?.[0] || 'other';
+      const sig = getFeedback(item.id);
+      return `
+        <article class="item ${item.id === state.activeId ? 'active' : ''}"
+                 data-id="${escapeAttr(item.id)}"
+                 data-section="${escapeAttr(sec)}">
+          <div class="item-top">
+            <h3>${escapeHtml(item.display_title || item.title)}</h3>
+            <div class="score">${Number(item.final_score).toFixed(1)}</div>
+          </div>
+          <div class="meta">
+            <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+            <span class="tag">${escapeHtml(item.source)}</span>
+            <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+          </div>
+          ${readerFormat(item, true)}
+          <div class="feedback-row">
+            <button class="feedback-btn ${sig === 1 ? 'active-up' : ''}" data-feedback="1" title="有用">👍</button>
+            <button class="feedback-btn ${sig === -1 ? 'active-down' : ''}" data-feedback="-1" title="跳过">👎</button>
+            <span class="feedback-hint">${sig === 1 ? '已标记有用' : sig === -1 ? '已标记跳过' : ''}</span>
+          </div>
+        </article>
+      `;
+    }
+
+    function sectionGroupHeader(section, count) {
+      return `
+        <div class="section-group-header" data-section="${escapeAttr(section.key)}">
+          <span class="section-group-title">${escapeHtml(section.label)}</span>
+          <span class="section-group-count">${count} 条</span>
+        </div>
+      `;
+    }
+
+    function renderItems(visible) {
+      const container = $('items');
+      if (!visible.length) {
+        container.innerHTML = '<div class="empty">当前筛选条件下没有匹配内容。</div>';
+        return;
+      }
+
+      let html = '';
+      if (state.section === 'All') {
+        // Group by section in defined order, with a header for each group
+        const grouped = {};
+        for (const item of visible) {
+          const sec = item.report_sections?.[0] || 'other';
+          if (!grouped[sec]) grouped[sec] = [];
+          grouped[sec].push(item);
+        }
+        for (const section of (payload.sections || [])) {
+          const group = grouped[section.key];
+          if (!group || !group.length) continue;
+          html += sectionGroupHeader(section, group.length);
+          html += group.map((item) => itemCard(item)).join('');
+        }
+        // Append any items that fell into 'other' (shouldn't normally happen)
+        if (grouped['other']?.length) {
+          html += grouped['other'].map((item) => itemCard(item)).join('');
+        }
+      } else {
+        html = visible.map((item) => itemCard(item)).join('');
+      }
+
+      container.innerHTML = html;
+      container.querySelectorAll('.item').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.activeId = node.dataset.id;
+          render();
+        });
+      });
+      container.querySelectorAll('.feedback-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const itemNode = btn.closest('.item');
+          setFeedback(itemNode.dataset.id, parseInt(btn.dataset.feedback, 10));
+          render();
+        });
+      });
+    }
+
+    function renderDetail(item) {
+      const detail = $('detail');
+      if (!item) {
+        detail.innerHTML = '<div class="empty">选择一条内容查看详情。</div>';
+        return;
+      }
+
+      detail.innerHTML = `
+        <h2>${escapeHtml(item.display_title || item.title)}</h2>
+        <div class="meta">
+          <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+          <span class="tag">${escapeHtml(sourceTypeLabel(item.source_type))}</span>
+          <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+        </div>
+
+        ${readerFormat(item, false)}
+
+        <div class="detail-block">
+          <h3>评分拆解</h3>
+          <div class="breakdown">
+            ${bar('相关性', item.relevance_score)}
+            ${bar('新颖度', item.novelty_score)}
+            ${bar('学术性', item.academic_score)}
+            ${bar('讨论度', item.discussion_score)}
+            ${bar('可行动性', item.actionable_score)}
+          </div>
+        </div>
+
+      `;
+    }
+
+    function readerFormat(item, compact) {
+      const points = itemKeyPoints(item);
+      return `
+        <div class="reader-format ${compact ? 'compact' : ''}">
+          <div class="reader-block">
+            <h4>1. 这篇文章的太长不读</h4>
+            <p>${escapeHtml(item.tldr || item.one_line_summary || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>2. 核心价值，对我量化的工作能够提供什么样的帮助</h4>
+            <p>${escapeHtml(item.core_value || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>3. 关键核心点 / 论文或帖子摘要</h4>
+            <ol>${points.map((point) => `<li>${escapeHtml(point)}</li>`).join('')}</ol>
+          </div>
+          <div class="reader-block">
+            <h4>4. 原文链接</h4>
+            ${referenceHtml(item)}
+          </div>
+        </div>
+      `;
+    }
+
+    function itemKeyPoints(item) {
+      const points = Array.isArray(item.key_points_list)
+        ? item.key_points_list
+        : (Array.isArray(item.key_points) ? item.key_points : []);
+      const clean = points.filter(Boolean).slice(0, 3);
+      return clean.length ? clean : ['需要打开原文进一步确认方法、数据和适用边界。'];
+    }
+
+    function referenceHtml(item) {
+      const url = item.reference_url || '';
+      if (!url) return '<p>暂无可打开链接</p>';
+      return `
+        <a class="reader-reference" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">打开原文</a>
+        <small class="reference-url">${escapeHtml(url)}</small>
+      `;
+    }
+
+    function bar(label, value) {
+      const score = Number(value || 0);
+      const width = Math.max(0, Math.min(100, score * 10));
+      return `
+        <div class="bar">
+          <span>${label}</span>
+          <div class="bar-track"><div class="bar-fill" style="width: ${width}%"></div></div>
+          <b>${score.toFixed(1)}</b>
+        </div>
+      `;
+    }
+
+    function countBy(list, key) {
+      return list.reduce((acc, item) => {
+        acc[item[key]] = (acc[item[key]] || 0) + 1;
+        return acc;
+      }, {});
+    }
+
+    function averageScore(list) {
+      if (!list.length) return 0;
+      return list.reduce((sum, item) => sum + Number(item.final_score || 0), 0) / list.length;
+    }
+
+    function option(value, label) {
+      return `<option value="${escapeAttr(value)}">${escapeHtml(label)}</option>`;
+    }
+
+    function sectionButton(section, label, count) {
+      return `
+        <button class="category-button section-button" type="button" data-section="${escapeAttr(section)}">
+          <span>${escapeHtml(label)}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryButton(category, count) {
+      return `
+        <button class="category-button" type="button" data-category="${escapeAttr(category)}">
+          <span>${escapeHtml(category === 'All' ? '全部' : categoryLabel(category))}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryLabel(category) {
+      return categoryLabels[category] || category;
+    }
+
+    function sectionLabel(sectionKey) {
+      const section = (payload.sections || []).find((item) => item.key === sectionKey);
+      return section ? section.label : '其他';
+    }
+
+    function feedTitle() {
+      const parts = [];
+      if (state.section !== 'All') parts.push(sectionLabel(state.section));
+      if (state.category !== 'All') parts.push(categoryLabel(state.category));
+      return parts.length ? parts.join(' / ') : '今日情报';
+    }
+
+    function priorityLabel(priority) {
+      return priorityLabels[priority] || priority;
+    }
+
+    function sourceTypeLabel(sourceType) {
+      return sourceTypeLabels[sourceType] || sourceType;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replaceAll('`', '&#096;');
+    }
+
+    init();
+  </script>
+</body>
+</html>
