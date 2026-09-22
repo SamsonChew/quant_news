@@ -1,0 +1,1086 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>samson 量化情报台 - 2026-09-22</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --panel: #ffffff;
+      --ink: #202124;
+      --muted: #5f6368;
+      --line: #dadce0;
+      --blue: #1a73e8;
+      --red: #ea4335;
+      --yellow: #fbbc04;
+      --green: #34a853;
+      --blue-soft: #e8f0fe;
+      --green-soft: #e6f4ea;
+      --yellow-soft: #fef7e0;
+      --red-soft: #fce8e6;
+      --shadow: 0 1px 2px rgba(60, 64, 67, 0.16), 0 8px 24px rgba(60, 64, 67, 0.10);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(66, 133, 244, 0.07), transparent 30%),
+        radial-gradient(circle at top right, rgba(251, 188, 4, 0.08), transparent 26%),
+        var(--bg);
+      color: var(--ink);
+      font-family: "Google Sans", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(280px, 620px);
+      gap: 24px;
+      align-items: center;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand h1 {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin: 0;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+
+    .brand h1::before {
+      content: "";
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background:
+        conic-gradient(from 0deg, var(--blue) 0 25%, var(--red) 0 50%, var(--yellow) 0 75%, var(--green) 0 100%);
+      box-shadow: inset 0 0 0 7px #fff;
+    }
+
+    .date-pill {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 170px 170px 150px;
+      gap: 10px;
+    }
+
+    .control {
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 12px;
+      outline: none;
+    }
+
+    .control:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.14);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 260px minmax(420px, 1fr) 420px;
+      gap: 22px;
+      padding: 24px 32px 36px;
+    }
+
+    .rail,
+    .detail {
+      position: sticky;
+      top: 86px;
+      height: calc(100vh - 112px);
+      overflow: auto;
+    }
+
+    .rail,
+    .detail,
+    .feed {
+      min-width: 0;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      padding: 12px;
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
+    }
+
+    .metric:nth-child(1) { border-top: 3px solid var(--blue); }
+    .metric:nth-child(2) { border-top: 3px solid var(--red); }
+    .metric:nth-child(3) { border-top: 3px solid var(--yellow); }
+    .metric:nth-child(4) { border-top: 3px solid var(--green); }
+
+    .metric b {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .section-label {
+      margin: 18px 0 8px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .category-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .category-button {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--ink);
+      padding: 8px 10px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .category-button:hover,
+    .category-button.active {
+      border-color: transparent;
+      background: var(--blue-soft);
+      color: #174ea6;
+    }
+
+    .count {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .source-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .source-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .feed-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .feed-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .result-count {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .items {
+      display: grid;
+      gap: 10px;
+    }
+
+    .section-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 2px 4px;
+      margin-top: 10px;
+      border-bottom: 2px solid var(--line);
+    }
+
+    .section-group-header:first-child {
+      margin-top: 0;
+    }
+
+    .section-group-title {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .section-group-header[data-section="deep_learning_quant"] .section-group-title { color: var(--blue); }
+    .section-group-header[data-section="ai_quant_tools"] .section-group-title { color: var(--green); }
+    .section-group-header[data-section="daily_news"] .section-group-title { color: var(--yellow); }
+
+    .section-group-count {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .item {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.10);
+      padding: 18px;
+      cursor: pointer;
+      transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+    }
+
+    .item::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--blue), var(--red), var(--yellow), var(--green));
+    }
+
+    .item[data-section="deep_learning_quant"]::before { background: var(--blue); }
+    .item[data-section="ai_quant_tools"]::before { background: var(--green); }
+    .item[data-section="daily_news"]::before { background: var(--yellow); }
+
+    .item:hover,
+    .item.active {
+      border-color: #c6dafc;
+      box-shadow: var(--shadow);
+      transform: translateY(-2px);
+    }
+
+    .item-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .item h3 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.28;
+    }
+
+    .score {
+      min-width: 54px;
+      border-radius: 999px;
+      background: var(--blue-soft);
+      color: #174ea6;
+      padding: 6px 8px;
+      text-align: center;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .tag {
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: #f1f3f4;
+      padding: 3px 8px;
+    }
+
+    .tag:nth-child(1) { background: var(--blue-soft); color: #174ea6; }
+    .tag:nth-child(2) { background: var(--green-soft); color: #137333; }
+    .tag:nth-child(3) { background: var(--yellow-soft); color: #8a5a00; }
+    .tag:nth-child(4) { background: var(--red-soft); color: #b3261e; }
+
+    .summary {
+      margin: 0;
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .reference-link {
+      display: inline-flex;
+      width: fit-content;
+      border-top: 1px solid var(--line);
+      color: var(--blue);
+      padding-top: 9px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .reader-format {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .reader-format.compact {
+      gap: 8px;
+    }
+
+    .reader-block {
+      border-top: 1px solid var(--line);
+      padding-top: 9px;
+    }
+
+    .reader-block:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .reader-block h4 {
+      margin: 0 0 5px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .reader-block p,
+    .reader-block li {
+      margin: 0;
+      color: #30342d;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .reader-block ol {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .reader-reference {
+      color: var(--blue);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
+    .reference-url {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .detail {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .detail h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+
+    .detail-block {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .detail-block h3 {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+
+    .detail-block p,
+    .detail-block li {
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .detail-block ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .breakdown {
+      display: grid;
+      gap: 8px;
+    }
+
+    .bar {
+      display: grid;
+      grid-template-columns: 118px 1fr 40px;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .bar-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e7eadf;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--blue), var(--green), var(--yellow), var(--red));
+    }
+
+    .open-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      margin-top: 16px;
+      border: 1px solid var(--blue);
+      border-radius: var(--radius);
+      color: var(--blue);
+      text-decoration: none;
+      padding: 0 12px;
+      font-weight: 700;
+    }
+
+    .feedback-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+    }
+
+    .feedback-btn {
+      background: #f1f3f4;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 120ms, border-color 120ms;
+    }
+
+    .feedback-btn:hover { background: var(--blue-soft); }
+    .feedback-btn.active-up { background: var(--green-soft); border-color: var(--green); }
+    .feedback-btn.active-down { background: var(--red-soft); border-color: var(--red); }
+
+    .feedback-hint {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      padding: 28px;
+      color: var(--muted);
+      background: var(--panel);
+    }
+
+    @media (max-width: 1180px) {
+      .layout {
+        grid-template-columns: 220px 1fr;
+      }
+
+      .detail {
+        position: static;
+        grid-column: 1 / -1;
+        height: auto;
+      }
+    }
+
+    @media (max-width: 820px) {
+      .topbar {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .brand {
+        display: grid;
+        gap: 4px;
+      }
+
+      .brand h1 {
+        white-space: normal;
+        font-size: 21px;
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .rail,
+      .detail {
+        position: static;
+        height: auto;
+      }
+
+      .metric-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <h1>samson 量化情报台</h1>
+        <span class="date-pill" id="report-date"></span>
+      </div>
+      <div class="controls">
+        <input class="control" id="search" type="search" placeholder="搜索标题、摘要、分类..." />
+        <select class="control" id="section-select"></select>
+        <select class="control" id="category-select"></select>
+        <select class="control" id="sort-select">
+          <option value="score">按评分排序</option>
+          <option value="priority">按优先级排序</option>
+          <option value="source">按来源排序</option>
+        </select>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="rail">
+        <div class="metric-grid">
+          <div class="metric"><b id="metric-items">0</b><span>报告条目</span></div>
+          <div class="metric"><b id="metric-categories">0</b><span>分类数量</span></div>
+          <div class="metric"><b id="metric-high">0</b><span>高优先级</span></div>
+          <div class="metric"><b id="metric-avg">0.0</b><span>平均评分</span></div>
+        </div>
+
+        <div class="section-label">两条主线</div>
+        <div class="category-list" id="section-list"></div>
+
+        <div class="section-label">细分标签</div>
+        <div class="category-list" id="category-list"></div>
+
+        <div class="section-label">主力来源</div>
+        <ul class="source-list" id="source-list"></ul>
+      </aside>
+
+      <section class="feed">
+        <div class="feed-header">
+          <h2 id="feed-title">今日情报</h2>
+          <span class="result-count" id="result-count"></span>
+        </div>
+        <div class="items" id="items"></div>
+      </section>
+
+      <aside class="detail" id="detail"></aside>
+    </main>
+  </div>
+
+  <script id="dashboard-data" type="application/json">{"report_date": "2026-09-22", "generated_at": "2026-09-22T01:34:23Z", "items": [{"id": "9fb0b522ce975b00ba2b115c753e78c70825b1d4ac8ef8e3e62006ac5b9d35e2", "source": "Reddit algotrading", "source_type": "forum", "title": "10,000 path Monte Carlo test of a futures portfolio", "url": "https://www.reddit.com/r/algotrading/comments/1wmf3hw/10000_path_monte_carlo_test_of_a_futures_portfolio/", "authors": ["/u/quant-king"], "published_at": "2026-09-21", "collected_at": "2026-09-22T01:26:56Z", "raw_text": "Looking for feedback on this simulation. The portfolio has 54 sleeves across MNQ, MGC, MYM and M2K trading one micro contract per instrument with a maximum of one open position per instrument. Backtest, May 2019 – September 2026: $50k starting equity with $140.5k net profit 15,036 trades with 1.22 profit factor and 51.9% win rate Includes commissions and one tick of slippage per side The Monte Carlo shuffles completed trades across 10,000 paths. Median maximum drawdown was 7.03%, the 95th percentile was 11.64% and the worst observed was 24.81%. I've been paper trading for about a week. Trades have generally matched the backtest after fixing a few live execution issues. submitted by /u/quant-king [link] [comments]", "abstract": "Looking for feedback on this simulation. The portfolio has 54 sleeves across MNQ, MGC, MYM and M2K trading one micro contract per instrument with a maximum of one open position per instrument. Backtest, May 2019 – September 2026: $50k starting equity with $140.5k net profit 15,036 trades with 1.22 profit factor and 51.9% win rate Includes commissions and one tick of slippage per side The Monte Carlo shuffles completed trades across 10,000 paths. Median maximum drawdown was 7.03%, the 95th percentile was 11.64% and the worst observed was 24.81%. I've been paper trading for about a week. Trades have generally matched the backtest after fixing a few live execution issues. submitted by /u/quant-king [link] [comments]", "content_hash": "3cd2ab0353601b043c2bb43bde3c1e014b49a1ffacf883bac87f68e3f59ccb51", "category": "Portfolio Construction", "tags": ["backtest", "drawdown", "execution", "factor", "portfolio", "slippage"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "10,000 条路径蒙特卡洛重排 15,036 笔微型期货交易，中位最大回撤 7.03%，但重排法抹掉了交易序列相关性", "technical_summary": "发帖人用 MNQ、MGC、MYM、M2K 四个微型期货各一个 sleeve 组出 54 个 sleeve 的组合，每个品种同时只持一手，2019 年 5 月至 2026 年 9 月回测从 5 万美元本金做到 14.05 万美元净利润，15,036 笔交易、利润因子 1.22、胜率 51.9%，成本已含手续费和每边一个 tick 滑点。为估计回撤尾部，他把已完成交易随机打乱生成 10,000 条权益路径，得到最大回撤中位数 7.03%、95 分位 11.64%、最差 24.81%。发帖人目前只实盘模拟（paper trading）约一周，声称修复若干实盘执行问题后成交基本与回测一致，正在向社区征求反馈。", "key_points": ["社区最该关注的是方法本身：交易重排蒙特卡洛只保留单笔盈亏分布、摧毁交易的时间顺序和连亏聚集性，因此 7.03% 的中位回撤是回撤分布的下限而非期望值，真实连亏期回撤通常更接近甚至超过 24.81% 这个最差观测值", "可直接照搬的做法：把回测成交明细导出为逐笔盈亏序列，做三类对照——① 完全随机重排（当前做法）② block bootstrap 按 5-20 笔分块重排（保留短期自相关）③ 按品种/时段分层重排，三条回撤分布一起看才形成有效区间；组合层面 4 个低相关微型品种（纳指/黄金/道指/罗素）各限一手的架构，适合小资金做分散化验证", "两个待核实的红旗：回测区间写到 2026 年 9 月，属于未来日期，要么是笔误要么数据来源有问题，必须回查；实盘模拟仅一周、约 40 笔量级样本，与 15,036 笔回测相比统计功效极低，「成交基本匹配」不构成有效性证据，且 54 个 sleeve 在 4 个品种上的参数配置存在明显过拟合空间"], "quant_relevance": "风险建模：给出了一个可直接套用的「交易序列重排」回撤分布估计流程；组合构建：54 个 sleeve 的单品种单持仓架构是微型账户分散化的一种参考范式。", "possible_use_case": "把自己策略的逐笔成交盈亏序列拿出来，用 Python 写 20 行代码跑三组重采样（i.i.d. 重排 / block bootstrap / 分层重排），画出三条最大回撤的 CDF 叠加图，用 block bootstrap 的结果去设定实盘的止损线和资金上限，而不是用 i.i.d. 重排的中位数。", "limitations": "这是社区讨论，需用数据验证后才能用于研究结论。发帖人未提供代码、逐笔交易数据或评论反馈内容，无法复现；回测区间终点 2026 年 9 月为未来日期，数据可信度存疑；模拟实盘仅一周，样本量不足以验证回测一致性；蒙特卡洛采用有放回的打乱方式，隐含独立同分布假设，与真实交易连亏聚集特性冲突；未披露各 sleeve 的参数搜索过程，54 个 sleeve 在多品种上的组合存在选择偏差；单笔一手的固定仓位意味着盈亏为加性而非复利，回撤百分比的分母随权益增长而变化，7.03% 到底是相对初始 5 万美元还是当期权益并未说明。", "read_priority": "高", "key_figures_md": "", "relevance_score": 6.3, "novelty_score": 9.78, "academic_score": 4.902, "discussion_score": 3.0, "actionable_score": 7.5, "final_score": 6.531, "display_title": "回测、回撤、交易执行、因子实践讨论", "tldr": "10,000 条路径蒙特卡洛重排 15,036 笔微型期货交易，中位最大回撤 7.03%，但重排法抹掉了交易序列相关性", "core_value": "对你的量化工作帮助：把它当作回测、回撤、交易执行、因子的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["社区最该关注的是方法本身：交易重排蒙特卡洛只保留单笔盈亏分布、摧毁交易的时间顺序和连亏聚集性，因此 7.03% 的中位回撤是回撤分布的下限而非期望值，真实连亏期回撤通常更接近甚至超过 24.81% 这个最差观测值", "可直接照搬的做法：把回测成交明细导出为逐笔盈亏序列，做三类对照——① 完全随机重排（当前做法）② block bootstrap 按 5-20 笔分块重排（保留短期自相关）③ 按品种/时段分层重排，三条回撤分布一起看才形成有效区间；组合层面 4 个低相关微型品种（纳指/黄金/道指/罗素）各限一手的架构，适合小资金做分散化验证", "两个待核实的红旗：回测区间写到 2026 年 9 月，属于未来日期，要么是笔误要么数据来源有问题，必须回查；实盘模拟仅一周、约 40 笔量级样本，与 15,036 笔回测相比统计功效极低，「成交基本匹配」不构成有效性证据，且 54 个 sleeve 在 4 个品种上的参数配置存在明显过拟合空间"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1wmf3hw/10000_path_monte_carlo_test_of_a_futures_portfolio/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "组合构建", "priority_label": "高", "source_type_label": "论坛"}, {"id": "a46c96a812f51753e3f64b315962f2d69d07db0f32dc9ac73ea6f09a8b06e379", "source": "Reddit algotrading", "source_type": "forum", "title": "Machine-Learning Driven Dynamic Switching Between Unleveraged and Leveraged ETFs", "url": "https://www.reddit.com/r/algotrading/comments/1wmly1v/machinelearning_driven_dynamic_switching_between/", "authors": ["/u/Expert_CBCD"], "published_at": "2026-09-21", "collected_at": "2026-09-22T01:26:56Z", "raw_text": "Hello All, I had posted this model I had developed a couple months ago that essentially used machine learning to predict whether an ETF was going to hit its rolling median high during the week. You can find the post here , but the TL;DR is that it showed high accuracy (~70%) across both SPY and QQQ, and when buying and holding the week the signal fires produce higher than average returns for that week. However, the signal does not fire extremely often, and I wanted to see if I could develop a strategy that beat the market's returns. As such I've backtested a strategy that dynamically switches between 1x ETF (e.g. SPY, QQQ) and their 2X or 3X variants (e.g. UPRO, TQQQ, etc.). Important to note for the purpose of the backtest, and coding simplicity I did not explicitly include the leveraged ETF tickers in my backtest, thus the results are based on simply 2X or 3X the 1X returns and making some adjustment to account for volatility drag associated with the LETFS. A quick summary of the model itself: Target: Does the stock surpass its rolling 10-year median weekly high (as measured by Monday open to weekly high). Features : 7 features that encompass technical indicators measuring return, volatility etc. Training/Test Period : There is a rolling 120-month (or 10 year) training period and 1 month test period The strategy is as follows: When the model is not showing a signal, buy the index ETF as normal on Monday morning. When there is a signal, buy the LETF instead. In both cases, the stock is sold Friday so there is no holding over the weekend - all trades are done at Monday open and Friday close. As I mentioned previously I also include a 0.95% annual management fee associated with LETFs (applied weekly for when an LETF is used - i.e. 0.95%/52), and a 3.5% penalty for daily volatility decay/drag associated with the use of LEFTs; this is also applied weekly (i.e. 3.5%/52 weeks) when an LEFT is used. Below are the results for four ETFs, SPY, QQQ, EEM, and XIU (which is a Canadian ETF for the TSX60), including results for BH (i.e. 1X all the time), 2X, and 3X as well as a strategy where we take half our funds and apply them to an LETF when a signal fires (and keep the other half for the underlying equity). The time period covers 2018 - present. SPY (2018–Present) Strategy Profile Leverage Cumulative Return Annualized CAGR Max Drawdown Sharpe Ratio Sortino Ratio Weekly Win Rate Always 1x Buy & Hold 1x 196.65% 13.23% 19.27% 0.81 1.23 58.02% Partial Dynamic (50/50) 2x 270.70% 16.15% 26.60% 0.73 1.13 58.02% Dynamic 2x 346.08% 18.64% 34.29% 0.66 1.03 57.80% Partial Dynamic (50/50) 3x 379.95% 19.63% 33.85% 0.70 1.10 58.02% Dynamic 3x 567.42% 24.23% 47.48% 0.59 0.94 58.02% QQQ (2018–Present) Strategy Profile Leverage Cumulative Return Annualized CAGR Max Drawdown Sharpe Ratio Sortino Ratio Weekly Win Rate Always 1x Buy & Hold 1x 428.50% 20.96% 24.90% 1.01 1.60 58.46% Partial Dynamic (50/50) 2x 644.38% 25.79% 34.10% 0.96 1.58 58.02% Dynamic 2x 899.74% 30.10% 42.98% 0.90 1.51 58.02% Partial Dynamic (50/50) 3x 966.99% 31.07% 41.99% 0.93 1.56 58.02% Dynamic 3x 1682.52% 38.99% 57.80% 0.82 1.41 58.02% XIU (2018–Present) Strategy Profile Leverage Cumulative Return Annualized CAGR Max Drawdown Sharpe Ratio Sortino Ratio Weekly Win Rate Always 1x Buy & Hold 1x 145.38% 10.83% 19.20% 0.87 1.28 57.93% Partial Dynamic (50/50) 2x 239.40% 15.02% 20.99% 0.95 1.47 57.93% Dynamic 2x 362.03% 19.16% 25.14% 0.98 1.56 57.71% Partial Dynamic (50/50) 3x 387.02% 19.88% 25.03% 1.02 1.63 57.93% Dynamic 3x 805.90% 28.71% 32.97% 1.05 1.72 57.93% EEM (2018–Present) Strategy Profile Leverage Cumulative Return Annualized CAGR Max Drawdown Sharpe Ratio Sortino Ratio Weekly Win Rate Always 1x Buy & Hold 1x 111.50% 8.94% 25.63% 0.50 0.77 52.97% Partial Dynamic (50/50) 2x 198.75% 13.32% 30.35% 0.61 0.98 52.53% Dynamic 2x 310.67% 17.52% 38.65% 0.66 1.09 52.53% Partial Dynamic (50/50) 3x 336.56% 18.34% 37.82% 0.69 1.15 52.97% Dynamic 3x 708.83% 26.99% 51.97% 0.73 1.27 52.53% As the results indicate, using LETFs when the model fires a signal outperforms BH across all 4 equities, while controlling drawdowns better than always holding LEFTs (which can and have seen 90% drawdowns). Even risk-adjusted we see that the partial dynamic (at both 2X and 3X) is relatively close to BH for SPY and QQQ (though lower) and actually outperforms BH for EEM and XIU. Similarly, Sortino ratios between BH and the partial dynamic are somewhat similar, while all strategies tested for EEM and XIU have higher ratios than BH. These results also overlap with a massive bull-run so it's possible it's not the model that matters but using leverage at any point is likely to boost returns. As such I also ran a randomized entry test (1000 times) that randomly bought LEFTs during the test period at the same frequency as signals fired. You'll notice the leveraeg results in the Those results are below SPY 1000 Random Runs Strategy Profile Leverage Annualized CAGR Max Drawdown Sortino Ratio Always 1x Buy & Hold Baseline 1x 13.26% 19.27% 1.23 2x Random Leverage (Mean) ~1.38x 15.64% 31.56% 1.00 2x Random Leverage (95th Pct) ~1.38x 20.86% 38.77% 1.40 2x Partial Dynamic(50/50) 2x 16.18% 26.60% 1.14 2x Dynamic 2x 18.66% 34.29**%** 1.04 --- --- --- --- --- 3x Random Leverage (Mean) ~1.76x 18.93% 43.69% 0.89 3x Random Leverage (95th Pct) ~1.76x 29.79% 54.92% 1.50 3x Partial Dynamic (50/50) 3x 19.66% 33.85% 1.10 3x Dynamic 3x 24.26% 47.48% 0.94 QQQ 1000 Random Runs Strategy Profile Leverage Annualized CAGR Max Drawdown Sortino Ratio Always 1x Buy & Hold Baseline 1x 20.97% 24.90% 1.60 2x Random Leverage (Mean) ~1.34x 25.34% 37.98% 1.37 2x Random Leverage (95th pct ) ~1.34x 32.04% 47.58% 1.82 2x Partial Dynamic (50/50) 2x 25.80% 34.10% 1.58 2x Dynamic 2x 30.11% 42.98% 1.51 --- --- --- --- --- 3x Random Leverage (Mean) ~1.67x 30.08% 50.88% 1.21 3x Random Leverage (95th Pct ) ~1.67x 44.05% 64.50% 1.91 3x Partial Dynamic (50/50) 3x 31.08% 41.99% 1.56 3x Dynamic 3x 39.00% 57.80% 1.41 EEM 1000 Random Runs Strategy Profile Leverage Annualized CAGR Max Drawdown Sortino Ratio Always 1x Buy & Hold Baseline 1x 8.95% 25.63% 0.77 2x Random Leverage (Mean) ~1.32x 9.36% 37.27% 0.58 2x Random Leverage (95th Pct) ~1.32x 14.33% 45.66% 0.91 2x Partial Dynamic (50/50) 2x 13.34% 30.35% 0.98 2x Dynamic 2x 17.54% 38.65% 1.09 --- --- --- --- --- 3x Random Leverage (Mean) ~1.63x 10.30% 49.01% 0.48 3x Random Leverage (95th Pct) ~1.63x 20.41% 62.17% 0.98 3x Partial Dynamic (50/50) 3x 18.36% 37.82% 1.15 3x Dynamic 3x 27.00% 51.97% 1.27 XIU 1000 Random Runs Strategy Profile Leverage Annualized CAGR Max Drawdown Sortino Ratio Always 1x Buy & Hold Baseline 1x 10.86% 19.20% 1.28 2x Random Leverage (Mean) ~1.27x 12.17% 25.86% 1.07 2x Random Leverage (95th Pct) ~1.27x 15.68% 31.80% 1.46 2x Partial Dynamic (50/50) 2x 15.06% 20.99% 1.47 2x Dynamic 2x 19.19% 25.14% 1.57 --- --- --- --- --- 3x Random Leverage (Mean) ~1.55x 14.43% 33.69% 0.97 3x Random Leverage (95th Pct) ~1.55x 21.63% 43.83% 1.60 3x Partial Dynamic (50/50) 3x 19.91% 25.03% 1.63 3x Dynamic 3x 28.75% 32.97% 1.73 \\ Note the percentages are very slightly different in these tables than the ones above as I used LLMs to format them - I'm too lazy to change them, but that's why there are slight differences.* For SPY and QQQ we see that the model results are both higher in terms of CAGR and Sortino ratios than the mean of the simulations, but falls short of the 95th percentile - this isn't a surprise given how strong the bull market has been. For EEM and XIU we see that's also the case but additionally the model's performance is better than the 95th percentile mean as well. For the partial dynamic, as intended, while the mean CAGR's might be similar the drawdowns are lower in all cases. This split in performance comes down to the underlying market regimes. In mega-cap US equities, a relentless bull run means a random guess that happens to stack leverage will occasionally hit a lucky streak, though it pays with massive drawdowns. In range-bound or dividend-heavy markets like EEM and XIU, unhedged leverage gets eaten alive by volatility drag, which is why the random 95th percentile ceiling stays low and the model easily beats it. Meanwhile, the 50/50 partial dynamic gives us the exact asymmetric payout we designed it for: capturing most of the upside while keeping drawdowns lower than chance/the full 2X/3X Dynamic strategies. In terms of next steps, I plan on paper trading a strategy that uses this model (but combines a number of the tickers here) and has shown good results in backtesting to see if my results hold up prior to deploying any real capital. Not sure if these results would be considered surprising for anyone but would love to hear thoughts and happy to answer any questions. submitted by /u/Expert_CBCD [link] [comments]", "abstract": "Hello All, I had posted this model I had developed a couple months ago that essentially used machine learning to predict whether an ETF was going to hit its rolling median high during the week. You can find the post here , but the TL;DR is that it showed high accuracy (~70%) across both SPY and QQQ, and when buying and holding the week the signal fires produce higher than average returns for that week. However, the signal does not fire extremely often, and I wanted to see if I could develop a strategy that beat the market's returns. As such I've backtested a strategy that dynamically switches between 1x ETF (e.g. SPY, QQQ) and their 2X or 3X variants (e.g. UPRO, TQQQ, etc.). Important to note for the purpose of the backtest, and coding simplicity I did not explicitly include the leveraged ETF tickers in my backtest, thus the results are based on simply 2X or 3X the 1X returns and making some adjustment to account for volatility drag associated with the LETFS. A quick summary of the model itself: Target: Does the stock surpass its rolling 10-year median weekly high (as measured by Monday open to weekly high). Features : 7 features that encompass technical indicators measuring return, volatility etc. Training/Test Period : There is a rolling 120-month (or 10 year) training period and 1 month test period The strategy is as follows: When the model is not showing a signal, buy the index ETF as normal on Monday morning. When there is a signal, buy the LETF instead. In both cases, the stock is sold Friday so there is no holding over the weekend - all trades are done at Monday open and Friday close. As I mentioned previously I also include a 0.95% annual management fee associated with LETFs (applied weekly for when an LETF is used - i.e. 0.95%/52), and a 3.5% penalty for daily volatility decay/drag associated with the use of LEFTs; this is also applied weekly (i.e. 3.5%/52 weeks) when an LEFT is used. Below are the results for four ETFs, SPY, QQQ, EEM, and XIU (which is a Canadian ETF for the TSX60), including results for BH (i.e. 1X all the time), 2X, and 3X as well as a strategy where we take half our funds and apply them to an LETF when a signal fires (and keep the other half for the underlying equity). The time period covers 2018 - present. SPY (2018–Present) Strategy Profile Leverage Cumulative Return Annualized CAGR Max Drawdown Sharpe Ratio Sortino Ratio Weekly Win Rate Always 1x Buy & Hold 1x 196.65% 13.23% 19.27% 0.81 1.23 58.02% Partial Dynamic (50/50) 2x 270.70% 16.15% 26.60% 0.73 1.13 58.02% Dynamic 2x 346.08% 18.64% 34.29% 0.66 1.03 57.80% Partial Dynamic (50/50) 3x 379.95% 19.63% 33.85% 0.70 1.10 58.02% Dynamic 3x 567.42% 24.23% 47.48% 0.59 0.94 58.02% QQQ (2018–Present) Strategy Profile Leverage Cumulative Return Annualized CAGR Max Drawdown Sharpe Ratio Sortino Ratio Weekly Win Rate Always 1x Buy & Hold 1x 428.50% 20.96% 24.90% 1.01 1.60 58.46% Partial Dynamic (50/50) 2x 644.38% 25.79% 34.10% 0.96 1.58 58.02% Dynamic 2x 899.74% 30.10% 42.98% 0.90 1.51 58.02% Partial Dynamic (50/50) 3x 966.99% 31.07% 41.99% 0.93 1.56 58.02% Dynamic 3x 1682.52% 38.99% 57.80% 0.82 1.41 58.02% XIU (2018–Present) Strategy Profile Leverage Cumulative Return Annualized CAGR Max Drawdown Sharpe Ratio Sortino Ratio Weekly Win Rate Always 1x Buy & Hold 1x 145.38% 10.83% 19.20% 0.87 1.28 57.93% Partial Dynamic (50/50) 2x 239.40% 15.02% 20.99% 0.95 1.47 57.93% Dynamic 2x 362.03% 19.16% 25.14% 0.98 1.56 57.71% Partial Dynamic (50/50) 3x 387.02% 19.88% 25.03% 1.02 1.63 57.93% Dynamic 3x 805.90% 28.71% 32.97% 1.05 1.72 57.93% EEM (2018–Present) Strategy Profile Leverage Cumulative Return Annualized CAGR Max Drawdown Sharpe Ratio Sortino Ratio Weekly Win Rate Always 1x Buy & Hold 1x 111.50% 8.94% 25.63% 0.50 0.77 52.97% Partial Dynamic (50/50) 2x 198.75% 13.32% 30.35% 0.61 0.98 52.53% Dynamic 2x 310.67% 17.52% 38.65% 0.66 1.09 52.53% Partial Dynamic (50/50) 3x 336.56% 18.34% 37.82% 0.69 1.15 52.97% Dynamic 3x 708.83% 26.99% 51.97% 0.73 1.27 52.53% As the results indicate, using LETFs when the model fires a signal outperforms BH across all 4 equities, while controlling drawdowns better than always holding LEFTs (which can and have seen 90% drawdowns). Even risk-adjusted we see that the partial dynamic (at both 2X and 3X) is relatively close to BH for SPY and QQQ (though lower) and actually outperforms BH for EEM and XIU. Similarly, Sortino ratios between BH and the partial dynamic are somewhat similar, while all strategies tested for EEM and XIU have higher ratios than BH. These results also overlap with a massive bull-run so it's possible it's not the model that matters but using leverage at any point is likely to boost returns. As such I also ran a randomized entry test (1000 times) that randomly bought LEFTs during the test period at the same frequency as signals fired. You'll notice the leveraeg results in the Those results are below SPY 1000 Random Runs Strategy Profile Leverage Annualized CAGR Max Drawdown Sortino Ratio Always 1x Buy & Hold Baseline 1x 13.26% 19.27% 1.23 2x Random Leverage (Mean) ~1.38x 15.64% 31.56% 1.00 2x Random Leverage (95th Pct) ~1.38x 20.86% 38.77% 1.40 2x Partial Dynamic(50/50) 2x 16.18% 26.60% 1.14 2x Dynamic 2x 18.66% 34.29**%** 1.04 --- --- --- --- --- 3x Random Leverage (Mean) ~1.76x 18.93% 43.69% 0.89 3x Random Leverage (95th Pct) ~1.76x 29.79% 54.92% 1.50 3x Partial Dynamic (50/50) 3x 19.66% 33.85% 1.10 3x Dynamic 3x 24.26% 47.48% 0.94 QQQ 1000 Random Runs Strategy Profile Leverage Annualized CAGR Max Drawdown Sortino Ratio Always 1x Buy & Hold Baseline 1x 20.97% 24.90% 1.60 2x Random Leverage (Mean) ~1.34x 25.34% 37.98% 1.37 2x Random Leverage (95th pct ) ~1.34x 32.04% 47.58% 1.82 2x Partial Dynamic (50/50) 2x 25.80% 34.10% 1.58 2x Dynamic 2x 30.11% 42.98% 1.51 --- --- --- --- --- 3x Random Leverage (Mean) ~1.67x 30.08% 50.88% 1.21 3x Random Leverage (95th Pct ) ~1.67x 44.05% 64.50% 1.91 3x Partial Dynamic (50/50) 3x 31.08% 41.99% 1.56 3x Dynamic 3x 39.00% 57.80% 1.41 EEM 1000 Random Runs Strategy Profile Leverage Annualized CAGR Max Drawdown Sortino Ratio Always 1x Buy & Hold Baseline 1x 8.95% 25.63% 0.77 2x Random Leverage (Mean) ~1.32x 9.36% 37.27% 0.58 2x Random Leverage (95th Pct) ~1.32x 14.33% 45.66% 0.91 2x Partial Dynamic (50/50) 2x 13.34% 30.35% 0.98 2x Dynamic 2x 17.54% 38.65% 1.09 --- --- --- --- --- 3x Random Leverage (Mean) ~1.63x 10.30% 49.01% 0.48 3x Random Leverage (95th Pct) ~1.63x 20.41% 62.17% 0.98 3x Partial Dynamic (50/50) 3x 18.36% 37.82% 1.15 3x Dynamic 3x 27.00% 51.97% 1.27 XIU 1000 Random Runs Strategy Profile Leverage Annualized CAGR Max Drawdown Sortino Ratio Always 1x Buy & Hold Baseline 1x 10.86% 19.20% 1.28 2x Random Leverage (Mean) ~1.27x 12.17% 25.86% 1.07 2x Random Leverage (95th Pct) ~1.27x 15.68% 31.80% 1.46 2x Partial Dynamic (50/50) 2x 15.06% 20.99% 1.47 2x Dynamic 2x 19.19% 25.14% 1.57 --- --- --- --- --- 3x Random Leverage (Mean) ~1.55x 14.43% 33.69% 0.97 3x Random Leverage (95th Pct) ~1.55x 21.63% 43.83% 1.60 3x Partial Dynamic (50/50) 3x 19.91% 25.03% 1.63 3x Dynamic 3x 28.75% 32.97% 1.73 \\ Note the percentages are very slightly different in these tables than the ones above as I used LLMs to format them - I'm too lazy to change them, but that's why there are slight differences.* For SPY and QQQ we see that the model results are both higher in terms of CAGR and Sortino ratios than the mean of the simulations, but falls short of the 95th percentile - this isn't a surprise given how strong the bull market has been. For EEM and XIU we see that's also the case but additionally the model's performance is better than the 95th percentile mean as well. For the partial dynamic, as intended, while the mean CAGR's might be similar the drawdowns are lower in all cases. This split in performance comes down to the underlying market regimes. In mega-cap US equities, a relentless bull run means a random guess that happens to stack leverage will occasionally hit a lucky streak, though it pays with massive drawdowns. In range-bound or dividend-heavy markets like EEM and XIU, unhedged leverage gets eaten alive by volatility drag, which is why the random 95th percentile ceiling stays low and the model easily beats it. Meanwhile, the 50/50 partial dynamic gives us the exact asymmetric payout we designed it for: capturing most of the upside while keeping drawdowns lower than chance/the full 2X/3X Dynamic strategies. In terms of next steps, I plan on paper trading a strategy that uses this model (but combines a number of the tickers here) and has shown good results in backtesting to see if my results hold up prior to deploying any real capital. Not sure if these results would be considered surprising for anyone but would love to hear thoughts and happy to answer any questions. submitted by /u/Expert_CBCD [link] [comments]", "content_hash": "621978c2c47409c5fd65031340edb0de169f06b6fcd37ddb7f3dae7fe9d19960", "category": "Risk Management", "tags": ["backtest", "backtesting", "drawdown", "machine learning", "risk", "signal", "volatility"], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "用7个技术指标ML信号在ETF与其2x/3x杠杆ETF间周频切换，SPY年化13.2%→24.2%，但夏普反从0.81跌到0.59", "technical_summary": "作者在r/algotrading发帖，把之前那个预测ETF当周是否突破滚动10年中位数周高点的模型（SPY/QQQ方向准确率约70%）拿来做成择时策略。规则是：信号不触发就周一开盘买1x指数ETF，触发就改买2x或3x杠杆ETF，两者都周五收盘平仓、不留隔夜周末。特征用了7个技术指标（收益率、波动率等），滚动120个月训练、1个月测试。回测里没有用真实LETF代码，而是简单把1x收益乘2或3，再加0.95%年管理费（按周计0.95%/52）和3.5%年波动衰减惩罚（按周计）。结果显示杠杆动态策略在4个标的上CAGR都超过1x买入持有，但社区最有价值的讨论点是作者自己做的对照实验：把信号换成随机进场，跑1000次后发现95分位的随机结果CAGR反而超过模型，暗示收益主要来自牛市里的杠杆，而非模型本身。", "key_points": ["回测核心结论：杠杆切换确实提升CAGR，但风险调整后SPY/QQQ夏普反降（0.59 vs 0.81），仅EEM/XIU跑赢。", "可复现做法：滚动120月训练+1月测试，周一开盘进周五收盘平，计入0.95%/52管理费与3.5%/52波动衰减。", "关键风险：作者用2x/3x乘1x收益模拟LETF而非真实代码，1000次随机进场95分位CAGR(QQQ 44%)反超模型(39%)。"], "quant_relevance": "因子/alpha信号 + 组合构建/权重优化：本质是一个基于ML择时信号的动态杠杆仓位管理层，讨论重点是它究竟是真alpha还是牛市杠杆红利。", "possible_use_case": "把该框架套到A股/港股ETF上做验证：以中证500或恒生科技ETF为1x基线，滚动10年训练逐月重训，测试信号触发时切换到两融或杠杆产品做周频择时；上线前必须先跑同频次的随机进场基准，确认模型CAGR是否超过95分位随机结果，否则说明只是杠杆暴露。", "limitations": "这是社区讨论，需用数据验证后才能用于研究结论。具体问题：一是回测用2x/3x乘1x收益模拟LETF，忽略了真实LETF的路径依赖、跟踪误差和日内再平衡成本，长期实盘收益会被高估；二是样本期2018年至今基本是单边牛市，作者自己承认无法区分是模型有效还是随便上杠杆都赚钱，随机进场测试也支持这一怀疑；三是Sharpe/Sortino普遍低于买入持有，只有EEM和XIU因样本特殊性跑赢，样本外表现存疑；四是3.5%/52的波动衰减假设是否充分未做敏感性分析。", "read_priority": "高", "key_figures_md": "", "relevance_score": 6.8, "novelty_score": 9.78, "academic_score": 5.5, "discussion_score": 3.0, "actionable_score": 5.5, "final_score": 6.371, "display_title": "回测、回撤、机器学习、风险实践讨论", "tldr": "用7个技术指标ML信号在ETF与其2x/3x杠杆ETF间周频切换，SPY年化13.2%→24.2%，但夏普反从0.81跌到0.59", "core_value": "对你的量化工作帮助：把它当作回测、回撤、机器学习、风险的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["回测核心结论：杠杆切换确实提升CAGR，但风险调整后SPY/QQQ夏普反降（0.59 vs 0.81），仅EEM/XIU跑赢。", "可复现做法：滚动120月训练+1月测试，周一开盘进周五收盘平，计入0.95%/52管理费与3.5%/52波动衰减。", "关键风险：作者用2x/3x乘1x收益模拟LETF而非真实代码，1000次随机进场95分位CAGR(QQQ 44%)反超模型(39%)。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1wmly1v/machinelearning_driven_dynamic_switching_between/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "风险管理", "priority_label": "高", "source_type_label": "论坛"}, {"id": "227bd6b924c02eb27138d767ef0ee60db2dfdef61e15d9a51f9033391f150f7a", "source": "CoinTelegraph", "source_type": "crypto_news", "title": "Bitcoin price tags $86K as analysis sees crypto in ‘new bull market’", "url": "https://cointelegraph.com/markets/bitcoin-price-86k-analysis-sees-crypto-new-bull-market?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "authors": [], "published_at": "2026-09-21", "collected_at": "2026-09-22T01:26:57Z", "raw_text": "Bitcoin crossed the $86,000 mark for the first time since late January as falling oil prices and concerns over supply lifted US stocks.", "abstract": "Bitcoin crossed the $86,000 mark for the first time since late January as falling oil prices and concerns over supply lifted US stocks.", "content_hash": "95c3a42220d6d1af4a85a5fe417c7daddb7a3e0f3f03a6e5e7bf6f8f3291f614", "category": "Crypto Quant", "tags": ["bitcoin", "crypto"], "language": "en", "metadata": {"feed_url": "https://cointelegraph.com/rss"}, "one_line_summary": "BTC 自 1 月下旬以来首次突破 86,000 美元，油价下跌与供应担忧推升美股带动风险偏好回升", "technical_summary": "比特币价格自 1 月下旬以来首次触及 86,000 美元关口。报道把上行动因归于两条宏观线索：原油价格下跌，以及市场对供给端的担忧情绪推升美国股市。风险资产整体走强，加密随之跟涨。原文未给出成交量、资金费率、未平仓合约、清算量或链上数据，也未标注具体涨幅百分比与时间戳。", "key_points": ["BTC 突破 86,000 美元，为 1 月下旬以来首次，驱动因素为油价下跌与供应担忧推升美股，风险偏好外溢至加密。", "对量化交易者的直接参考：这是 BTC 重回前高区间的突破事件，可触发趋势/动量类策略的多头开仓条件，同时注意与美股（尤其能源与股指）的日内相关性可能阶段性抬升。", "原文仅一句话，无成交量、资金费率、未平仓合约、清算数据及链上指标，无法判断此次突破是现货驱动还是杠杆驱动，突破真伪与持续性均待验证。"], "quant_relevance": "因子 / alpha 信号：跨资产风险偏好联动 + BTC 价格突破动量信号；无微观结构或成本层面新信息。", "possible_use_case": "可作为 BTC 日内突破动量信号参考：在 86,000 上方设置突破入场，配合资金费率与未平仓合约变化区分现货驱动与杠杆驱动，并同时监控油价与美股指数作为跨资产确认信号。", "limitations": "原文信息密度极低，仅一句话，缺少成交量、资金费率、未平仓合约、清算量、链上数据、具体涨幅与时间戳；单一主流媒体来源，未提供独立佐证；突破 86,000 美元后能否守住无任何证据支撑，不可直接作为研究结论使用。", "read_priority": "高", "key_figures_md": "", "relevance_score": 5.4, "novelty_score": 9.78, "academic_score": 5.669, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.626, "display_title": "加密资产加密市场新闻情报", "tldr": "BTC 自 1 月下旬以来首次突破 86,000 美元，油价下跌与供应担忧推升美股带动风险偏好回升", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["BTC 突破 86,000 美元，为 1 月下旬以来首次，驱动因素为油价下跌与供应担忧推升美股，风险偏好外溢至加密。", "对量化交易者的直接参考：这是 BTC 重回前高区间的突破事件，可触发趋势/动量类策略的多头开仓条件，同时注意与美股（尤其能源与股指）的日内相关性可能阶段性抬升。", "原文仅一句话，无成交量、资金费率、未平仓合约、清算数据及链上指标，无法判断此次突破是现货驱动还是杠杆驱动，突破真伪与持续性均待验证。"], "reference_url": "https://cointelegraph.com/markets/bitcoin-price-86k-analysis-sees-crypto-new-bull-market?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "8e0e7f77c4cd3a12ca40d7a0d3d6fae3b699ddda545eff59e46e7a390a49cff7", "source": "CoinDesk", "source_type": "crypto_news", "title": "Why this investment bank expects little demand for tokenized stocks despite SEC’s new trading rules", "url": "https://www.coindesk.com/markets/2026/09/21/why-this-investment-bank-sees-little-demand-for-tokenized-stocks-despite-sec-s-new-trading-rules", "authors": [], "published_at": "2026-09-21", "collected_at": "2026-09-22T01:26:57Z", "raw_text": "TD Cowen expects limited demand for tokenized stocks despite new SEC rules opening a path for trading outside traditional markets.", "abstract": "TD Cowen expects limited demand for tokenized stocks despite new SEC rules opening a path for trading outside traditional markets.", "content_hash": "d70fc563ccc496daea5826b3027cacc4f290da6f67418942ad5039d514731432", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "TD Cowen 判断 SEC 新规难激活代币化股票需求，看空代币化股票交易量前景", "technical_summary": "SEC 新规为代币化股票在传统市场之外交易开了一条路，市场原本预期这会带动代币化证券的交易量与做市需求。TD Cowen 作为卖方投行给出的判断是需求有限，即监管松绑并不自动转化为机构资金流入。原文没有披露任何量化支撑——没有代币化股票当前规模、成交量、费率结构，也没有说明 TD Cowen 判断所依据的客户调研样本或时间表，正文实际只有一句被重复两次的结论性表述。对量化而言，这条信息的价值在于提示「监管利好 ≠ 流动性利好」这一非共识定价线索，而非提供可直接建模的数据。", "key_points": ["SEC 新规允许代币化股票在传统交易市场之外交易，TD Cowen 却判断需求有限，原文未给出任何规模、成交量或费率数字。", "可操作方向：把代币化股票与现货 / ETF 的价差、24/7 时段的流动性深度纳入监控清单，用于判断套利窗口是否真实存在。", "原文正文仅重复一句结论，无数据、无引述来源、无规则生效时间表；卖方投行的看空判断可能与其经纪业务立场相关，需用链上与交易所数据独立验证。"], "quant_relevance": "数据工程（代币化股票行情与链上数据的接入价值待评估）；执行 / 交易成本（关注 24/7 场外交易通道对现货与 ETF 定价的冲击）", "possible_use_case": "可作为「代币化股票 vs 现货 ETF 价差 / 24/7 流动性」监控清单的触发事件：先整理 SEC 新规的生效时间与允许的交易主体，再列出已发行的代币化股票标的，评估跨市场价差是否存在可捕获的套利空间。", "limitations": "原文正文仅一句话且重复两次，缺乏任何量化证据、数据来源与引述对象，摘要基于定性描述；TD Cowen 属卖方机构，其「需求有限」的判断可能存在立场或客户结构偏差；代币化股票的实际成交量、发行方数据、二级市场深度均未提供，无法验证结论。", "read_priority": "中", "key_figures_md": "", "relevance_score": 3.7, "novelty_score": 9.78, "academic_score": 5.662, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.515, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "TD Cowen 判断 SEC 新规难激活代币化股票需求，看空代币化股票交易量前景", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["SEC 新规允许代币化股票在传统交易市场之外交易，TD Cowen 却判断需求有限，原文未给出任何规模、成交量或费率数字。", "可操作方向：把代币化股票与现货 / ETF 的价差、24/7 时段的流动性深度纳入监控清单，用于判断套利窗口是否真实存在。", "原文正文仅重复一句结论，无数据、无引述来源、无规则生效时间表；卖方投行的看空判断可能与其经纪业务立场相关，需用链上与交易所数据独立验证。"], "reference_url": "https://www.coindesk.com/markets/2026/09/21/why-this-investment-bank-sees-little-demand-for-tokenized-stocks-despite-sec-s-new-trading-rules", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "中", "source_type_label": "加密市场新闻"}, {"id": "22098787f5835ff05d8565040121da43e5aa872e39219d4b02b3ce152b7a73b9", "source": "CoinTelegraph", "source_type": "crypto_news", "title": "ECB launches Pontes to settle tokenized assets without stablecoins", "url": "https://cointelegraph.com/news/eurosystem-central-bank-money-tokenized-finance?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "authors": [], "published_at": "2026-09-21", "collected_at": "2026-09-22T01:26:57Z", "raw_text": "Pontes will expand its services and operating hours gradually, with full implementation expected by 2028 and more participants set to join.", "abstract": "Pontes will expand its services and operating hours gradually, with full implementation expected by 2028 and more participants set to join.", "content_hash": "755e6e5856ed2af4547ced83cc735f536d1b3f05b7bd7721a44a826e1626aca1", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://cointelegraph.com/rss"}, "one_line_summary": "欧洲央行上线 Pontes 平台，用央行货币结算代币化资产、明确排除稳定币，2028 年全面落地", "technical_summary": "欧洲央行（ECB）联合欧元体系启动 Pontes 项目，目标是给代币化资产（tokenized assets）提供以央行货币计价和结算的通道，从而在制度上绕开 USDT/USDC 等私人稳定币。平台采取渐进式上线：服务品种和每日运营时间分阶段扩展，参与机构逐步接入，完全实施目标定在 2028 年。对量化交易者的含义是欧元区代币化债券、代币化基金等资产将获得一条央行背书的结算路径，链上欧元流动性结构可能从稳定币向央行数字货币（CBDC）/央行结算资产迁移。原文未披露参与机构名单、结算资产范围、是否接入公链或私有链、以及是否开放给非银行机构。", "key_points": ["欧洲央行启动 Pontes 结算平台，用央行货币而非稳定币完成代币化资产交割，全面实施时间表为 2028 年，服务与运营时间分阶段扩展", "对加密量化交易者的直接含义：欧元区代币化资产的结算基础设施获得央行背书，未来可关注链上欧元流动性池、稳定币/代币化资产相对定价的套利与做市机会", "原文信息密度极低，全文实质内容仅两句话且重复，缺乏参与机构、资产范围、技术架构、上线阶段时间表等关键细节，来源为单一加密媒体，需以 ECB 官方公告核实后再做为交易假设"], "quant_relevance": "数据工程 / 市场基础设施；执行与结算通道", "possible_use_case": "可作为欧元稳定币与代币化资产相对定价（basis）策略的事件驱动信号：在 ECB 官方发布 Pontes 阶段上线细则或首批参与机构名单时，观察 EURC、EURt 等欧元稳定币与代币化国债产品的链上流动性迁移，构建 EUR 稳定币对之间的价差交易。", "limitations": "这是单篇加密媒体报道，全文正文仅两句话且内容重复，无参与机构名单、无结算资产清单、无技术架构（公链/私有链）、无分阶段时间节点；2028 年是远期目标，短期无直接交易触发器；无任何量化数据支撑，无法据此回测。需查阅 ECB 官方公告与 Pontes 项目页面独立核实后才能用于研究结论。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 5.674, "discussion_score": 2.0, "actionable_score": 7.5, "final_score": 5.507, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "欧洲央行上线 Pontes 平台，用央行货币结算代币化资产、明确排除稳定币，2028 年全面落地", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["欧洲央行启动 Pontes 结算平台，用央行货币而非稳定币完成代币化资产交割，全面实施时间表为 2028 年，服务与运营时间分阶段扩展", "对加密量化交易者的直接含义：欧元区代币化资产的结算基础设施获得央行背书，未来可关注链上欧元流动性池、稳定币/代币化资产相对定价的套利与做市机会", "原文信息密度极低，全文实质内容仅两句话且重复，缺乏参与机构、资产范围、技术架构、上线阶段时间表等关键细节，来源为单一加密媒体，需以 ECB 官方公告核实后再做为交易假设"], "reference_url": "https://cointelegraph.com/news/eurosystem-central-bank-money-tokenized-finance?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "b3829c15439356cad28757531502e2db84df1545a5ebbe6e794c98a4301937b5", "source": "Reddit algotrading", "source_type": "forum", "title": "How far back do you back test?", "url": "https://www.reddit.com/r/algotrading/comments/1wm7hzx/how_far_back_do_you_back_test/", "authors": ["/u/Jebusfreek666"], "published_at": "2026-09-21", "collected_at": "2026-09-22T01:26:56Z", "raw_text": "I have just recently been getting into this. I have started and scrapped several models so far, each time further refining my rules for constructing a model to limit bias and overfitting. In one of the legs of research I did I learned that the market fundamentally changed around 1999-2000, with evidence strongly suggesting we are in the process of another fundamental change, or that one has already occurred (probably either a little before or after covid). Though this wont be able to be confirmed until we have a few more years of data. But after discovering this, I changed how I was looking at the data. Yes, you want a robust system that is not just tuned to do well in the current market conditions. But at the same time, tuning for a market that no longer exists wont do you any good either. So clearly the answer is back testing only up to a certain number of year, and replacing the oldest year with the newest year on a rotation. But the question is, how far back do you go? I think ideally, I would like to focus on the past 25 years with a focus/weighted effect on the newest 5-10 years. So, how far back do you typically back test? submitted by /u/Jebusfreek666 [link] [comments]", "abstract": "I have just recently been getting into this. I have started and scrapped several models so far, each time further refining my rules for constructing a model to limit bias and overfitting. In one of the legs of research I did I learned that the market fundamentally changed around 1999-2000, with evidence strongly suggesting we are in the process of another fundamental change, or that one has already occurred (probably either a little before or after covid). Though this wont be able to be confirmed until we have a few more years of data. But after discovering this, I changed how I was looking at the data. Yes, you want a robust system that is not just tuned to do well in the current market conditions. But at the same time, tuning for a market that no longer exists wont do you any good either. So clearly the answer is back testing only up to a certain number of year, and replacing the oldest year with the newest year on a rotation. But the question is, how far back do you go? I think ideally, I would like to focus on the past 25 years with a focus/weighted effect on the newest 5-10 years. So, how far back do you typically back test? submitted by /u/Jebusfreek666 [link] [comments]", "content_hash": "81f620221c9940e8e145fc7e0ac0609258f82c04bd77ba1647674667b614e69e", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "量化回测窗口该取多长？社区提出「25 年窗口 + 近 5–10 年加权」的滚动替换方案，并指出 1999–2000 与疫情前后存在市场结构断裂", "technical_summary": "讨论的核心是「回测该往回取多少年」这一建模前置决策。发帖人反复推翻并重建模型，发现 1999–2000 前后市场统计特征发生断裂，并怀疑疫情前后又出现一次断裂（需再积累几年数据才能确认）。他的结论是：既不能只拟合当下市场，也不能拿一个已经不存在的市场来调参，因此应该限定回测年限，并采用「去掉最老一年、加入最新一年」的滚动替换方式；他个人倾向于用过去 25 年、并把权重集中在最近 5–10 年。原文只包含提问，没有附上任何回测数据或社区结论。", "key_points": ["核心观点：市场在 1999–2000 前后发生结构性断裂，疫情前后可能再次断裂，因此回测样本不应无限回溯，发帖人主张 25 年窗口并对最近 5–10 年加权。", "可操作做法：用「最老年份滚出、最新年份滚入」的滚动窗口替代固定全历史回测，既能剔除失效市场状态，又能持续吸收新数据；可进一步对样本做时间衰减加权。", "注意：原文只有提问、没有任何回复或实测数据支撑 25 年这个数字，也没有讨论该窗口下的交易成本、幸存者偏差和多重检验问题，直接照搬窗口长度存在过拟合与数据挖掘偏差风险。"], "quant_relevance": "因子 / alpha 信号 —— 回测窗口与训练样本区间的选择直接决定因子有效性判断和过拟合程度；同时影响研究工具 / 工作流（滚动窗口回测机制的设计）。", "possible_use_case": "在自己现有的因子回测框架里加一层滚动窗口参数：以 25 年为上限、按年滚动（每年剔除最老一年、加入最新一年），并对最近 5–10 年样本施加时间衰减权重，对比「全历史固定窗口」与「滚动加权窗口」下同一因子的 IC 衰减曲线和样本外夏普差异。", "limitations": "这是社区提问帖，原文只有发帖人的主观判断，没有回测结果、没有参数敏感性测试，也没有其他用户的回复内容可供交叉验证；1999–2000 和疫情前后的「结构性断裂」只是他的观察，未经统计检验（如 Chow test、结构突变点检测）。此外，滚动窗口会缩短有效样本量，在小样本上更容易被少数极端行情主导。需用数据验证后才能用于研究结论。", "read_priority": "中", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 5.494, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 5.43, "display_title": "测试实践讨论", "tldr": "量化回测窗口该取多长？社区提出「25 年窗口 + 近 5–10 年加权」的滚动替换方案，并指出 1999–2000 与疫情前后存在市场结构断裂", "core_value": "对你的量化工作帮助：把它当作测试的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["核心观点：市场在 1999–2000 前后发生结构性断裂，疫情前后可能再次断裂，因此回测样本不应无限回溯，发帖人主张 25 年窗口并对最近 5–10 年加权。", "可操作做法：用「最老年份滚出、最新年份滚入」的滚动窗口替代固定全历史回测，既能剔除失效市场状态，又能持续吸收新数据；可进一步对样本做时间衰减加权。", "注意：原文只有提问、没有任何回复或实测数据支撑 25 年这个数字，也没有讨论该窗口下的交易成本、幸存者偏差和多重检验问题，直接照搬窗口长度存在过拟合与数据挖掘偏差风险。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1wm7hzx/how_far_back_do_you_back_test/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "阿尔法 / 因子研究", "priority_label": "中", "source_type_label": "论坛"}, {"id": "84074f74ccadd4c9fef752757e03217b07544657771055654d922e7c4b6ce48a", "source": "Reddit algotrading", "source_type": "forum", "title": "It's the OJ guy. I tried a new strategy - over engineering the Martingale strategy trying every possible combination using python", "url": "https://www.reddit.com/r/algotrading/comments/1wmepu7/its_the_oj_guy_i_tried_a_new_strategy_over/", "authors": ["/u/NoahBLB"], "published_at": "2026-09-21", "collected_at": "2026-09-22T01:26:56Z", "raw_text": "After a noble but so far fruitless 😬 attempt at predicting the orange juice market with an xgb model I have tried a new strategy: the Martingale. If you're not familiar you can make riskless trades/bets by knowing that if you lose you will make a large/risky enough bet to recoup your losses. You can do this infinite times but that would require infinite money. Anyway I tried running literally millions of simulations with python to try and find the most optimal way of using this strategy and have published my findings here: https://youtu.be/FowdNtI2exA submitted by /u/NoahBLB [link] [comments]", "abstract": "After a noble but so far fruitless 😬 attempt at predicting the orange juice market with an xgb model I have tried a new strategy: the Martingale. If you're not familiar you can make riskless trades/bets by knowing that if you lose you will make a large/risky enough bet to recoup your losses. You can do this infinite times but that would require infinite money. Anyway I tried running literally millions of simulations with python to try and find the most optimal way of using this strategy and have published my findings here: https://youtu.be/FowdNtI2exA submitted by /u/NoahBLB [link] [comments]", "content_hash": "93ccbb26160cbe4da364682c119c651d91e12e97917f2f57f24555eedcfb40c3", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "用 Python 跑数百万次 Martingale 加倍下注模拟找「最优组合」，但帖子里没给出任何收益、回撤或破产概率数字", "technical_summary": "发帖人是 r/algotrading 里做橙汁期货（OJ）的常客，上一轮尝试是用 XGBoost 模型预测橙汁价格，自述「高尚但至今毫无成果」。这次换方向做 Martingale：亏损后加倍下注以回本，理论上只要资金无限就可以无限次重复、实现「无风险」盈利。他用 Python 跑了「数百万次」模拟，想找出这套加倍策略的最优参数组合，并把结果发布在一个 YouTube 视频里。帖文本身没有贴代码、没有贴参数、没有公布任何夏普、年化、最大回撤或爆仓概率，社区里对 Martingale 的普遍看法是它在有限资金下等价于卖出尾部风险、长期必然爆仓。", "key_points": ["原文缺乏量化指标：只声称跑了「数百万次」Python 模拟，没有公布任何收益、夏普、最大回撤或破产概率数字，全部结论放在 YouTube 视频里，帖文本身无法复核。", "可借用的是蒙特卡洛压力测试的框架：设定初始资金、单次风险比例、最大连续亏损次数和合约保证金，用模拟对比「固定分数下注」与「加倍下注」的资金曲线，直接算出破产概率而不是看单次收益。", "Martingale 的「无风险」只在资金无限假设下成立，任何有限资金遇上连续亏损就会爆仓；橙汁期货合约规模大、流动性远不如股指期货，滑点、隔夜费和保证金追缴会让实际结果比模拟差得多，而且作者没有公布代码和模拟参数，这类「百万次模拟」极易变成参数过拟合的噪音。"], "quant_relevance": "风险建模 / 组合构建（仓位与破产概率）；研究工具 / 工作流（蒙特卡洛压力测试的用法示范）", "possible_use_case": "把「加倍下注」作为对照组写进自己的回测框架：固定初始资金与最大回撤约束，用蒙特卡洛模拟对比固定比例下注与 Martingale 的资金曲线和破产概率，用来给自己的真实策略做尾部压力测试。", "limitations": "这是社区讨论帖，且信息密度极低——没有代码、没有参数、没有任何数值结果，结论全部外链到视频，无法独立验证；标的是流动性较差的橙汁期货，与主流量化标的相关性低；Martingale 在理论上是已知负期望的仓位方案，正向价值仅在于风险教育而非 alpha 来源。社区内容需用数据验证后才能用于研究结论。", "read_priority": "低", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 4.749, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 5.318, "display_title": "阿尔法 / 因子研究实践讨论", "tldr": "用 Python 跑数百万次 Martingale 加倍下注模拟找「最优组合」，但帖子里没给出任何收益、回撤或破产概率数字", "core_value": "对你的量化工作帮助：把它当作阿尔法 / 因子研究的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["原文缺乏量化指标：只声称跑了「数百万次」Python 模拟，没有公布任何收益、夏普、最大回撤或破产概率数字，全部结论放在 YouTube 视频里，帖文本身无法复核。", "可借用的是蒙特卡洛压力测试的框架：设定初始资金、单次风险比例、最大连续亏损次数和合约保证金，用模拟对比「固定分数下注」与「加倍下注」的资金曲线，直接算出破产概率而不是看单次收益。", "Martingale 的「无风险」只在资金无限假设下成立，任何有限资金遇上连续亏损就会爆仓；橙汁期货合约规模大、流动性远不如股指期货，滑点、隔夜费和保证金追缴会让实际结果比模拟差得多，而且作者没有公布代码和模拟参数，这类「百万次模拟」极易变成参数过拟合的噪音。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1wmepu7/its_the_oj_guy_i_tried_a_new_strategy_over/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "阿尔法 / 因子研究", "priority_label": "低", "source_type_label": "论坛"}, {"id": "de797d1a96ab19e99059ce1d59f88ed70b82b1ea12a0016c29969ac0e0e50ee2", "source": "CoinTelegraph", "source_type": "crypto_news", "title": "Saudi Arabia exits China-backed mBridge CBDC project: FT", "url": "https://cointelegraph.com/news/saudi-arabia-exits-china-backed-mbridge-cbdc-project-ft?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "authors": [], "published_at": "2026-09-21", "collected_at": "2026-09-22T01:26:57Z", "raw_text": "Saudi Arabia has left mBridge, a cross-border CBDC platform that has drawn scrutiny from US policymakers, according to the Financial Times.", "abstract": "Saudi Arabia has left mBridge, a cross-border CBDC platform that has drawn scrutiny from US policymakers, according to the Financial Times.", "content_hash": "69eb76974549be48367d404274dd4cc4857c7f7e6a5515598fd8a93ce8560ed2", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://cointelegraph.com/rss"}, "one_line_summary": "沙特退出中国主导的 mBridge 跨境 CBDC 桥，FT 报道称该项目正受美国政策制定者审查", "technical_summary": "原文仅两句话且内容重复，核心信息只有一条：沙特已退出 mBridge。mBridge 是跨境 CBDC 多边平台（背景补充：由 BIS 创新中心牵头，中国、香港、泰国、阿联酋等参与），近期因美国政策制定者的审查而受到关注，沙特退出被 FT 解读为该项目承受地缘政治压力的信号。原文没有给出退出时点、参与份额、结算量或任何数字货币市场价格反应，也没有说明沙特退出后 mBridge 是否继续运行。对量化研究而言，这是一条叙事面/政策面新闻，而非可建模的数据事件。", "key_points": ["原文可用事实仅两条：沙特退出 mBridge 跨境 CBDC 平台，信源为 Financial Times；未提供任何退出时间、参与方份额、结算规模或价格数据，全文为两句重复表述。", "对量化交易者的可操作信息接近于零：mBridge 属批发型跨境 CBDC 基础设施，不直接挂钩任何可交易代币，短期没有可构造的价格或流动性信号，只能作为 CBDC/去美元化叙事在情绪面跟踪。", "风险点在于信息本身：消息仅有 FT 单一信源、无沙特或 BIS 官方确认、无原文链接细节，且该平台长期是美中政策博弈焦点，后续官方表态可能反向修正，据此建仓等于用二手标题做宏观押注。"], "quant_relevance": "风险建模 / 数据工程（宏观与地缘政治因子）；对加密资产价格与流动性暂无可直接映射的量化传导路径", "possible_use_case": "把该条按日期打标进自建的政策事件库，用于回看 CBDC/去美元化类新闻对 BTC、稳定币市值、USDT/USDC 溢价的事件研究；不要单独当作交易信号，需等沙特或 BIS 官方确认后再评估是否纳入宏观因子。", "limitations": "原文是两句话的新闻快讯，信息密度极低，无数字、无官方确认、无退出原因说明；单一信源（FT）且 CoinTelegraph 为转述；mBridge 参与方与规模等关键背景需另行核实。本摘要基于定性描述，未包含任何可验证的量化证据，不能作为研究结论引用。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 5.674, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.307, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "沙特退出中国主导的 mBridge 跨境 CBDC 桥，FT 报道称该项目正受美国政策制定者审查", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["原文可用事实仅两条：沙特退出 mBridge 跨境 CBDC 平台，信源为 Financial Times；未提供任何退出时间、参与方份额、结算规模或价格数据，全文为两句重复表述。", "对量化交易者的可操作信息接近于零：mBridge 属批发型跨境 CBDC 基础设施，不直接挂钩任何可交易代币，短期没有可构造的价格或流动性信号，只能作为 CBDC/去美元化叙事在情绪面跟踪。", "风险点在于信息本身：消息仅有 FT 单一信源、无沙特或 BIS 官方确认、无原文链接细节，且该平台长期是美中政策博弈焦点，后续官方表态可能反向修正，据此建仓等于用二手标题做宏观押注。"], "reference_url": "https://cointelegraph.com/news/saudi-arabia-exits-china-backed-mbridge-cbdc-project-ft?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "909200ce6d7b038e19852c3856d6f110b2eafe4a6a4c07ea16b7b8ee2b2463b4", "source": "Decrypt", "source_type": "crypto_news", "title": "Coinbase Brings IPO Shares to US Retail Traders, With Oura Up First", "url": "https://decrypt.co/378874/coinbase-ipo-shares-us-traders-oura", "authors": [], "published_at": "2026-09-21", "collected_at": "2026-09-22T01:26:57Z", "raw_text": "Eligible customers can request shares at the offering price, but allocations are not guaranteed.", "abstract": "Eligible customers can request shares at the offering price, but allocations are not guaranteed.", "content_hash": "321695f5ba490a669b3ea0b0372306926d405a99719a6542898c02542394decf", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://decrypt.co/feed"}, "one_line_summary": "Coinbase 向美国散户开放 IPO 申购通道、Oura 成首个标的，按发行价申购但配售不保证", "technical_summary": "解决的是美国散户长期拿不到 IPO 发行价份额的问题，做法是 Coinbase 用现有零售账户体系承接新股申购，Oura 作为首个标的。机制上合格客户按发行价提交申购请求，但 Coinbase 明确配售结果不保证，即申购≠中签。原文未披露申购门槛、费率、可申购额度上限、适用地区以及上线时间表，也没有任何资金规模或用户数量数据。对量化侧的直接含义是 Coinbase 从纯加密交易场所向「加密账户 + 传统证券分销」混合形态延伸，COIN 本身的业务叙事和资金流结构会出现新变量。", "key_points": ["Coinbase 向美国合格散户开放 IPO 发行价申购，Oura 为首个标的，配售不保证；原文两句话、零数字，未给费率、额度上限或时间表。", "对量化交易者可操作的是 COIN 事件驱动：把「平台业务扩张公告」作为事件因子，统计公告窗口内 COIN 相对 BTC 与纳指的超额收益。", "信息源仅两段重复声明，无 SEC 备案细节、无监管口径、无配售比例，加密平台分销传统证券是否长期合规存在不确定性，不能据此直接建仓。"], "quant_relevance": "因子 / alpha 信号：Coinbase 业务边界从加密现货扩张到股权一级市场分销，为 COIN 事件驱动策略和平台资金流观测提供新输入。", "possible_use_case": "可作为 COIN 事件驱动交易的信号输入：在产品正式上线公告日前后，统计 COIN 相对 BTC 和纳指的超额收益与成交量异常；同时监控申购资金是否对 Coinbase 平台稳定币余额和加密现货成交量形成分流，用于判断资金在平台内部的资产切换路径。", "limitations": "原文仅两句重复声明，没有任何数字、费率、时间表、可申购额度或监管条款，信息密度极低；配售不保证意味着散户实际获配比例未知，产品形态可能随 SEC 对「加密平台分销证券」的许可态度变化；这是新闻报道而非可验证数据，需等待 Coinbase 官方公告或 SEC 文件确认后才能用于研究或交易结论。", "read_priority": "中", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 5.62, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.299, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "Coinbase 向美国散户开放 IPO 申购通道、Oura 成首个标的，按发行价申购但配售不保证", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["Coinbase 向美国合格散户开放 IPO 发行价申购，Oura 为首个标的，配售不保证；原文两句话、零数字，未给费率、额度上限或时间表。", "对量化交易者可操作的是 COIN 事件驱动：把「平台业务扩张公告」作为事件因子，统计公告窗口内 COIN 相对 BTC 与纳指的超额收益。", "信息源仅两段重复声明，无 SEC 备案细节、无监管口径、无配售比例，加密平台分销传统证券是否长期合规存在不确定性，不能据此直接建仓。"], "reference_url": "https://decrypt.co/378874/coinbase-ipo-shares-us-traders-oura", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "中", "source_type_label": "加密市场新闻"}, {"id": "73793ee4fb2069724b6a9cca888fbbc399608818da403660d46fd3e75f295d7c", "source": "Reddit algotrading", "source_type": "forum", "title": "HMM inputs", "url": "https://www.reddit.com/r/algotrading/comments/1wmts6p/hmm_inputs/", "authors": ["/u/Grand-Fly-6090"], "published_at": "2026-09-22", "collected_at": "2026-09-22T01:26:56Z", "raw_text": "What inputs are you using for your HMM’s? The best I have right now are 1 minute gains for predicting target hit probabilities. How many states do you run? submitted by /u/Grand-Fly-6090 [link] [comments]", "abstract": "What inputs are you using for your HMM’s? The best I have right now are 1 minute gains for predicting target hit probabilities. How many states do you run? submitted by /u/Grand-Fly-6090 [link] [comments]", "content_hash": "7e6305e997e836e90f89997b2ba22baafa483b95d14426063d8793a7b28207d8", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://www.reddit.com/r/algotrading/.rss"}, "one_line_summary": "Reddit 讨论 HMM 输入特征选择：用 1 分钟收益率预测目标命中概率，状态数设多少成焦点", "technical_summary": "帖子在问两件事：HMM 的观测输入该用什么变量，以及隐状态数量该设几个。发帖人给出的个人方案是把 1 分钟收益率喂进 HMM，输出用于估计价格目标被触及的概率。全帖没有任何回测数字、没有指定标的和样本区间，也看不到状态数结论。除了这一个方案外，原帖未呈现其他社区回复内容，讨论尚处提问阶段。", "key_points": ["发帖人自报的最佳方案是用 1 分钟收益率作 HMM 观测输入，输出价格目标命中概率，但未提供任何状态数、准确率或回测指标。", "若要落地，可先沿用其思路：以分钟级收益率 + 实现波动率 + 成交量组成观测向量，先跑 2–3 状态高斯 HMM，观察状态切换与目标命中率的相关性。", "1 分钟数据信噪比极低，HMM 在高频尺度上极易把噪声拟合为状态；且原帖无人给出状态数答案，状态数选择缺乏社区共识，存在过拟合风险。"], "quant_relevance": "因子 / alpha 信号；风险建模（市场状态 / regime 划分）", "possible_use_case": "在自有分钟级数据上复现该思路：用收益率 + 波动率 + 成交量拟合 2–3 状态 HMM，把估计出的状态概率作为日内的开仓过滤条件，测试能否提升目标命中率。", "limitations": "这是社区讨论且原帖几乎无回复，仅有一个未经验证的个人做法，需用数据验证后才能用于研究结论；原文缺乏量化证据，摘要基于定性描述。此外 1 分钟级 HMM 的状态稳定性、状态数选择与交易成本影响均未被讨论。", "read_priority": "低", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 10.0, "academic_score": 4.255, "discussion_score": 3.0, "actionable_score": 6.5, "final_score": 5.288, "display_title": "阿尔法 / 因子研究实践讨论", "tldr": "Reddit 讨论 HMM 输入特征选择：用 1 分钟收益率预测目标命中概率，状态数设多少成焦点", "core_value": "对你的量化工作帮助：把它当作阿尔法 / 因子研究的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["发帖人自报的最佳方案是用 1 分钟收益率作 HMM 观测输入，输出价格目标命中概率，但未提供任何状态数、准确率或回测指标。", "若要落地，可先沿用其思路：以分钟级收益率 + 实现波动率 + 成交量组成观测向量，先跑 2–3 状态高斯 HMM，观察状态切换与目标命中率的相关性。", "1 分钟数据信噪比极低，HMM 在高频尺度上极易把噪声拟合为状态；且原帖无人给出状态数答案，状态数选择缺乏社区共识，存在过拟合风险。"], "reference_url": "https://www.reddit.com/r/algotrading/comments/1wmts6p/hmm_inputs/", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "阿尔法 / 因子研究", "priority_label": "低", "source_type_label": "论坛"}], "source_stats": {"Reddit algotrading": 5, "CoinTelegraph": 3, "CoinDesk": 1, "Decrypt": 1}, "category_counts": {"Portfolio Construction": 1, "Risk Management": 1, "Crypto Quant": 1, "Alpha / Factor Research": 7}, "section_counts": {"ai_quant_tools": 5, "daily_news": 5}, "sections": [{"key": "deep_learning_quant", "label": "深度学习量化未来", "description": "技术主线：深度学习、强化学习、Transformer、图神经网络、表征学习、订单簿预测、金融时间序列大模型等在量化里的应用。"}, {"key": "ai_quant_tools", "label": "AI 量化工具", "description": "工具主线：能提升量化研究效率的 AI 工具、代码仓库、研究自动化、智能体、回测/数据工程工具和可接入团队工作流的基础设施。"}, {"key": "daily_news", "label": "Crypto 市场每日 Top 5", "description": "加密市场新闻主线：来自 CoinDesk、CoinTelegraph、The Block、Decrypt、Blockworks 等主流媒体当日最重要的 Crypto 市场报道。"}], "category_labels": {"Alpha / Factor Research": "阿尔法 / 因子研究", "Statistical Arbitrage": "统计套利", "Portfolio Construction": "组合构建", "Risk Management": "风险管理", "Options / Volatility": "期权 / 波动率", "Market Microstructure": "市场微观结构", "Execution / Transaction Cost": "交易执行 / 交易成本", "Machine Learning for Finance": "金融机器学习", "LLM / Agents for Quant": "量化大模型 / 智能体", "Crypto Quant": "加密资产量化", "Data Engineering": "数据工程", "Backtesting / Research Tools": "回测 / 研究工具", "Industry / Career": "行业 / 职业 / 合规", "Unclassified": "未分类"}, "priority_labels": {"High": "高", "Medium": "中", "Low": "低", "高": "高", "中": "中", "低": "低"}, "source_type_labels": {"paper": "论文", "forum": "论坛", "github": "代码仓库", "blog": "博客", "news": "新闻", "social": "社交媒体", "zhihu": "知乎", "x": "X", "quantml": "QuantML", "crypto_news": "加密市场新闻"}, "report_config": {"max_items_per_category": 5, "max_total_items": 60, "executive_brief_items": 5}}</script>
+  <script>
+    const payload = JSON.parse(document.getElementById('dashboard-data').textContent);
+    const items = payload.items || [];
+    const categoryLabels = payload.category_labels || {};
+    const priorityLabels = payload.priority_labels || {};
+    const sourceTypeLabels = payload.source_type_labels || {};
+    const state = {
+      query: '',
+      section: 'All',
+      category: 'All',
+      sort: 'score',
+      activeId: items[0]?.id || null,
+    };
+
+    const priorityRank = { High: 3, Medium: 2, Low: 1, '高': 3, '中': 2, '低': 1 };
+    const $ = (id) => document.getElementById(id);
+
+    // --- Feedback ---
+    const _feedbackStore = JSON.parse(localStorage.getItem('quant-feedback') || '{}');
+    function getFeedback(id) { return _feedbackStore[id] || 0; }
+    function setFeedback(id, signal) {
+      if (_feedbackStore[id] === signal) { delete _feedbackStore[id]; signal = 0; }
+      else { _feedbackStore[id] = signal; }
+      localStorage.setItem('quant-feedback', JSON.stringify(_feedbackStore));
+      fetch('http://localhost:8080/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, signal }),
+      }).catch(() => {});
+    }
+
+    function init() {
+      $('report-date').textContent = payload.report_date + ' - 主力源：arXiv / 知乎 / QuantML / 大型论坛 - 生成时间 ' + payload.generated_at;
+      $('metric-items').textContent = items.length;
+      $('metric-categories').textContent = new Set(items.map((item) => item.category)).size;
+      $('metric-high').textContent = items.filter((item) => priorityLabel(item.read_priority) === '高').length;
+      $('metric-avg').textContent = averageScore(items).toFixed(1);
+
+      buildSectionControls();
+      buildCategoryControls();
+      buildSourceList();
+      bindControls();
+      render();
+    }
+
+    function bindControls() {
+      $('search').addEventListener('input', (event) => {
+        state.query = event.target.value.trim().toLowerCase();
+        render();
+      });
+      $('category-select').addEventListener('change', (event) => {
+        state.category = event.target.value;
+        render();
+      });
+      $('section-select').addEventListener('change', (event) => {
+        state.section = event.target.value;
+        render();
+      });
+      $('sort-select').addEventListener('change', (event) => {
+        state.sort = event.target.value;
+        render();
+      });
+    }
+
+    function buildCategoryControls() {
+      const counts = countBy(items, 'category');
+      const categories = Object.keys(counts).sort();
+      const select = $('category-select');
+      select.innerHTML = option('All', `全部细分标签 (${items.length})`) +
+        categories.map((category) => option(category, `${categoryLabel(category)} (${counts[category]})`)).join('');
+
+      const list = $('category-list');
+      list.innerHTML = categoryButton('All', items.length) +
+        categories.map((category) => categoryButton(category, counts[category])).join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.category = button.dataset.category;
+          select.value = state.category;
+          if (state.category === 'All') {
+            state.section = 'All';
+            $('section-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSectionControls() {
+      const counts = payload.section_counts || {};
+      const sections = payload.sections || [];
+      const select = $('section-select');
+      select.innerHTML = option('All', `全部主线 (${items.length})`) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => option(section.key, `${section.label} (${counts[section.key]})`))
+          .join('');
+
+      const list = $('section-list');
+      list.innerHTML = sectionButton('All', '全部', items.length) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => sectionButton(section.key, section.label, counts[section.key]))
+          .join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.section = button.dataset.section;
+          select.value = state.section;
+          if (state.section === 'All') {
+            state.category = 'All';
+            $('category-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSourceList() {
+      const stats = payload.source_stats || {};
+      const entries = Object.entries(stats)
+        .filter(([source]) => !source.startsWith('fetched:'))
+        .sort((a, b) => b[1] - a[1]);
+      $('source-list').innerHTML = entries.length
+        ? entries.map(([source, count]) => `<li><span>${escapeHtml(source)}</span><b>${count}</b></li>`).join('')
+        : '<li><span>暂无来源统计</span><b>0</b></li>';
+    }
+
+    function render() {
+      let visible = items.filter(matchesFilters);
+      visible = sortItems(visible);
+      if (!visible.some((item) => item.id === state.activeId)) {
+        state.activeId = visible[0]?.id || null;
+      }
+
+      $('feed-title').textContent = feedTitle();
+      $('result-count').textContent = `展示 ${visible.length} 条 - 两条主线每条最多 ${payload.report_config.max_items_per_category} 条`;
+      renderSectionActive();
+      renderCategoryActive();
+      renderItems(visible);
+      renderDetail(visible.find((item) => item.id === state.activeId) || visible[0]);
+    }
+
+    function matchesFilters(item) {
+      const sectionMatch = state.section === 'All' || (item.report_sections || []).includes(state.section);
+      if (!sectionMatch) return false;
+      const categoryMatch = state.category === 'All' || item.category === state.category;
+      if (!categoryMatch) return false;
+      if (!state.query) return true;
+      const haystack = [
+        item.title,
+        item.display_title,
+        item.source,
+        item.source_type,
+        item.category,
+        categoryLabel(item.category),
+        sectionLabel(item.report_sections?.[0]),
+        sourceTypeLabel(item.source_type),
+        priorityLabel(item.read_priority),
+        item.one_line_summary,
+        item.technical_summary,
+        item.quant_relevance,
+        item.possible_use_case,
+        item.tldr,
+        item.core_value,
+        ...(item.key_points_list || []),
+        item.reference_url,
+      ].join(' ').toLowerCase();
+      return haystack.includes(state.query);
+    }
+
+    function sortItems(list) {
+      return [...list].sort((a, b) => {
+        if (state.sort === 'priority') {
+          return (priorityRank[b.read_priority] || 0) - (priorityRank[a.read_priority] || 0)
+            || b.final_score - a.final_score;
+        }
+        if (state.sort === 'source') {
+          return a.source.localeCompare(b.source) || b.final_score - a.final_score;
+        }
+        return b.final_score - a.final_score;
+      });
+    }
+
+    function renderCategoryActive() {
+      document.querySelectorAll('.category-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.category === state.category);
+      });
+    }
+
+    function renderSectionActive() {
+      document.querySelectorAll('.section-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.section === state.section);
+      });
+    }
+
+    function itemCard(item) {
+      const sec = item.report_sections?.[0] || 'other';
+      const sig = getFeedback(item.id);
+      return `
+        <article class="item ${item.id === state.activeId ? 'active' : ''}"
+                 data-id="${escapeAttr(item.id)}"
+                 data-section="${escapeAttr(sec)}">
+          <div class="item-top">
+            <h3>${escapeHtml(item.display_title || item.title)}</h3>
+            <div class="score">${Number(item.final_score).toFixed(1)}</div>
+          </div>
+          <div class="meta">
+            <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+            <span class="tag">${escapeHtml(item.source)}</span>
+            <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+          </div>
+          ${readerFormat(item, true)}
+          <div class="feedback-row">
+            <button class="feedback-btn ${sig === 1 ? 'active-up' : ''}" data-feedback="1" title="有用">👍</button>
+            <button class="feedback-btn ${sig === -1 ? 'active-down' : ''}" data-feedback="-1" title="跳过">👎</button>
+            <span class="feedback-hint">${sig === 1 ? '已标记有用' : sig === -1 ? '已标记跳过' : ''}</span>
+          </div>
+        </article>
+      `;
+    }
+
+    function sectionGroupHeader(section, count) {
+      return `
+        <div class="section-group-header" data-section="${escapeAttr(section.key)}">
+          <span class="section-group-title">${escapeHtml(section.label)}</span>
+          <span class="section-group-count">${count} 条</span>
+        </div>
+      `;
+    }
+
+    function renderItems(visible) {
+      const container = $('items');
+      if (!visible.length) {
+        container.innerHTML = '<div class="empty">当前筛选条件下没有匹配内容。</div>';
+        return;
+      }
+
+      let html = '';
+      if (state.section === 'All') {
+        // Group by section in defined order, with a header for each group
+        const grouped = {};
+        for (const item of visible) {
+          const sec = item.report_sections?.[0] || 'other';
+          if (!grouped[sec]) grouped[sec] = [];
+          grouped[sec].push(item);
+        }
+        for (const section of (payload.sections || [])) {
+          const group = grouped[section.key];
+          if (!group || !group.length) continue;
+          html += sectionGroupHeader(section, group.length);
+          html += group.map((item) => itemCard(item)).join('');
+        }
+        // Append any items that fell into 'other' (shouldn't normally happen)
+        if (grouped['other']?.length) {
+          html += grouped['other'].map((item) => itemCard(item)).join('');
+        }
+      } else {
+        html = visible.map((item) => itemCard(item)).join('');
+      }
+
+      container.innerHTML = html;
+      container.querySelectorAll('.item').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.activeId = node.dataset.id;
+          render();
+        });
+      });
+      container.querySelectorAll('.feedback-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const itemNode = btn.closest('.item');
+          setFeedback(itemNode.dataset.id, parseInt(btn.dataset.feedback, 10));
+          render();
+        });
+      });
+    }
+
+    function renderDetail(item) {
+      const detail = $('detail');
+      if (!item) {
+        detail.innerHTML = '<div class="empty">选择一条内容查看详情。</div>';
+        return;
+      }
+
+      detail.innerHTML = `
+        <h2>${escapeHtml(item.display_title || item.title)}</h2>
+        <div class="meta">
+          <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+          <span class="tag">${escapeHtml(sourceTypeLabel(item.source_type))}</span>
+          <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+        </div>
+
+        ${readerFormat(item, false)}
+
+        <div class="detail-block">
+          <h3>评分拆解</h3>
+          <div class="breakdown">
+            ${bar('相关性', item.relevance_score)}
+            ${bar('新颖度', item.novelty_score)}
+            ${bar('学术性', item.academic_score)}
+            ${bar('讨论度', item.discussion_score)}
+            ${bar('可行动性', item.actionable_score)}
+          </div>
+        </div>
+
+      `;
+    }
+
+    function readerFormat(item, compact) {
+      const points = itemKeyPoints(item);
+      return `
+        <div class="reader-format ${compact ? 'compact' : ''}">
+          <div class="reader-block">
+            <h4>1. 这篇文章的太长不读</h4>
+            <p>${escapeHtml(item.tldr || item.one_line_summary || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>2. 核心价值，对我量化的工作能够提供什么样的帮助</h4>
+            <p>${escapeHtml(item.core_value || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>3. 关键核心点 / 论文或帖子摘要</h4>
+            <ol>${points.map((point) => `<li>${escapeHtml(point)}</li>`).join('')}</ol>
+          </div>
+          <div class="reader-block">
+            <h4>4. 原文链接</h4>
+            ${referenceHtml(item)}
+          </div>
+        </div>
+      `;
+    }
+
+    function itemKeyPoints(item) {
+      const points = Array.isArray(item.key_points_list)
+        ? item.key_points_list
+        : (Array.isArray(item.key_points) ? item.key_points : []);
+      const clean = points.filter(Boolean).slice(0, 3);
+      return clean.length ? clean : ['需要打开原文进一步确认方法、数据和适用边界。'];
+    }
+
+    function referenceHtml(item) {
+      const url = item.reference_url || '';
+      if (!url) return '<p>暂无可打开链接</p>';
+      return `
+        <a class="reader-reference" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">打开原文</a>
+        <small class="reference-url">${escapeHtml(url)}</small>
+      `;
+    }
+
+    function bar(label, value) {
+      const score = Number(value || 0);
+      const width = Math.max(0, Math.min(100, score * 10));
+      return `
+        <div class="bar">
+          <span>${label}</span>
+          <div class="bar-track"><div class="bar-fill" style="width: ${width}%"></div></div>
+          <b>${score.toFixed(1)}</b>
+        </div>
+      `;
+    }
+
+    function countBy(list, key) {
+      return list.reduce((acc, item) => {
+        acc[item[key]] = (acc[item[key]] || 0) + 1;
+        return acc;
+      }, {});
+    }
+
+    function averageScore(list) {
+      if (!list.length) return 0;
+      return list.reduce((sum, item) => sum + Number(item.final_score || 0), 0) / list.length;
+    }
+
+    function option(value, label) {
+      return `<option value="${escapeAttr(value)}">${escapeHtml(label)}</option>`;
+    }
+
+    function sectionButton(section, label, count) {
+      return `
+        <button class="category-button section-button" type="button" data-section="${escapeAttr(section)}">
+          <span>${escapeHtml(label)}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryButton(category, count) {
+      return `
+        <button class="category-button" type="button" data-category="${escapeAttr(category)}">
+          <span>${escapeHtml(category === 'All' ? '全部' : categoryLabel(category))}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryLabel(category) {
+      return categoryLabels[category] || category;
+    }
+
+    function sectionLabel(sectionKey) {
+      const section = (payload.sections || []).find((item) => item.key === sectionKey);
+      return section ? section.label : '其他';
+    }
+
+    function feedTitle() {
+      const parts = [];
+      if (state.section !== 'All') parts.push(sectionLabel(state.section));
+      if (state.category !== 'All') parts.push(categoryLabel(state.category));
+      return parts.length ? parts.join(' / ') : '今日情报';
+    }
+
+    function priorityLabel(priority) {
+      return priorityLabels[priority] || priority;
+    }
+
+    function sourceTypeLabel(sourceType) {
+      return sourceTypeLabels[sourceType] || sourceType;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replaceAll('`', '&#096;');
+    }
+
+    init();
+  </script>
+</body>
+</html>
