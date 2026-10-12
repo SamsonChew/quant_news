@@ -1,0 +1,41 @@
+{
+  "alpha_name": "Hyperliquid 跨所标记价偏离回归",
+  "hypothesis": "新上线的高杠杆交易所（如 Papertrade）用 Hyperliquid 的 ETH 报价做清算参照，少数钱包可在低深度时段用资金推动 HL 标记价并触发对手方强平；HL 标记价因此偏离 Binance/Bybit 公允价，偏离由操纵而非基本面驱动，随后会被套利盘与预言机更新拉回——对手盘是追单的动量交易者与被强平的仓位，我们站在偏离回归一侧。",
+  "signal_logic": "数据字段：Hyperliquid info API 的 metaAndAssetCtxs（markPx/oraclePx/funding/OI）、1m candles、WS trades 与 liquidation 推送；Binance USDT-M 与 Bybit 永续的 1m klines/markPrice/funding/OI。计算：basis_bps = (HL_mid - CEX_mid_median)/CEX_mid_median*1e4，取 1m 采样、30 天滚动窗口计算 z-score；同时计算 5 分钟清算名义额与其 7 日均值之比 liq_ratio，以及 HL 盘口前 5 档深度相对 7 日中位数 depth_ratio。触发条件（做空方向，做多对称）：z > 3 且 liq_ratio > 3 且 depth_ratio < 0.5；持仓方向为反向——short HL 永续 / long Binance 永续对冲（或按资金费率择优单腿）。频率：事件驱动，回测中以 1 分钟为决策粒度，平均每日 0–3 次触发。",
+  "data_needed": [
+    "Hyperliquid info API（https://api.hyperliquid.xyz/info，type=metaAndAssetCtxs / candleSnapshot）与 WebSocket trades、liquidation 频道",
+    "Binance USDT-M Futures 1m klines 与 markPriceKlines、fundingRate（/fapi/v1/klines、/fapi/v1/premiumIndex）",
+    "Bybit v5 永续 tickers/kline（/v5/market/kline?category=linear）用于三所中位数基准",
+    "可选：Coinglass 或 HL 自建清算聚合表，用于校验 liq_ratio"
+  ],
+  "backtest_approach": "资产池：BTC、ETH、SOL 永续（三所均上市的线性合约）。时间窗口：2024-01-01 至 2026-10-12，1 分钟 bar，重点切出 2026-10-11 事件日做样本外验证。入场：触发后下一根 1m 开盘价，按 Hyperliquid 实际 taker 费 + 2bps 滑点计成本，单腿与双腿对冲分别回测。出场：|z| < 0.5 或持仓 60 分钟强制平仓；止损：逆向 z > 6 或亏损 100bps 立即离场；单标的仓位上限按其 7 日中位盘口深度的 1% 计，避免自我冲击。评估指标：年化夏普、最大回撤、单笔平均盈亏（bps）、命中率、换手率、容量估算；并做两条消融对照——(a) 去掉清算/深度过滤只留 z 阈值，(b) 用 5 分钟而非 1 分钟频率，检验信号是否只来自单次事件。",
+  "supporting_sources": [
+    {
+      "title": "Trader nets $1.28 million on new 1,000x exchange Papertrade by moving Hyperliquid’s ETH prices",
+      "url": "https://www.theblock.co/news/defi/2026-10-11-trader-nets-1-28-million-on-new-1000x-exchange-papertrade-by-moving-hyperliquids-eth-prices-418239",
+      "why": "直接证据：低深度时段 HL 的 ETH 报价可被单钱包推动并引发 30 个空头强平，说明标记价偏离具有可测的触发-回归结构"
+    },
+    {
+      "title": "Bitcoin, Ethereum and Solana ETFs All in the Red for October",
+      "url": "https://decrypt.co/380640/bitcoin-ethereum-solana-etfs-red-october",
+      "why": "BTC 净流出 3.863 亿、ETH 连续 9 日失血，说明现货端持续抛压、做市深度偏薄，是此类价格偏离与强平级联的高发环境"
+    },
+    {
+      "title": "SwingGuard: Risk-Conditioned Multi-Agent Swing Trading with Dual-Timescale Governance",
+      "url": "http://arxiv.org/abs/2610.12988v1",
+      "why": "提供风险条件化的仓位与止损框架（其公布 BTC/ETH 组合夏普 2.98 vs 事后风控 2.79），可作为本 alpha 中按 z 值和深度缩放仓位的实现参考"
+    }
+  ],
+  "risk_factors": [
+    "事件稀有性：Papertrade 类操纵可能是单次事件，样本量小，回测易过拟合成一个孤立窗口",
+    "Hyperliquid 预言机与清算机制变更（如采用更多外部数据源或调整标记价算法）会直接压缩偏离幅度，使信号失效",
+    "容量与执行风险：偏离期往往伴随 HL 盘口极薄，回测假设的 2bps 滑点可能严重低估，实际成交会放大亏损",
+    "对冲腿基差风险：双腿入场时 Binance/Bybit 与 HL 的资金费率与基差可能反向扩大，吞噬价差收益"
+  ],
+  "confidence": "medium",
+  "confidence_reason": "机制清晰且数据（HL info API + 币安/Bybit 公开 K 线）当日即可取到，但 alpha 来源是一次新闻披露的孤立操纵事件，缺乏足够独立样本，需先做事件日验证再谈统计显著性。",
+  "quick_start": "今天先复现事件日：用 Python 执行 `curl -s -X POST https://api.hyperliquid.xyz/info -H 'Content-Type: application/json' -d '{\"type\":\"candleSnapshot\",\"req\":{\"coin\":\"ETH\",\"interval\":\"1m\",\"startTime\":1759939200000,\"endTime\":1760140800000}}'` 拉取 2026-10-11 前后 ETH 分钟线，同时用 `GET https://fapi.binance.com/fapi/v1/klines?symbol=ETHUSDT&interval=1m&startTime=...` 取币安同窗口 1m 收盘，计算 basis_bps 并画 z-score 曲线，确认偏离-回归的时间尺度与最大幅度，再决定阈值（z>3）是否合理。",
+  "model": "deepseek-reasoner",
+  "date": "2026-10-12",
+  "generated_at": "2026-10-12T02:19:47Z"
+}

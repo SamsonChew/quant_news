@@ -1,47 +1,41 @@
 {
-  "alpha_name": "山寨流动性流失做空篮子",
-  "hypothesis": "10/10 闪崩一年后流动性向 BTC/ETH 头部集中，山寨币订单簿深度与成交额持续流失且做市商撤离，被动型资金（ETF 流出）进一步压制山寨需求，对手盘是仍按等权配置的散户与追高山寨的动量交易者，导致山寨相对 BTC 系统性跑输。",
-  "signal_logic": "数据字段：币安现货 24h quote volume（USDT 计价）、Bybit/Binance U 本位永续资金费率与 1% 盘口深度、ETF 周度净流入。计算：LiquidityShare_t = 山寨篮子（市值前 30、剔除稳定币与 BTC/ETH）7 日 EMA 成交额 / (BTC+ETH 7 日 EMA 成交额)，再对其 180 日滚动窗口取 z-score；同时计算 7 日变化率 Δ。触发条件：z < -1.0 且 Δ < 0（流动性持续向头部集中）且 BTC+ETH+SOL 现货 ETF 当周合计净流出 < 0，则下一交易日开盘建立美元中性组合：空头等权山寨篮子（每腿 1/30 资金）、多头按 beta 或 60 日已实现波动率倒数配比买入 BTC+ETH。反向条件（z > +1 且 ETF 净流入转正）则平仓或反转。持仓周期 5-14 个交易日，每周一重设权重。",
+  "alpha_name": "Hyperliquid 跨所标记价偏离回归",
+  "hypothesis": "新上线的高杠杆交易所（如 Papertrade）用 Hyperliquid 的 ETH 报价做清算参照，少数钱包可在低深度时段用资金推动 HL 标记价并触发对手方强平；HL 标记价因此偏离 Binance/Bybit 公允价，偏离由操纵而非基本面驱动，随后会被套利盘与预言机更新拉回——对手盘是追单的动量交易者与被强平的仓位，我们站在偏离回归一侧。",
+  "signal_logic": "数据字段：Hyperliquid info API 的 metaAndAssetCtxs（markPx/oraclePx/funding/OI）、1m candles、WS trades 与 liquidation 推送；Binance USDT-M 与 Bybit 永续的 1m klines/markPrice/funding/OI。计算：basis_bps = (HL_mid - CEX_mid_median)/CEX_mid_median*1e4，取 1m 采样、30 天滚动窗口计算 z-score；同时计算 5 分钟清算名义额与其 7 日均值之比 liq_ratio，以及 HL 盘口前 5 档深度相对 7 日中位数 depth_ratio。触发条件（做空方向，做多对称）：z > 3 且 liq_ratio > 3 且 depth_ratio < 0.5；持仓方向为反向——short HL 永续 / long Binance 永续对冲（或按资金费率择优单腿）。频率：事件驱动，回测中以 1 分钟为决策粒度，平均每日 0–3 次触发。",
   "data_needed": [
-    "币安现货 K 线/成交额（binance public data /data/spot/monthly/klines 或 ccxt REST）",
-    "Bybit 或币安 U 本位永续资金费率与标记价格（ccxt fetchFundingRate）",
-    "CoinGlass / Kaiko 1% 盘口深度与流动性份额数据",
-    "Farside 或 The Block 的 BTC/ETH/SOL 现货 ETF 每日/每周净流入数据"
+    "Hyperliquid info API（https://api.hyperliquid.xyz/info，type=metaAndAssetCtxs / candleSnapshot）与 WebSocket trades、liquidation 频道",
+    "Binance USDT-M Futures 1m klines 与 markPriceKlines、fundingRate（/fapi/v1/klines、/fapi/v1/premiumIndex）",
+    "Bybit v5 永续 tickers/kline（/v5/market/kline?category=linear）用于三所中位数基准",
+    "可选：Coinglass 或 HL 自建清算聚合表，用于校验 liq_ratio"
   ],
-  "backtest_approach": "资产池：市值前 30 山寨币（剔除稳定币、BTC、ETH，每月末按市值调整成分）+ BTC/ETH 多头腿。时间段：2021-01 至 2026-10（ETF 因子自 2024-01 起生效，2021-2023 仅用流动性份额因子做稳健性检验）。频率：日频信号、周频调仓。成本假设：单边 10bps 手续费 + 5bps 滑点，并按各币 20 日 ADV 做容量约束。止损：单周组合回撤 > 8% 或单腿 20 日动量反转则平仓。评估指标：年化收益、夏普、Sortino、最大回撤、Calmar、胜率、换手率，并与「纯多头 BTC」「等权多 BTC+ETH」基准对比，做分年度与 ETF 流入/流出分组的条件收益分解。",
+  "backtest_approach": "资产池：BTC、ETH、SOL 永续（三所均上市的线性合约）。时间窗口：2024-01-01 至 2026-10-12，1 分钟 bar，重点切出 2026-10-11 事件日做样本外验证。入场：触发后下一根 1m 开盘价，按 Hyperliquid 实际 taker 费 + 2bps 滑点计成本，单腿与双腿对冲分别回测。出场：|z| < 0.5 或持仓 60 分钟强制平仓；止损：逆向 z > 6 或亏损 100bps 立即离场；单标的仓位上限按其 7 日中位盘口深度的 1% 计，避免自我冲击。评估指标：年化夏普、最大回撤、单笔平均盈亏（bps）、命中率、换手率、容量估算；并做两条消融对照——(a) 去掉清算/深度过滤只留 z 阈值，(b) 用 5 分钟而非 1 分钟频率，检验信号是否只来自单次事件。",
   "supporting_sources": [
     {
-      "title": "One year after 10/10 flash crash, bitcoin and ether liquidity have rebuilt, but altcoins still face risks",
-      "url": "https://www.coindesk.com/markets/2026/10/10/one-year-after-10-10-bitcoin-and-ether-liquidity-have-rebuilt-but-other-altcoins-still-face-risks",
-      "why": "直接给出核心事实：BTC/ETH 订单簿深度已超崩盘前水平，而山寨币流动性持续流失、现货成交额远低于 2025 年 10 月峰值，是 LiquidityShare 因子的实证基础。"
+      "title": "Trader nets $1.28 million on new 1,000x exchange Papertrade by moving Hyperliquid’s ETH prices",
+      "url": "https://www.theblock.co/news/defi/2026-10-11-trader-nets-1-28-million-on-new-1000x-exchange-papertrade-by-moving-hyperliquids-eth-prices-418239",
+      "why": "直接证据：低深度时段 HL 的 ETH 报价可被单钱包推动并引发 30 个空头强平，说明标记价偏离具有可测的触发-回归结构"
     },
     {
-      "title": "Ether ETFs extend outflow streak to nine days as Solana funds snap record 14-week inflow run",
-      "url": "https://www.theblock.co/news/markets/2026-10-10-ether-etfs-extend-outflow-streak-to-nine-days-as-solana-funds-snap-record-14-week-inflow-run-418215",
-      "why": "提供 BTC/ETH/SOL 现货 ETF 单周集体转为净流出的确认信号，可作为因子过滤条件与资金面偏离的对手盘证据。"
+      "title": "Bitcoin, Ethereum and Solana ETFs All in the Red for October",
+      "url": "https://decrypt.co/380640/bitcoin-ethereum-solana-etfs-red-october",
+      "why": "BTC 净流出 3.863 亿、ETH 连续 9 日失血，说明现货端持续抛压、做市深度偏薄，是此类价格偏离与强平级联的高发环境"
     },
     {
-      "title": "Bitcoin's volatility has plunged, but extreme price swings are more frequent than in 2018",
-      "url": "https://www.coindesk.com/markets/2026/10/09/bitcoin-s-volatility-has-plunged-but-extreme-price-swings-are-more-frequent-than-in-2018",
-      "why": "说明波动率整体下降但极端跳变更频繁，支持用波动率倒数配比与单周回撤止损控制尾部风险。"
-    },
-    {
-      "title": "Bitcoin's $19 billion wake-up call: One-year after flash crash, has crypto learned anything?",
-      "url": "https://www.coindesk.com/markets/2026/10/10/bitcoin-s-usd19-billion-wake-up-call-one-year-later-has-crypto-learned-anything",
-      "why": "提示杠杆清算与卖压成因未消，山寨腿在流动性稀薄时易被清算放大跌幅，是空头腿收益来源也是回测需剔除的极端样本。"
+      "title": "SwingGuard: Risk-Conditioned Multi-Agent Swing Trading with Dual-Timescale Governance",
+      "url": "http://arxiv.org/abs/2610.12988v1",
+      "why": "提供风险条件化的仓位与止损框架（其公布 BTC/ETH 组合夏普 2.98 vs 事后风控 2.79），可作为本 alpha 中按 z 值和深度缩放仓位的实现参考"
     }
   ],
   "risk_factors": [
-    "山寨篮子成分与市值频繁变动导致历史回测存在幸存者偏差与再平衡噪声",
-    "美元中性组合在 BTC 与山寨高度同涨同跌（相关性 > 0.9）时可能双边亏损，方向性暴露未真正对冲",
-    "流动性份额序列存在季节性（季度交割、空投季）与交易所口径不一致，z-score 阈值可能过拟合",
-    "极端行情下山寨腿借币成本与资金费率可能急剧上升，做空成本吞掉价差",
-    "ETF 流量数据发布时间滞后且修订频繁，实时信号可能不可得"
+    "事件稀有性：Papertrade 类操纵可能是单次事件，样本量小，回测易过拟合成一个孤立窗口",
+    "Hyperliquid 预言机与清算机制变更（如采用更多外部数据源或调整标记价算法）会直接压缩偏离幅度，使信号失效",
+    "容量与执行风险：偏离期往往伴随 HL 盘口极薄，回测假设的 2bps 滑点可能严重低估，实际成交会放大亏损",
+    "对冲腿基差风险：双腿入场时 Binance/Bybit 与 HL 的资金费率与基差可能反向扩大，吞噬价差收益"
   ],
   "confidence": "medium",
-  "confidence_reason": "流动性分层与 ETF 流出两个方向性证据同时出现且来自一手市场结构报道，但缺少历史深度与成交额长期序列的公开验证，因子收益可能被交易成本与做空费率侵蚀。",
-  "quick_start": "先用 ccxt 或 binance 公共数据拉取 BTC、ETH 与市值前 30 山寨的日频 quote volume：`python -c \"import ccxt, pandas as pd; ex=ccxt.binance(); print(ex.fetch_ohlcv('BTC/USDT','1d',limit=1000)[-3:])\"`，对齐到 UTC 日频后计算 7 日 EMA 成交额比值与 180 日 z-score，画出 2024-2026 曲线并检查其在 2025-10-10 前后是否出现显著下破，作为第一步验证。",
+  "confidence_reason": "机制清晰且数据（HL info API + 币安/Bybit 公开 K 线）当日即可取到，但 alpha 来源是一次新闻披露的孤立操纵事件，缺乏足够独立样本，需先做事件日验证再谈统计显著性。",
+  "quick_start": "今天先复现事件日：用 Python 执行 `curl -s -X POST https://api.hyperliquid.xyz/info -H 'Content-Type: application/json' -d '{\"type\":\"candleSnapshot\",\"req\":{\"coin\":\"ETH\",\"interval\":\"1m\",\"startTime\":1759939200000,\"endTime\":1760140800000}}'` 拉取 2026-10-11 前后 ETH 分钟线，同时用 `GET https://fapi.binance.com/fapi/v1/klines?symbol=ETHUSDT&interval=1m&startTime=...` 取币安同窗口 1m 收盘，计算 basis_bps 并画 z-score 曲线，确认偏离-回归的时间尺度与最大幅度，再决定阈值（z>3）是否合理。",
   "model": "deepseek-reasoner",
-  "date": "2026-10-11",
-  "generated_at": "2026-10-11T01:40:01Z"
+  "date": "2026-10-12",
+  "generated_at": "2026-10-12T02:19:47Z"
 }
