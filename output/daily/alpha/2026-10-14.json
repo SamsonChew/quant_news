@@ -1,0 +1,46 @@
+{
+  "alpha_name": "周末跨所永续基差回归",
+  "hypothesis": "周末 TradFi 与做市团队人手减少、跨所搬砖资本暂停，同一永续合约在 Binance/Bybit/OKX 之间的基差与资金费率差被放大到非理性水平；对手盘是周末仍被迫交易的散户与被动去杠杆的杠杆多头，周一传统套利台返场后价差收敛。",
+  "signal_logic": "数据字段：三所（Binance/Bybit/OKX）BTC、ETH、SOL 永续的 mark price、index price、last price、funding rate、下一期 funding 时间，取 1 分钟频率。计算 basis_venue = (mark - index)/index，spread = basis_binance - basis_bybit（及所有两两配对取最大绝对差）。触发：在周六 00:00 UTC 至周日 22:00 UTC 窗口内，若 |spread| > 过去 30 天同小时窗口 spread 的 90 分位（约 1.6σ），且两所 funding rate 差 > 0.01%/8h；方向：做空基差较高（mark 相对 index 溢价更高）的那一所永续，做多基差较低的那一所永续，两腿名义本金 1:1 delta 中性。平仓：spread 收敛至 30 天中位数以下，或周一 02:00 UTC 强制平仓；止损：spread 反向扩大至 4σ 或累计资金费亏损超过入场时预期收益的 1.5 倍。",
+  "data_needed": [
+    "Binance USDT 本位永续 REST/WebSocket：markPrice、indexPrice、premiumIndex、fundingRate（1 分钟）",
+    "Bybit v5 market/tickers + funding/history：BTCUSDT/ETHUSDT/SOLUSDT 永续（1 分钟）",
+    "OKX v5 market/tickers + public/funding-rate：同标的永续（1 分钟）",
+    "交易所资金费率结算历史（用于回测 funding 现金流），或 Reddit 帖中提到的 2 秒级订单簿快照数据用于滑点建模"
+  ],
+  "backtest_approach": "资产池：BTC、ETH、SOL 的 USDT 永续，覆盖 Binance/Bybit/OKX 三所六条两两配对腿；时间窗口：2023-01-01 至 2026-10-13（含全部周末样本），信号频率 1 分钟、仅在周末窗口开仓；成本假设：单边 taker 手续费 0.05%、滑点按各所 1 分钟买卖价差的一半计，另计入两腿 funding 现金流；评估指标：年化夏普、最大回撤、Calmar、单次交易平均持有小时数、周末 vs 工作日的分层收益、对 2σ/3σ 阈值的参数敏感性，以及扣除成本后的净收益；对照基准为空仓与纯 funding carry 策略。",
+  "supporting_sources": [
+    {
+      "title": "Binance VIP head says hedge funds are actively exploring arbitrage opportunities on crypto venues",
+      "url": "https://www.theblock.co/news/business/2026-10-13-binance-vip-head-hedge-funds-exploring-arbitrage-418389",
+      "why": "直接点明跨所套利资金正在进场且驱动因素包含‘24/7 交易与周末价格发现’，说明周末价差放大—收敛的结构性来源，且套利资本增加会加速收敛、缩短持仓周期。"
+    },
+    {
+      "title": "Gauging interest - very high frequency cryptomarket data",
+      "url": "https://www.reddit.com/r/algotrading/comments/1x5apnw/gauging_interest_very_high_frequency_cryptomarket/",
+      "why": "提供 2 秒级 BTC/ETH 订单簿快照数据的可得性线索，用于精确建模跨所同步延迟与滑点，验证基差是否可被实际吃单。"
+    },
+    {
+      "title": "Russia’s largest bank Sberbank secures approval to trade crypto",
+      "url": "https://www.coindesk.com/business/2026/10/13/russia-s-largest-bank-sberbank-secures-approval-to-trade-crypto",
+      "why": "12 月 1 日面向零售开放 BTC/ETH/USDT 币对，新增碎片化场外/本地venue，会加大不同场所间的价差与资金费率偏离，利好跨所基差类策略。"
+    },
+    {
+      "title": "Largest Philippines crypto exchange, Coins.ph, said to face central bank regulatory action",
+      "url": "https://www.coindesk.com/policy/2026/10/13/largest-philippines-crypto-exchange-coins-ph-said-to-face-central-bank-regulatory-action",
+      "why": "区域性交易所遭监管行动会引发本地 venue 流动性抽离与价差走阔，佐证‘跨所价差由venue 风险与流动性错配驱动’的核心假设，并提示对手方风险需纳入筛选。"
+    }
+  ],
+  "risk_factors": [
+    "跨所基差在极端行情（如周一开盘跳空或宏观数据）会持续扩大，delta 中性无法对冲两所间的强平/结算机制差异，可能触发单腿爆仓",
+    "周末流动性薄，1 分钟级信号的实际成交滑点可能吞掉全部理论收益，尤其当 spread 由单笔大额市价单造成时",
+    "套利资金持续涌入（来源[3]）会结构性压缩基差，策略收益随时间衰减甚至消失；且交易所可能调整资金费率上限或手续费结构",
+    "两所持仓需预置保证金，资金占用与跨所转账延迟会造成隐性机会成本与保证金不足风险"
+  ],
+  "confidence": "medium",
+  "confidence_reason": "具备明确的微观结构动因与公开可得的 1 分钟级跨所数据可立即回测，但缺少对周末样本外价差分布与真实滑点的先验估计，收益显著性完全依赖回测结果。",
+  "quick_start": "用 ccxt 拉取三所永续数据做首日验证：pip install ccxt pandas；对 ['binance','bybit','okx'] 循环调用 fetch_funding_rate_history 与 fetch_ohlcv(symbol='BTC/USDT:USDT', timeframe='1m', since=...)，把 mark/index（Bybit 取 tickers 的 markPrice/indexPrice，Binance 取 premiumIndex 端点）合并成一张分钟表，先只统计 2025-01 至今每周六 00:00–周日 22:00 UTC 的 (basis_binance - basis_bybit) 分布与 90 分位阈值，确认价差幅度是否稳定大于双边 taker 成本 0.10%。",
+  "model": "deepseek-reasoner",
+  "date": "2026-10-14",
+  "generated_at": "2026-10-14T01:56:41Z"
+}

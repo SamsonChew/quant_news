@@ -1,39 +1,46 @@
 {
-  "alpha_name": "爆仓级联后资金费率反转做多",
-  "hypothesis": "当24小时多头爆仓占比超85%且规模超5亿美元时，被动去杠杆的强制卖盘已接近尾声，而永续资金费率通常被砸至负值，此时对手盘（恐慌的杠杆多头与追空的趋势跟随者）为反向做多提供了1-3日的均值回归收益。",
-  "signal_logic": "数据字段：币安/BYBIT USDT永续资金费率（8h结算）、全市场24h爆仓额与多空爆仓占比（Coinglass API）、BTC 1h OHLCV与未平仓合约OI。计算方式：当条件同时满足——(a) 滚动24h多头爆仓额 > 5亿美元；(b) 多头爆仓占比 > 85%；(c) 当期8h资金费率 < -0.005%（或年化<0）——则在下一根1h K线开盘做多BTC。持仓方向：做多。平仓条件：资金费率回到0以上且连续两次为正，或持仓满72小时，或触发止损。",
+  "alpha_name": "周末跨所永续基差回归",
+  "hypothesis": "周末 TradFi 与做市团队人手减少、跨所搬砖资本暂停，同一永续合约在 Binance/Bybit/OKX 之间的基差与资金费率差被放大到非理性水平；对手盘是周末仍被迫交易的散户与被动去杠杆的杠杆多头，周一传统套利台返场后价差收敛。",
+  "signal_logic": "数据字段：三所（Binance/Bybit/OKX）BTC、ETH、SOL 永续的 mark price、index price、last price、funding rate、下一期 funding 时间，取 1 分钟频率。计算 basis_venue = (mark - index)/index，spread = basis_binance - basis_bybit（及所有两两配对取最大绝对差）。触发：在周六 00:00 UTC 至周日 22:00 UTC 窗口内，若 |spread| > 过去 30 天同小时窗口 spread 的 90 分位（约 1.6σ），且两所 funding rate 差 > 0.01%/8h；方向：做空基差较高（mark 相对 index 溢价更高）的那一所永续，做多基差较低的那一所永续，两腿名义本金 1:1 delta 中性。平仓：spread 收敛至 30 天中位数以下，或周一 02:00 UTC 强制平仓；止损：spread 反向扩大至 4σ 或累计资金费亏损超过入场时预期收益的 1.5 倍。",
   "data_needed": [
-    "Coinglass API：24h全市场及交易所级别爆仓额、多空爆仓占比",
-    "币安/BYBIT USDT永续：资金费率历史（8h）、未平仓合约OI历史",
-    "币安现货+永续 BTCUSDT 1h OHLCV（用于入场与止损计算）"
+    "Binance USDT 本位永续 REST/WebSocket：markPrice、indexPrice、premiumIndex、fundingRate（1 分钟）",
+    "Bybit v5 market/tickers + funding/history：BTCUSDT/ETHUSDT/SOLUSDT 永续（1 分钟）",
+    "OKX v5 market/tickers + public/funding-rate：同标的永续（1 分钟）",
+    "交易所资金费率结算历史（用于回测 funding 现金流），或 Reddit 帖中提到的 2 秒级订单簿快照数据用于滑点建模"
   ],
-  "backtest_approach": "资产池：BTCUSDT与ETHUSDT永续为主，可扩展至前10大市值永续。时间窗口：2021-01至2026-10共约5.8年，事件驱动+分钟级触发。频率：信号稀疏（历史约30-60次触发），持仓1-3日。止损：入场价-3%或跌破前低，止盈为资金费率归一。评估指标：事件研究法下的平均超额收益、胜率、盈亏比、年化夏普、最大回撤；并做安慰剂对照（随机时点做多）与分年稳健性检验。",
+  "backtest_approach": "资产池：BTC、ETH、SOL 的 USDT 永续，覆盖 Binance/Bybit/OKX 三所六条两两配对腿；时间窗口：2023-01-01 至 2026-10-13（含全部周末样本），信号频率 1 分钟、仅在周末窗口开仓；成本假设：单边 taker 手续费 0.05%、滑点按各所 1 分钟买卖价差的一半计，另计入两腿 funding 现金流；评估指标：年化夏普、最大回撤、Calmar、单次交易平均持有小时数、周末 vs 工作日的分层收益、对 2σ/3σ 阈值的参数敏感性，以及扣除成本后的净收益；对照基准为空仓与纯 funding carry 策略。",
   "supporting_sources": [
     {
-      "title": "Bitcoin slides below $82,000 as crypto liquidations surge past $770 million",
-      "url": "https://www.theblock.co/news/markets/2026-10-12-bitcoin-slides-crypto-liquidations-surge-418374",
-      "why": "给出24h爆仓7.71亿、多单占比88.9%的具体阈值依据，是触发条件的直接来源"
+      "title": "Binance VIP head says hedge funds are actively exploring arbitrage opportunities on crypto venues",
+      "url": "https://www.theblock.co/news/business/2026-10-13-binance-vip-head-hedge-funds-exploring-arbitrage-418389",
+      "why": "直接点明跨所套利资金正在进场且驱动因素包含‘24/7 交易与周末价格发现’，说明周末价差放大—收敛的结构性来源，且套利资本增加会加速收敛、缩短持仓周期。"
     },
     {
-      "title": "Bitcoin Spooked? Crypto Fear and Greed Index Drops to Pre-Rally August Lows",
-      "url": "https://decrypt.co/380708/bitcoin-spooked-crypto-fear-greed-drops",
-      "why": "恐惧贪婪指数跌至56印证情绪极端，可作辅助过滤条件，强化对手盘恐慌的逻辑"
+      "title": "Gauging interest - very high frequency cryptomarket data",
+      "url": "https://www.reddit.com/r/algotrading/comments/1x5apnw/gauging_interest_very_high_frequency_cryptomarket/",
+      "why": "提供 2 秒级 BTC/ETH 订单簿快照数据的可得性线索，用于精确建模跨所同步延迟与滑点，验证基差是否可被实际吃单。"
     },
     {
-      "title": "Altcoins rally on thin trading as bitcoin holds below $83,500",
-      "url": "https://www.coindesk.com/markets/2026/10/12/altcoins-rally-on-thin-trading-as-bitcoin-holds-near-usd84-000",
-      "why": "ETF净流出6.81亿+缩量显示现货承接弱，帮助界定爆仓级联后反弹的持续性上限与仓位管理"
+      "title": "Russia’s largest bank Sberbank secures approval to trade crypto",
+      "url": "https://www.coindesk.com/business/2026/10/13/russia-s-largest-bank-sberbank-secures-approval-to-trade-crypto",
+      "why": "12 月 1 日面向零售开放 BTC/ETH/USDT 币对，新增碎片化场外/本地venue，会加大不同场所间的价差与资金费率偏离，利好跨所基差类策略。"
+    },
+    {
+      "title": "Largest Philippines crypto exchange, Coins.ph, said to face central bank regulatory action",
+      "url": "https://www.coindesk.com/policy/2026/10/13/largest-philippines-crypto-exchange-coins-ph-said-to-face-central-bank-regulatory-action",
+      "why": "区域性交易所遭监管行动会引发本地 venue 流动性抽离与价差走阔，佐证‘跨所价差由venue 风险与流动性错配驱动’的核心假设，并提示对手方风险需纳入筛选。"
     }
   ],
   "risk_factors": [
-    "爆仓数据多为交易所抽样聚合，口径不一可能导致信号误触发或阈值漂移",
-    "宏观事件（油价、债券收益率、监管）驱动的连续下跌会让均值回归失效，止损需严格执行",
-    "资金费率极端值在低流动性时段易被操纵，需用多交易所中位数而非单一交易所报价"
+    "跨所基差在极端行情（如周一开盘跳空或宏观数据）会持续扩大，delta 中性无法对冲两所间的强平/结算机制差异，可能触发单腿爆仓",
+    "周末流动性薄，1 分钟级信号的实际成交滑点可能吞掉全部理论收益，尤其当 spread 由单笔大额市价单造成时",
+    "套利资金持续涌入（来源[3]）会结构性压缩基差，策略收益随时间衰减甚至消失；且交易所可能调整资金费率上限或手续费结构",
+    "两所持仓需预置保证金，资金占用与跨所转账延迟会造成隐性机会成本与保证金不足风险"
   ],
   "confidence": "medium",
-  "confidence_reason": "爆仓级联后资金费率反转做多有较好的学术与实务证据，但爆仓数据口径与稀有事件样本量限制了统计显著性。",
-  "quick_start": "今天即可用 Python 拉取币安BTCUSDT永续最近180天8h资金费率（ccxt: exchange.fetch_funding_rate_history('BTC/USDT:USDT')）与1h OHLCV，并从Coinglass导出近180天多空爆仓序列，先手工标注3-5个历史级联事件验证资金费率是否在爆仓峰值后24h内转负并伴随反弹。",
+  "confidence_reason": "具备明确的微观结构动因与公开可得的 1 分钟级跨所数据可立即回测，但缺少对周末样本外价差分布与真实滑点的先验估计，收益显著性完全依赖回测结果。",
+  "quick_start": "用 ccxt 拉取三所永续数据做首日验证：pip install ccxt pandas；对 ['binance','bybit','okx'] 循环调用 fetch_funding_rate_history 与 fetch_ohlcv(symbol='BTC/USDT:USDT', timeframe='1m', since=...)，把 mark/index（Bybit 取 tickers 的 markPrice/indexPrice，Binance 取 premiumIndex 端点）合并成一张分钟表，先只统计 2025-01 至今每周六 00:00–周日 22:00 UTC 的 (basis_binance - basis_bybit) 分布与 90 分位阈值，确认价差幅度是否稳定大于双边 taker 成本 0.10%。",
   "model": "deepseek-reasoner",
-  "date": "2026-10-13",
-  "generated_at": "2026-10-13T03:31:55Z"
+  "date": "2026-10-14",
+  "generated_at": "2026-10-14T01:56:41Z"
 }
