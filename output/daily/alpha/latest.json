@@ -1,46 +1,42 @@
 {
-  "alpha_name": "周末跨所永续基差回归",
-  "hypothesis": "周末 TradFi 与做市团队人手减少、跨所搬砖资本暂停，同一永续合约在 Binance/Bybit/OKX 之间的基差与资金费率差被放大到非理性水平；对手盘是周末仍被迫交易的散户与被动去杠杆的杠杆多头，周一传统套利台返场后价差收敛。",
-  "signal_logic": "数据字段：三所（Binance/Bybit/OKX）BTC、ETH、SOL 永续的 mark price、index price、last price、funding rate、下一期 funding 时间，取 1 分钟频率。计算 basis_venue = (mark - index)/index，spread = basis_binance - basis_bybit（及所有两两配对取最大绝对差）。触发：在周六 00:00 UTC 至周日 22:00 UTC 窗口内，若 |spread| > 过去 30 天同小时窗口 spread 的 90 分位（约 1.6σ），且两所 funding rate 差 > 0.01%/8h；方向：做空基差较高（mark 相对 index 溢价更高）的那一所永续，做多基差较低的那一所永续，两腿名义本金 1:1 delta 中性。平仓：spread 收敛至 30 天中位数以下，或周一 02:00 UTC 强制平仓；止损：spread 反向扩大至 4σ 或累计资金费亏损超过入场时预期收益的 1.5 倍。",
+  "alpha_name": "强平潮资金费率反转做多",
+  "hypothesis": "当通胀数据（PPI/CPI）超预期引发杠杆多头被集中强平、资金费率被砸到深度负值时，被动去杠杆与做市商撤单会造成价格在数小时到数天内超调；对手盘是恐慌性割肉的杠杆多头与追空的动量空头，系统性回补资金费率与缺口修复期存在可交易的均值回归。",
+  "signal_logic": "数据字段：Binance USDⓈ-M BTCUSDT/ETHUSDT 永续 1h OHLCV；8h 资金费率历史（fapi/v1/fundingRate）与 1h 预测资金费率（premiumIndex）；5m/1h 未平仓合约（futures/data/openInterestHist）；Coinglass 或 Bybit 聚合强平数据（多/空强平额、最近 24h 总强平额）。触发条件（单边做多）：① 24h 全市场强平额 ≥ 8 亿美元且多头强平占比 ≥ 70%；② BTC 过去 24h 出现单根 1h 跌幅 ≤ -3%；③ 当期 8h 资金费率为负 or 处于过去 30 天 5% 分位以下；④ 强平峰值后 1h 未平仓合约环比下降 ≥ 2%（确认杠杆出清）。仓位：触发后下一根 1h 开盘做多 BTCUSDT 永续，ETH/SOL 按相同信号可加仓但敞口不超过 BTC 的 50%。平仓：T+72h 强制平仓，或期间资金费率回升至 ≥ 0 且 24h 收益 > +2% 提前止盈；止损：浮亏 -5% 或新出现一轮更大强平（1h 强平额再 > 5 亿美元且价格未创新低）立即离场。",
   "data_needed": [
-    "Binance USDT 本位永续 REST/WebSocket：markPrice、indexPrice、premiumIndex、fundingRate（1 分钟）",
-    "Bybit v5 market/tickers + funding/history：BTCUSDT/ETHUSDT/SOLUSDT 永续（1 分钟）",
-    "OKX v5 market/tickers + public/funding-rate：同标的永续（1 分钟）",
-    "交易所资金费率结算历史（用于回测 funding 现金流），或 Reddit 帖中提到的 2 秒级订单簿快照数据用于滑点建模"
+    "Binance USDⓈ-M Futures API：fapi/v1/klines（BTCUSDT/ETHUSDT/SOLUSDT 1h，2021 至今）",
+    "Binance fapi/v1/fundingRate + fapi/v1/premiumIndex（8h 结算费率与 1h 预测费率）",
+    "Binance futures/data/openInterestHist（5m/1h 未平仓合约）",
+    "Coinglass API / Bybit 强平频道：24h 多空强平额与占比（备选：Binance 强平订单流 WS !forceOrder@arr 自建聚合）",
+    "宏观日历：美国 PPI/CPI 发布时点（作为事件分组变量，可用 FRED 或 Trading Economics 日历）"
   ],
-  "backtest_approach": "资产池：BTC、ETH、SOL 的 USDT 永续，覆盖 Binance/Bybit/OKX 三所六条两两配对腿；时间窗口：2023-01-01 至 2026-10-13（含全部周末样本），信号频率 1 分钟、仅在周末窗口开仓；成本假设：单边 taker 手续费 0.05%、滑点按各所 1 分钟买卖价差的一半计，另计入两腿 funding 现金流；评估指标：年化夏普、最大回撤、Calmar、单次交易平均持有小时数、周末 vs 工作日的分层收益、对 2σ/3σ 阈值的参数敏感性，以及扣除成本后的净收益；对照基准为空仓与纯 funding carry 策略。",
+  "backtest_approach": "资产池：BTCUSDT、ETHUSDT、SOLUSDT 永续（Binance USDⓈ-M）；时间窗口：2021-01-01 至 2026-10-01（样本外 2025-01 至 2026-10 做 walk-forward）；频率：事件驱动，1h 决策、持仓 24/48/72h 三档对比；手续费按 taker 0.05% 双边 + 滑点 1bp 计入，资金费率按实际结算累加；止损 -5%，单次风险敞口 1 倍名义杠杆；评估指标：事件数、平均 24/48/72h 收益与胜率、年化夏普、最大回撤、卡玛比率、与同期 buy&hold 及同日随机入场基准的对比、分宏观事件（PPI/CPI）与非事件日的稳健性检验。",
   "supporting_sources": [
     {
-      "title": "Binance VIP head says hedge funds are actively exploring arbitrage opportunities on crypto venues",
-      "url": "https://www.theblock.co/news/business/2026-10-13-binance-vip-head-hedge-funds-exploring-arbitrage-418389",
-      "why": "直接点明跨所套利资金正在进场且驱动因素包含‘24/7 交易与周末价格发现’，说明周末价差放大—收敛的结构性来源，且套利资本增加会加速收敛、缩短持仓周期。"
+      "title": "Bitcoin Whipsaws as Crypto Liquidations Near $1 Billion",
+      "url": "https://decrypt.co/381044/bitcoin-whipsaws-crypto-liquidations-near-1-billion",
+      "why": "直接给出“通胀数据→加息预期→近 10 亿美元强平”的事件链条，是触发条件的核心事实依据。"
     },
     {
-      "title": "Gauging interest - very high frequency cryptomarket data",
-      "url": "https://www.reddit.com/r/algotrading/comments/1x5apnw/gauging_interest_very_high_frequency_cryptomarket/",
-      "why": "提供 2 秒级 BTC/ETH 订单簿快照数据的可得性线索，用于精确建模跨所同步延迟与滑点，验证基差是否可被实际吃单。"
+      "title": "Bitcoin slips under $80K after US PPI gains most in four years",
+      "url": "https://cointelegraph.com/markets/bitcoin-price-breaks-under-80k-after-us-ppi-gains-most-in-over-4-years?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "why": "确认本次属于 PPI 超预期驱动的单日暴跌，为“宏观冲击型强平”事件标签与回测分组提供样本定义。"
     },
     {
-      "title": "Russia’s largest bank Sberbank secures approval to trade crypto",
-      "url": "https://www.coindesk.com/business/2026/10/13/russia-s-largest-bank-sberbank-secures-approval-to-trade-crypto",
-      "why": "12 月 1 日面向零售开放 BTC/ETH/USDT 币对，新增碎片化场外/本地venue，会加大不同场所间的价差与资金费率偏离，利好跨所基差类策略。"
-    },
-    {
-      "title": "Largest Philippines crypto exchange, Coins.ph, said to face central bank regulatory action",
-      "url": "https://www.coindesk.com/policy/2026/10/13/largest-philippines-crypto-exchange-coins-ph-said-to-face-central-bank-regulatory-action",
-      "why": "区域性交易所遭监管行动会引发本地 venue 流动性抽离与价差走阔，佐证‘跨所价差由venue 风险与流动性错配驱动’的核心假设，并提示对手方风险需纳入筛选。"
+      "title": "Altcoins lead crypto declines as Asian stocks drop; bitcoin little changed since midnight",
+      "url": "https://www.coindesk.com/markets/2026/10/15/bitcoin-holds-above-usd80-000-as-an-asian-stock-rout-drags-altcoins-lower",
+      "why": "显示风险资产联动下山寨跌幅更大而 BTC 相对抗跌，佐证强平集中在高 beta 杠杆仓、BTC 具备反弹弹性。"
     }
   ],
   "risk_factors": [
-    "跨所基差在极端行情（如周一开盘跳空或宏观数据）会持续扩大，delta 中性无法对冲两所间的强平/结算机制差异，可能触发单腿爆仓",
-    "周末流动性薄，1 分钟级信号的实际成交滑点可能吞掉全部理论收益，尤其当 spread 由单笔大额市价单造成时",
-    "套利资金持续涌入（来源[3]）会结构性压缩基差，策略收益随时间衰减甚至消失；且交易所可能调整资金费率上限或手续费结构",
-    "两所持仓需预置保证金，资金占用与跨所转账延迟会造成隐性机会成本与保证金不足风险"
+    "强平数据依赖第三方（Coinglass/Bybit），历史覆盖与口径不一致会造成事件计数与阈值不稳定",
+    "事件型样本量小（2021 年以来同类触发约 40-60 次），统计功效弱、易被少数极端行情主导",
+    "2026 年宏观处于加息预期与亚洲股市急跌的偏空环境中，超调后可能继续单边下行，均值回归假设在趋势市失效",
+    "资金费率在部分交易所结算周期与预测值口径差异，可能导致触发条件被噪声触发"
   ],
   "confidence": "medium",
-  "confidence_reason": "具备明确的微观结构动因与公开可得的 1 分钟级跨所数据可立即回测，但缺少对周末样本外价差分布与真实滑点的先验估计，收益显著性完全依赖回测结果。",
-  "quick_start": "用 ccxt 拉取三所永续数据做首日验证：pip install ccxt pandas；对 ['binance','bybit','okx'] 循环调用 fetch_funding_rate_history 与 fetch_ohlcv(symbol='BTC/USDT:USDT', timeframe='1m', since=...)，把 mark/index（Bybit 取 tickers 的 markPrice/indexPrice，Binance 取 premiumIndex 端点）合并成一张分钟表，先只统计 2025-01 至今每周六 00:00–周日 22:00 UTC 的 (basis_binance - basis_bybit) 分布与 90 分位阈值，确认价差幅度是否稳定大于双边 taker 成本 0.10%。",
+  "confidence_reason": "价格、资金费率与未平仓合约数据完全可得且事件逻辑有当日新闻直接支撑，但强平聚合数据的质量与小样本统计功效是主要局限。",
+  "quick_start": "先用 Python 拉数据验证事件可得性：`import requests, pandas as pd; kl = pd.DataFrame(requests.get('https://fapi.binance.com/fapi/v1/klines', params={'symbol':'BTCUSDT','interval':'1h','limit':1500}).json())` 取 1h K 线，再调 `https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1000` 对齐 8h 资金费率，同时用 CCXT 或 websockets 订阅 Binance `!forceOrder@arr` 流累积强平额，先用最近 12 个月数据统计“24h 强平≥8 亿美元且多头占比≥70%”的日子，看后续 24/48/72h 收益分布是否显著为正。",
   "model": "deepseek-reasoner",
-  "date": "2026-10-14",
-  "generated_at": "2026-10-14T01:56:41Z"
+  "date": "2026-10-16",
+  "generated_at": "2026-10-16T01:26:15Z"
 }
