@@ -1,0 +1,30 @@
+{
+  "alpha_name": "Blob费率尖峰做空L2",
+  "hypothesis": "blob 需求弹性仅 -0.19，说明需求对价格极不敏感，机械定价控制器只会转移支付、不会清算市场。因此突发性的 blob 费用尖峰（L2 抢跑、空投或铭文批量上链）无法像价格发现那样迅速压低需求，会持续抬升 L2 的结算成本；而市场往往把费用尖峰误读成 L2 使用量利好，实则成本上升、参与者没有能力通过减少调用来应对这段窗口。对手方是追逐「L2 活跃度」叙事、对费用结构不敏感的散户与叙事类资金。",
+  "signal_logic": "数据字段：以太坊共识层每个 slot 的 blob_base_fee（gwei/blob gas）与 blob_gas_used。计算：按小时聚合 avg(blob_base_fee)，并做滚动 30 天的中位数与 MAD 稳健 z 分数 z=(x-median)/(1.4826*MAD)。触发条件：z>4，且 blob_base_fee>0.1 gwei，并连续 2 个整点满足（过滤单位噪声）。持仓方向：触发时做空一篮子 L2 永续（ARB、OP 各 50% 名义），同时做多 ETH 永续等名义金额对冲 beta，保留 1.0 贝塔中性的「L2 相对 ETH」空头。平仓：blob 费率回落至滚动 30 天 p60 以下，或持有满 48 小时，或价差反向 3% 止损。频率：小时级监控，日级调仓，属于事件驱动型低容量策略。",
+  "data_needed": [
+    "以太坊共识层 blob 数据：beaconcha.in API 或 Dune Analytics（blob_sidecars / blob_base_fee 按 slot 聚合）",
+    "Binance USDT 本位永续 ARBUSDT、OPUSDT、ETHUSDT 的 1h OHLCV 与资金费率（data.binance.vision 公开归档）",
+    "L2 结算成本与 sequencer 支出参考：growthepie / L2BEAT API（用于分层验证成本传导链条）"
+  ],
+  "backtest_approach": "资产池：ARBUSDT、OPUSDT 永续，ETHUSDT 作为对冲腿。时间窗口：2024-03-13（Dencun 上线）至 2026-10-01，按 Pectra 前后分段各跑一次，防止 blob 目标数变更污染参数。频率：信号按小时判定，持有 24、48、72 小时三档做网格。成本：单边 5bp 手续费，叠加实际资金费率与 1bp 滑点。评估指标：年化夏普、最大回撤、胜率、单笔平均收益、t 统计量，并与「随机同一时段开仓」的 bootstrap 分布对照，检验收益是否来自 blob 费率信号而非 L2 板块 beta。附加回归：以 blob 费率 z 分数为自变量、未来 48h L2/ETH 相对收益为因变量，检验弹性结论的横截面含义（弹性越低的板块，费率冲击的持续性越强）。",
+  "supporting_sources": [
+    {
+      "title": "Demand Under a Mechanical Price: Elasticity and Welfare in Ethereum's Data-Availability Market",
+      "url": "http://arxiv.org/abs/2610.16588v1",
+      "why": "核心依据：以 Pectra 硬分叉为自然实验测得 blob 需求弹性仅 -0.19，证明机械定价控制器不承担价格发现，费率冲击无法靠需求收缩快速消退，因此尖峰具有可交易的持续性。"
+    }
+  ],
+  "risk_factors": [
+    "事件过于稀疏：blob 费率触发 z>4 的次数可能每月仅个位数，样本量小导致统计功效不足，结论易受个别事件主导",
+    "L2 代币价格主要由代币解锁、空投预期和板块叙事驱动，费率成本传导到价格的链条弱，信号可能被噪声淹没",
+    "Dencun 后 blob 费率长期贴近 1 wei 下限，MAD 趋近 0 会使 z 分数极不稳定，需要下限截断或改用绝对阈值",
+    "Pectra 改变 blob 目标数和最大值，跨硬分叉的回测参数不可直接复用，存在制度性断点"
+  ],
+  "confidence": "medium",
+  "confidence_reason": "弹性 -0.19 是一个结构清晰、可复用且可链上验证的量化事实；但论文的福利结论到「L2 代币相对收益」之间隔了多层传导假设，且事件频率低，样本有限。",
+  "quick_start": "今天先拿 blob 费用时间序列：用 Dune 查询 `SELECT date_trunc('hour', block_time) h, avg(blob_base_fee)/1e9 gwei, sum(blob_gas_used) FROM ethereum.blobs WHERE block_time > now() - interval '90' day GROUP BY 1 ORDER BY 1`，导出 CSV 后算 30 天滚动中位数、MAD 与 z 分数，统计历史上 z>4 且连续 2 小时触发的事件时刻；随后用 `https://data.binance.vision/data/futures/um/daily/klines/ARBUSDT/1h/` 与 OPUSDT、ETHUSDT 拉取对应小时 K 线，对每个事件画 T+0 到 T+72h 的 (ARB/OP 等权空头 − ETH 多头) 累计收益曲线，先看方向与持续性，再决定是否上手续费与资金费率做完整回测。",
+  "model": "deepseek-reasoner",
+  "date": "2026-10-18",
+  "generated_at": "2026-10-18T00:55:13Z"
+}
