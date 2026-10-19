@@ -1,0 +1,40 @@
+{
+  "alpha_name": "周五VIX恐慌后BTC周一反转",
+  "hypothesis": "周五美股急跌引发的 VIX 跳涨多半是情绪性去杠杆，而 BTC 当日实现波动未同步放大，说明加密杠杆盘并未真正出清；对手盘是周五为规避周末风险而在 CME 收盘前机械降仓的宏观基金与做市商，他们的抛压在周一流动性回归后被动回补。",
+  "signal_logic": "数据字段：VIX 日收盘价（CBOE）、BTCUSDT 永续 1h 与日线收盘、BTC 日实现波动率 RV=std(1h对数收益)*sqrt(24)。触发条件（仅周五 UTC 收盘判定）：① VIX 周五单日涨幅 z-score(20日) ≥ 1.5；② BTC 周五 RV 与过去 20 日 RV 中位数之比 < 0.9，说明 BTC 未跟随放大波动；③ BTC 周五收盘跌幅 < 1.5%（相对韧性）。三条同时满足则在周一 UTC 00:00 开盘做多 BTCUSDT 永续，等权。持仓：24h 后（周二 UTC 00:00）平仓；若盘中触及周五低点下方 0.5% 则止损离场；若 24h 内涨幅超 3% 则止盈。信号频率：平均每月 1–3 次。反向镜像信号（VIX 跳涨且 BTC RV 同步放大 >1.3x）不做多，作为对照组验证机制。",
+  "data_needed": [
+    "CBOE VIX 指数日线（可通过 yfinance ^VIX 或 CBOE 官方 CSV 获取）",
+    "Binance Futures BTCUSDT 永续 1h 与 1d K线（/fapi/v1/klines，含资金费率 /fapi/v1/fundingRate）",
+    "Binance/Bybit ETHUSDT、SOLUSDT 永续 K线用于资产池外推验证",
+    "可选：美股 SPX 日线（yfinance ^GSPC）构造周五跌幅控制变量"
+  ],
+  "backtest_approach": "资产池：BTCUSDT 永续为主，ETHUSDT、SOLUSDT 做稳健性外推。时间段：2019-01 至 2026-10（覆盖 2020-03、2022-06、2024-08 等 VIX 跳涨事件），数据频率为日频+1h 用于止损/止盈撮合。信号仅在周五判定、周一入场，采用事件研究法：与同月份随机周一入场做 bootstrap 对照（1000 次重采样）。评估指标：事件平均收益、胜率、Newey-West 修正 t 统计、年化夏普、最大回撤、Calmar；另按季度分组检查稳定性，并用 Deflated Sharpe Ratio 与 PBO（组合对称交叉验证）对多阈值变体做多重检验折减，避免阈值挑选造成的过拟合。手续费按 taker 0.05% 双边+滑点 0.02% 计入。",
+  "supporting_sources": [
+    {
+      "title": "Wall Street freaked out Friday, but VIX and bitcoin trades say the fear may fade Monday.",
+      "url": "https://www.coindesk.com/markets/2026/10/18/wall-street-freaked-out-friday-vix-and-bitcoin-say-it-may-not-last",
+      "why": "直接给出核心机制：周五 VIX 跳涨而 BTC 波动保持平静，且历史上周五恐慌多在下周一回落，是信号触发条件与持仓窗口的直接依据。"
+    },
+    {
+      "title": "Bitcoin ETFs Shed Nearly $1 Billion in Two Weeks as Uptober Stays Red",
+      "url": "https://decrypt.co/381246/bitcoin-etfs-shed-nearly-1-billion-two-weeks-uptober-red",
+      "why": "ETF 两周净流出约 9.1 亿美元表明现货买盘承接力走弱，构成'情绪悲观但 BTC 波动未放大'这一背离的另一佐证，也提示需把 ETF 净流入作为控制变量剔除资金流趋势影响。"
+    },
+    {
+      "title": "How should I account for multiple strategy variants when evaluating out-of-sample crypto backtest results?",
+      "url": "https://quant.stackexchange.com/questions/86898/how-should-i-account-for-multiple-strategy-variants-when-evaluating-out-of-sample",
+      "why": "提供回测方法论约束：对 VIX 阈值、RV 比阈值等多组变体必须用 Deflated Sharpe Ratio 与 PBO 做多重检验折减，防止阈值搜索产生虚假 alpha。"
+    }
+  ],
+  "risk_factors": [
+    "样本量有限：VIX 跳涨且 BTC 低波动的联合条件历史触发次数可能不足 40 次，统计功效低，容易受 2020-03 等极端事件主导",
+    "机制失效风险：若 VIX 跳涨源于真实宏观流动性冲击（如加息、信用事件）而非情绪性去杠杆，周一会继续下跌，需区分宏观事件周并剔除 FOMC/CPI 窗口",
+    "执行与成本：周一 UTC 00:00 入场处于亚洲早盘流动性偏薄时段，滑点可能显著高于回测假设；同时永续资金费率在恐慌后常剧烈波动，影响实际净收益"
+  ],
+  "confidence": "medium",
+  "confidence_reason": "机制有明确的市场微观结构解释（CME 时段降仓与周末风险溢价回补）且有媒体观察与 ETF 流向背离佐证，但事件样本稀疏、阈值敏感，需要 PBO/DSR 检验才能确认非数据挖掘。",
+  "quick_start": "先跑事件表：python 中用 yfinance 下载 ^VIX 日线（yf.download('^VIX', start='2019-01-01')），再从 Binance /fapi/v1/klines 拉 BTCUSDT 1h（limit=1500 分页）聚合出日线收盘与 1h 实现波动，计算 vix_chg_z = (VIX.pct_change() - rolling20.mean())/rolling20.std() 与 rv_ratio = RV_1d / RV_20d.median()，筛出周五满足 vix_chg_z>=1.5 且 rv_ratio<0.9 且当日跌幅<1.5% 的日期列表，统计这些日期次一交易日的 BTC 收益分布与胜率，与随机周一 baseline 对比。",
+  "model": "deepseek-reasoner",
+  "date": "2026-10-19",
+  "generated_at": "2026-10-19T00:57:46Z"
+}
