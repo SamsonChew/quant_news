@@ -1,42 +1,46 @@
 {
-  "alpha_name": "BTC收复均线后山寨动量轮动",
-  "hypothesis": "市场反弹初期资金优先涌入高 beta/叙事型山寨（如 ZEC），而 ETF、机构与被动资金反应滞后，对手盘是调仓缓慢的被动买盘，以及反弹初期仍按低 beta 配置的仓位，横截面动量差在 1–3 天内可捕捉",
-  "signal_logic": "数据字段：币安 USDT 永续 4h OHLCV + 资金费率 + BTC 现货 ETF 日净流入。步骤：(1) 状态过滤：BTC/USDT 4h 收盘价自下而上穿越 20 周期 SMA（上一根在下方、当根在上方），且当日 ETF 净流入 > 0；(2) 触发后在该根 4h 收盘时，对资产池内每个永续计算过去 6 根 4h（24h）收益率，并用 14 期 ATR% 归一化得到风险调整动量 r_norm = ret_24h / ATR%；(3) 按 r_norm 排序，做多前 10%（至少 5 个币）、做空后 10%，多空组合按 1/ATR% 波动率倒数加权，总敞口 1x；(4) 每 4h 重新排序再平衡，但仅在状态成立时持仓，最长持有 18 根 4h（3 天）；(5) 退出条件：BTC 4h 收盘跌破 20SMA，或组合中多头腿 24h 涨幅 < BTC 涨幅且资金费率 > 0.03%/8h（指示过热）时提前平仓",
+  "alpha_name": "集中流动性LP动态区间择时",
+  "hypothesis": "多数 LP 在 Uniswap v3 式集中流动性池里用固定区间，波动率跳升时区间被价格打穿、只剩无常损失；对手盘是懒得调区间的被动 LP 与追热点的散户，用实现波动率对临界波动率的比值动态切换区间宽度可系统性抢在他们前面减仓/加宽。",
+  "signal_logic": "数据字段：Binance ETHUSDC 与 Base 上 Aero WETH/USDC 池的 1h OHLC（或 Uniswap v3 subgraph 的 hourly token0Price）。计算：σ_rv = 过去 24h 对数收益标准差 × sqrt(8760) 年化；同时用论文闭式解算临界波动率 σ*（由费率档位、目标区间半宽 w 与再平衡周期 T 反解，w=±2σ_rv·sqrt(T/8760)）。触发：(1) 每 8 小时评估一次，若 σ_rv < 0.8σ* 且价格仍在区间内，维持/收窄至 ±2σ_rv·sqrt(T)；(2) 若 σ_rv 介于 0.8σ* 与 1.2σ*，区间加宽至 ±4σ_rv·sqrt(T)；(3) 若 σ_rv > 1.2σ*，撤出流动性转稳定币借贷或全范围宽区间；(4) 价格触及区间边界即刻再平衡（不等 8h）。持仓方向：delta 中性 LP 头寸，只做波动率/费率收割，不做方向暴露。",
   "data_needed": [
-    "币安 USDT 永续合约 4h K线 OHLCV（ccxt fetch_ohlcv，symbol 池为市值前 50 永续）",
-    "币安永续资金费率历史（ccxt fetch_funding_rate_history，8h 频率）",
-    "BTC 现货 ETF 每日净流入（Farside Investors / SoSoValue 公开 CSV 或 API）",
-    "CoinGecko / CoinMarketCap 市值与成交量快照，用于每周更新资产池与流动性过滤"
+    "Uniswap v3 subgraph（WETH/USDC 0.05% 与 0.30% 池，hourly poolHourData：token0Price、feeGrowthGlobal、tvlUSD）",
+    "Binance REST/WebSocket ETHUSDC 与 ETHUSDT 1h/1m K 线（api.binance.com/api/v3/klines）",
+    "Base 链 Aerodrome/Aero WETH/USDC 池 TVL、fee 与 APR（Dune 或 Aerodrome 官方 subgraph）",
+    "以太坊主网 gas price（Etherscan API）用于再平衡成本建模"
   ],
-  "backtest_approach": "资产池为币安 USDT 永续中市值前 50 且 30 日均成交额 > 2000 万美元的合约，按周更新，剔除稳定币与杠杆代币。时间段 2021-01 至 2026-10，频率 4h，事件驱动，仅在触发后持仓，平均年触发 25–40 次。成本按单边 5bp 手续费 + 5bp 滑点计入，每次调仓计双边。评估指标：年化收益、夏普、Sortino、最大回撤、Calmar、相对 BTC 多头超额收益、换手率、按年度与按触发次数分组的事件研究（事件后 1/3/7 天的 top-decile 相对 BTC 超额收益与 t 值）。对照组：无条件全时段横截面动量、纯多头 BTC、以及多空腿互换的反向组合",
+  "backtest_approach": "资产池：Uniswap v3 主网 WETH/USDC 0.05% 与 0.30% 池、Base 上 Aero WETH/USDC 池。时间：2024-01 至 2026-10，hourly 步进。频率：8h 定期评估 + 触边界即时再平衡。成本：每次再平衡计 gas（按当期 gas price）+ 5bp 滑点 + 头寸迁移手续费。评估指标：净手续费 APR、扣除无常损失后的净值曲线、Sharpe、最大回撤、年化再平衡次数、与全范围 LP 基线及 50/50 持有 ETH/USDC 的对比，并做 σ* 阈值（0.6/0.8/1.0/1.2）敏感性分析。止损：单池连续 3 次再平衡为负收益则停止该池策略并复核参数。",
   "supporting_sources": [
     {
-      "title": "Zcash Leads Crypto Bounce, Surging 8.5% as Bitcoin Reclaims $83,000",
-      "url": "https://decrypt.co/381424/zcash-crypto-bounce-surging-bitcoin-reclaims",
-      "why": "提供直接观察：BTC 刚收复关键价位时，ZEC 等高 beta 山寨以显著超额涨幅领涨，说明反弹初期的横截面动量分层是可交易的，并给出了具体的触发场景（BTC 回升 1.6% 重上 83,000）"
+      "title": "A game-theoretic analysis of the market microstructure in decentralized exchanges with concentrated liquidity",
+      "url": "http://arxiv.org/abs/2610.28863v1",
+      "why": "给出集中流动性 LP 最优区间宽度闭式解与临界波动率概念，并在 5 个 WETH/USDC 池 2.5 年小时数据上验证临界波动率跟踪实现波动率，直接提供信号构造与参数标定依据"
     },
     {
-      "title": "JPMorgan issues first long-term bitcoin return forecast, projecting 10% annually",
-      "url": "https://www.theblock.co/news/markets/2026-10-20-jpmorgan-bitcoin-10-year-return-forecast-ltcma-421436",
-      "why": "指出 BTC 自身长期年化仅 10%、夏普约 0.18，纯 beta 效率极低，因此 alpha 必须来自横截面与择时的超额，支持用多空轮动而非单纯持币的框架"
+      "title": "Aerodrome and Velodrome merge to launch Aero across seven blockchain networks",
+      "url": "https://www.theblock.co/news/defi/2026-10-21-aerodrome-velodrome-merge-aero-421514",
+      "why": "合并后 Aero 覆盖 7 条链，WETH/USDC 类池的流动性分布与费率结构将被重估，为跨场所区间宽度差异与迁移套利提供额外收益来源，也是回测需覆盖的第二资产池"
     },
     {
-      "title": "Crypto’s 2026 shutdown wave claims 82 projects. What went wrong?",
-      "url": "https://cointelegraph.com/news/crypto-project-shutdowns-2026-what-went-wrong?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-      "why": "说明山寨尾部风险显著（项目关停、流动性枯竭），因此回测必须在空头腿施加流动性过滤与单币权重上限，并解释了为什么动量多头需要严格止损与短持有期"
+      "title": "Bitcoin Hits Weekly High as Crypto Market Rebounds",
+      "url": "https://decrypt.co/381555/bitcoin-price-weekly-high-crypto-rebounds",
+      "why": "当前市场处于波动率抬升的反弹窗口，是用实现波动率触发区间加宽规则的高价值测试时段，也提示回测需覆盖单边行情段"
+    },
+    {
+      "title": "Using CLAUDE to trade CRYPTO",
+      "url": "https://www.reddit.com/r/algotrading/comments/1xbq5rb/using_claude_to_trade_crypto/",
+      "why": "展示用 LLM 自动生成 Renko/PnF 多屏择时流程的可行性，可作为区间击穿判定与再平衡触发的辅助信号工程参考"
     }
   ],
   "risk_factors": [
-    "假突破：BTC 上穿 20SMA 后迅速跌破，导致每 4h 调仓的多空组合被反复双重打损",
-    "山寨流动性与插针风险：空头腿集中在弱币，容易被逼空，单币出现 30%+ 反弹时，会造成远超预期的亏损",
-    "横截面分散度不足：市场整体高相关时，top-decile 与 bottom-decile 的动量差收敛，多空组合退化为高成本的市场中性噪音",
-    "资金费率反转：多头腿过热时正资金费率侵蚀持仓收益，事件窗口内费率快速翻正会削弱信号收益",
-    "数据风险：ETF 净流入数据源发布延迟或修正，会导致状态过滤器错判，需要用 T-1 数据避免前视偏差"
+    "闭式解假设几何布朗运动、无跳跃，真实行情有跳空与插针，会导致区间击穿频率被系统性低估",
+    "MEV 与 JIT 流动性抢跑使实际费率收益低于回测，尤其在高 gas 时段再平衡成本可能吞掉全部手续费",
+    "稳定币脱锚（USDC/USDT）会污染无常损失计算并放大净值回撤，需加入脱锚熔断",
+    "Aero 跨 7 链部署带来跨链桥与治理迁移风险，Base 池的 TVL 与费率可能因合并短期剧烈变化导致样本不可比"
   ],
   "confidence": "medium",
-  "confidence_reason": "反弹初期高 beta 领涨有当日 ZEC 实例与市场结构逻辑支撑，数据全部可从币安公开接口获取且回测成本低，但横截面动量在反弹事件样本量有限（年均 25–40 次），统计显著性存在风险，因此定为中等",
-  "quick_start": "pip install ccxt pandas numpy；用 ccxt.binanceusdm().fetch_ohlcv('BTC/USDT','4h',limit=2000) 拉取 BTC 4h K线，计算 20 周期 SMA 并标记上穿事件，统计每个事件后 6/18/42 根 4h 的 BTC 前向收益，作为基准；再用同一接口批量拉取前 50 永续 4h 数据，对每个事件日计算 top-decile 与 bottom-decile 的 24h/72h 超额收益均值与 t 值，先做纯事件研究验证方向再做组合回测",
+  "confidence_reason": "有论文闭式解与 2.5 年实证支撑、数据全部公开可得，但收益高度依赖 gas 与 MEV 成本假设，净收益是否为正需回测确认。",
+  "quick_start": "先跑通波动率阈值：用 curl \"https://api.binance.com/api/v3/klines?symbol=ETHUSDC&interval=1h&limit=1000\" 拉 ETHUSDC 小时线，计算过去 24h 对数收益年化波动率序列；同时用 Dune 或 Uniswap v3 subgraph 查 WETH/USDC 0.05% 池的 hourly token0Price 与 feeGrowthGlobal，把两条波动率序列对齐，画出 σ_rv 分位数与池内实际费率 APR 的散点图，先验证「σ_rv 越低、窄区间 LP 净 APR 越高」这一核心假设是否成立，再决定是否上完整再平衡回测。",
   "model": "deepseek-reasoner",
-  "date": "2026-10-21",
-  "generated_at": "2026-10-21T01:36:19Z"
+  "date": "2026-10-22",
+  "generated_at": "2026-10-22T01:35:41Z"
 }
