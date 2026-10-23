@@ -1,46 +1,47 @@
 {
-  "alpha_name": "集中流动性LP动态区间择时",
-  "hypothesis": "多数 LP 在 Uniswap v3 式集中流动性池里用固定区间，波动率跳升时区间被价格打穿、只剩无常损失；对手盘是懒得调区间的被动 LP 与追热点的散户，用实现波动率对临界波动率的比值动态切换区间宽度可系统性抢在他们前面减仓/加宽。",
-  "signal_logic": "数据字段：Binance ETHUSDC 与 Base 上 Aero WETH/USDC 池的 1h OHLC（或 Uniswap v3 subgraph 的 hourly token0Price）。计算：σ_rv = 过去 24h 对数收益标准差 × sqrt(8760) 年化；同时用论文闭式解算临界波动率 σ*（由费率档位、目标区间半宽 w 与再平衡周期 T 反解，w=±2σ_rv·sqrt(T/8760)）。触发：(1) 每 8 小时评估一次，若 σ_rv < 0.8σ* 且价格仍在区间内，维持/收窄至 ±2σ_rv·sqrt(T)；(2) 若 σ_rv 介于 0.8σ* 与 1.2σ*，区间加宽至 ±4σ_rv·sqrt(T)；(3) 若 σ_rv > 1.2σ*，撤出流动性转稳定币借贷或全范围宽区间；(4) 价格触及区间边界即刻再平衡（不等 8h）。持仓方向：delta 中性 LP 头寸，只做波动率/费率收割，不做方向暴露。",
+  "alpha_name": "ETF流入背离做多BTC",
+  "hypothesis": "现货 ETF 的申购资金是“慢钱”、按 T+1 披露且持续性较强，而日内价格由宏观情绪与高 beta 山寨去杠杆主导；当 ETF 连续净流入而价格反而下跌时，卖方主要是被动去杠杆的短周期动量交易者与山寨币赎回盘，其抛压在数日内被 ETF 承接，形成可交易的均值回复。",
+  "signal_logic": "频率：每日收盘后（UTC 00:00）计算一次，信号持仓 1-5 个交易日。字段与计算：① F = 过去 3 日美国现货 BTC ETF 合计净流入（百万美元，Farside/CoinGlass 日频，按 T+1 对齐）；② R3 = BTC/USDT 永续 3 日对数收益率；③ A3 = 等权山寨篮子（ETH、SOL、ARB、OP、LINK 等 8-10 个高流动性 perp）3 日对数收益率；④ D = R3 - A3（BTC 相对强弱）。触发条件（做多）：F > +500 且 R3 < -2%（价格与资金流背离），并且 D > 0（资金确在向 BTC 轮动）。持仓：做多 BTCUSDT 永续，权重 1；增强版同时做空等权山寨篮子，权重 0.5，构造市场中性。平仓：F 转负、或持有满 5 日、或 D 掉头转负（BTC 相对走弱）即离场。反向信号（F < -500 且 R3 > +2%）做空 BTC，同样规则。",
   "data_needed": [
-    "Uniswap v3 subgraph（WETH/USDC 0.05% 与 0.30% 池，hourly poolHourData：token0Price、feeGrowthGlobal、tvlUSD）",
-    "Binance REST/WebSocket ETHUSDC 与 ETHUSDT 1h/1m K 线（api.binance.com/api/v3/klines）",
-    "Base 链 Aerodrome/Aero WETH/USDC 池 TVL、fee 与 APR（Dune 或 Aerodrome 官方 subgraph）",
-    "以太坊主网 gas price（Etherscan API）用于再平衡成本建模"
+    "Farside Investors 美国现货比特币 ETF 每日净流入表（或 CoinGlass ETF Flows API，按 T+1 对齐）",
+    "Binance USDT 本位永续 OHLCV：BTCUSDT、ETHUSDT、SOLUSDT、ARBUSDT、OPUSDT、LINKUSDT，4h 与 1d 粒度（ccxt 拉取）",
+    "Binance/Bybit 永续资金费率与未平仓量（用于成本扣除与拥挤度过滤）",
+    "CoinDesk DeFi 指数或自建山寨等权篮子收益率序列，用于构造相对强弱 D"
   ],
-  "backtest_approach": "资产池：Uniswap v3 主网 WETH/USDC 0.05% 与 0.30% 池、Base 上 Aero WETH/USDC 池。时间：2024-01 至 2026-10，hourly 步进。频率：8h 定期评估 + 触边界即时再平衡。成本：每次再平衡计 gas（按当期 gas price）+ 5bp 滑点 + 头寸迁移手续费。评估指标：净手续费 APR、扣除无常损失后的净值曲线、Sharpe、最大回撤、年化再平衡次数、与全范围 LP 基线及 50/50 持有 ETH/USDC 的对比，并做 σ* 阈值（0.6/0.8/1.0/1.2）敏感性分析。止损：单池连续 3 次再平衡为负收益则停止该池策略并复核参数。",
+  "backtest_approach": "资产池：BTCUSDT 永续 + 8-10 个高流动性山寨永续（ETH/SOL/ARB/OP/LINK/AVAX/MATIC/DOGE 等，按 2024 年后持续有流动性筛选）。时间段：2024-01-11（美现货 ETF 上市）至 2026-10-22，样本外留出 2026-07 之后。频率：日频信号、4h 执行（信号日 UTC 00:05 开盘价入场）。成本：单边 5bp 手续费 + 2bp 滑点，永续计入实际资金费率。止损：单笔 -3.5% 硬止损，或 ETF 三日净流入转为负值即刻平仓；最大持有 5 日。评估指标：年化收益、夏普（日收益 × √365）、最大回撤、Calmar、胜率、平均持仓天数、换手率、与 BTC 多头基准的超额；并对 F 阈值（300/500/800）与回看窗口（2/3/5 日）做参数敏感性，要求参数平台期稳定而非单点最优。",
   "supporting_sources": [
     {
-      "title": "A game-theoretic analysis of the market microstructure in decentralized exchanges with concentrated liquidity",
-      "url": "http://arxiv.org/abs/2610.28863v1",
-      "why": "给出集中流动性 LP 最优区间宽度闭式解与临界波动率概念，并在 5 个 WETH/USDC 池 2.5 年小时数据上验证临界波动率跟踪实现波动率，直接提供信号构造与参数标定依据"
+      "title": "Bitcoin ETFs Erase October Losses With $1 Billion in Three Days",
+      "url": "https://decrypt.co/381611/bitcoin-etfs-erase-october-losses-1-billion-three-days",
+      "why": "直接给出“三日 10.7 亿美元净流入、月度转为净流入 +4.6 亿，而同期 BTC/ETH 价格反而下跌”的背离样本，是本 alpha 的核心触发条件与首个实盘案例。"
     },
     {
-      "title": "Aerodrome and Velodrome merge to launch Aero across seven blockchain networks",
-      "url": "https://www.theblock.co/news/defi/2026-10-21-aerodrome-velodrome-merge-aero-421514",
-      "why": "合并后 Aero 覆盖 7 条链，WETH/USDC 类池的流动性分布与费率结构将被重估，为跨场所区间宽度差异与迁移套利提供额外收益来源，也是回测需覆盖的第二资产池"
+      "title": "Bitcoin slides below $82,000 as AI doubts return, with DeFi tokens leading declines",
+      "url": "https://www.coindesk.com/markets/2026/10/22/bitcoin-slides-below-usd82-000-as-ai-doubts-return-with-defi-tokens-leading-declines",
+      "why": "BTC -2.9%、DeFi 指数 -6%，说明下跌由高 beta 板块主导，为“做多 BTC / 做空山寨篮子”的腿提供横截面依据。"
     },
     {
-      "title": "Bitcoin Hits Weekly High as Crypto Market Rebounds",
-      "url": "https://decrypt.co/381555/bitcoin-price-weekly-high-crypto-rebounds",
-      "why": "当前市场处于波动率抬升的反弹窗口，是用实现波动率触发区间加宽规则的高价值测试时段，也提示回测需覆盖单边行情段"
+      "title": "Crypto traders seek shelter in bitcoin as altcoins slide and ETF flows wobble",
+      "url": "https://www.coindesk.com/daybook-us/2026/10/22/crypto-traders-seek-shelter-in-bitcoin-as-altcoins-slide-and-etf-flows-wobble",
+      "why": "确认资金正从山寨撤向比特币，支持用 D = R3(BTC) - R3(山寨篮子) 作为轮动过滤条件而非单纯做多 BTC。"
     },
     {
-      "title": "Using CLAUDE to trade CRYPTO",
-      "url": "https://www.reddit.com/r/algotrading/comments/1xbq5rb/using_claude_to_trade_crypto/",
-      "why": "展示用 LLM 自动生成 Renko/PnF 多屏择时流程的可行性，可作为区间击穿判定与再平衡触发的辅助信号工程参考"
+      "title": "Switzerland approves first spot Bitcoin ETF for retail investors",
+      "url": "https://cointelegraph.com/news/switzerland-approves-first-spot-bitcoin-etf-for-retail-investors?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "why": "欧洲新增合规现货通道（11 月登陆 SIX），意味着 ETF 申购资金流的结构性增量在样本外仍延续，降低信号在回测末段失效的概率。"
     }
   ],
   "risk_factors": [
-    "闭式解假设几何布朗运动、无跳跃，真实行情有跳空与插针，会导致区间击穿频率被系统性低估",
-    "MEV 与 JIT 流动性抢跑使实际费率收益低于回测，尤其在高 gas 时段再平衡成本可能吞掉全部手续费",
-    "稳定币脱锚（USDC/USDT）会污染无常损失计算并放大净值回撤，需加入脱锚熔断",
-    "Aero 跨 7 链部署带来跨链桥与治理迁移风险，Base 池的 TVL 与费率可能因合并短期剧烈变化导致样本不可比"
+    "ETF 净流入为 T+1 披露，信号存在一天滞后，快速反转行情中入场价可能已修复大部分背离",
+    "背离可能持续扩大（如 2022 式宏观去杠杆），价格下跌是信息而非噪声，做多会连续止损",
+    "山寨空头腿面临逼空与资金费率反转，中性组合可能两头亏；小市值 perp 流动性差导致滑点被低估",
+    "F > 500 的绝对阈值随 ETF 规模增长而失效，需要滚动分位数替代，否则信号频率漂移",
+    "监管/税务口径变化（如 Blockchain Association 推动的加密税则）可能一次性改变 ETF 申赎行为"
   ],
   "confidence": "medium",
-  "confidence_reason": "有论文闭式解与 2.5 年实证支撑、数据全部公开可得，但收益高度依赖 gas 与 MEV 成本假设，净收益是否为正需回测确认。",
-  "quick_start": "先跑通波动率阈值：用 curl \"https://api.binance.com/api/v3/klines?symbol=ETHUSDC&interval=1h&limit=1000\" 拉 ETHUSDC 小时线，计算过去 24h 对数收益年化波动率序列；同时用 Dune 或 Uniswap v3 subgraph 查 WETH/USDC 0.05% 池的 hourly token0Price 与 feeGrowthGlobal，把两条波动率序列对齐，画出 σ_rv 分位数与池内实际费率 APR 的散点图，先验证「σ_rv 越低、窄区间 LP 净 APR 越高」这一核心假设是否成立，再决定是否上完整再平衡回测。",
+  "confidence_reason": "有当日真实背离样本与明确的资金轮动叙事支撑，数据全部公开可得；但样本仅约两年半、ETF 流量事件数偏少，统计显著性有限。",
+  "quick_start": "先用 ccxt 拉取日线价格，再用 ETF 流量表对齐验证背离事件数：python -c \"import ccxt,pandas as pd; ex=ccxt.binance(); d=ex.fetch_ohlcv('BTC/USDT:USDT','1d',since=ex.parse8601('2024-01-11T00:00:00Z'),limit=1000); df=pd.DataFrame(d,columns=['ts','o','h','l','c','v']); df['r3']=df.c.pct_change(3); print(df.tail())\"，同时把 Farside 的 ETF 日净流入 CSV 按日期 shift(1) 合并，统计 count(F>500 且 r3<-2%) 的事件数与其后 1/3/5 日 BTC 收益均值，若事件数 < 15 则先放宽到 F>300 或改用滚动 90 日分位数阈值。",
   "model": "deepseek-reasoner",
-  "date": "2026-10-22",
-  "generated_at": "2026-10-22T01:35:41Z"
+  "date": "2026-10-23",
+  "generated_at": "2026-10-23T01:34:30Z"
 }
