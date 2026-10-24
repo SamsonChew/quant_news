@@ -1,0 +1,47 @@
+{
+  "alpha_name": "ETF资金流反转做空BTC永续",
+  "hypothesis": "ETF 一级申赎流是慢钱（配置盘/投顾）的被动卖出，价格当日往往未完全反映，对手盘是延迟调仓的被动多头与日内追涨的散户。",
+  "signal_logic": "数据字段：美国现货 BTC/ETH/SOL ETF 每日净申赎金额（美元）、各基金 AUM、Binance/Bybit 永续 1h/1d OHLCV、资金费率。计算：F_t = (BTC+ETH+SOL ETF 净流入合计)/三者合计 AUM，得到占 AUM 比例；再取 3 日滚动和 S_t = F_t+F_{t-1}+F_{t-2}，用过去 60 日 S 的均值与标准差做 z 分数 Z_t。触发条件（每日 23:30 UTC 计算，00:00 UTC 开盘执行）：若 Z_t < -1.0 且 BTC 收盘价 < MA20，则做空 BTCUSDT 永续，持有 1 日；若连续两日 Z_t < -1.5，则展期至 3 日；若 Z_t > +1.0 且价格 > MA20，则做多。附加过滤：仅在当期资金费率为正（>0.005%/8h）时执行空头，以获取“价格下跌 + 费率收敛”双击；费率转负则提前平仓。信号频率为日频，最多同时持仓 1 个方向、单币种仓位 ≤1 倍名义。",
+  "data_needed": [
+    "Farside Investors / SoSoValue / CoinGlass API：美国现货 BTC、ETH、SOL ETF 每日净流入与 AUM",
+    "Binance Futures API：BTCUSDT/ETHUSDT/SOLUSDT 永续 1d 与 1h K 线、资金费率历史（/fapi/v1/fundingRate）",
+    "Bybit V5 API：永续 K 线与资金费率，用作跨所一致性校验",
+    "CoinGecko 或 Kaiko：BTC 现货收盘价用于 MA20 计算"
+  ],
+  "backtest_approach": "资产池：BTCUSDT、ETHUSDT、SOLUSDT 永续（Binance 主回测，Bybit 复现）。时间段：2024-01-11（BTC 现货 ETF 上市）至 2026-10-23，样本内 2024-01~2025-12，样本外 2026-01~2026-10。频率：日频，信号于 23:30 UTC 生成，00:00 UTC 开盘价成交。成本：单边手续费 5bp + 滑点 2bp，含资金费率损益。止损：2×ATR(14) 或反向 Z 分数翻转，最大持有 3 日。评估指标：年化夏普、最大回撤、胜率、盈亏比、换手率、与买入持有及纯资金费率套利的相关系数；并做 ETF 流量滞后 0/1/2 日的敏感性检验与分市值子样本稳健性检验。",
+  "supporting_sources": [
+    {
+      "title": "Bitcoin ETFs Bleed $636 Million as October Turns Red Again",
+      "url": "https://decrypt.co/381700/bitcoin-etfs-bleed-october-turns-red-again",
+      "why": "给出单日 -6.36 亿美元、10 月累计 -1.76 亿美元且 ETH/SOL 同步失血的事实，说明流量信号在横截面上同向，可构建聚合流量指标并验证其对次日价格的预测力。"
+    },
+    {
+      "title": "Bitcoin consolidates after 3% loss as AI fears stoke fresh stock-market weakness",
+      "url": "https://cointelegraph.com/markets/bitcoin-consolidates-after-3-loss-as-ai-fears-stoke-fresh-stock-market-weakness",
+      "why": "印证资金流出当日 BTC 跌 3% 后仅盘整而未立即反弹，支持“流出冲击未在当日完全定价、次日仍有下行漂移”的 alpha 前提。"
+    },
+    {
+      "title": "IRS plans lower tax disclosure penalties, including for crypto: Forbes",
+      "url": "https://cointelegraph.com/news/irs-plans-lower-penalties-for-crypto-tax-disclosures-forbes-reports",
+      "why": "税损收割与主动补申报会放大 Q4 的 ETF/现货卖压，为四季度流量负值信号提供季节性解释，可用于构建季度虚拟变量做条件增强。"
+    },
+    {
+      "title": "Bitcoin appears to have decoupled from midterm cycle bottom history",
+      "url": "https://www.coindesk.com/markets/2026/10/23/bitcoin-approaches-midterms-as-july-low-challenges-historical-cycle-pattern",
+      "why": "提示历史周期类慢变量解释力下降，需要以资金流这类高频基本面替代周期择时，构成策略的必要性论据。"
+    }
+  ],
+  "risk_factors": [
+    "ETF 流量数据 T+1 才完整披露，实盘须用当日盘中估算（发行人页面/彭博），存在修正与延迟导致信号失真",
+    "净流出常与宏观风险事件（AI 恐慌、股市下跌）同源，信号可能退化为对风险资产的滞后 beta 而非独立 alpha，需剔除 SPX/NQ 收益后检验残差 alpha",
+    "2026 年 BTC 已非 ETF 增量主导阶段，流量弹性下降，历史 2024 年强关系可能失效",
+    "永续资金费率在极端行情转负会触发提前平仓，削弱空头收益甚至反向亏损",
+    "SEC/监管与税务规则变化（如 IRS 罚金下调）可能改变年末申赎节奏，使季节性参数过拟合"
+  ],
+  "confidence": "medium",
+  "confidence_reason": "流量-价格关系有明确机制与真实事件支撑，且纯日频、数据公开易得；但样本仅约 2.5 年、ETF 流量已被大量机构研究，超额可能偏薄且需剔除宏观 beta。",
+  "quick_start": "第一步拉数据：`curl \"https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=1d&limit=1500\" > btc_1d.json` 与 `curl \"https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1000\" > btc_funding.json`；同时用 pandas 抓取 Farside 的 BTC/ETH ETF 流量表（`pd.read_html('https://farside.co.uk/btc/')`），合并成以 UTC 日期为索引的 DataFrame，先画 3 日滚动净流入 z 分数与次日 BTC 收益的散点图并算 IC，确认方向与显著性后再写向量化回测。",
+  "model": "deepseek-reasoner",
+  "date": "2026-10-24",
+  "generated_at": "2026-10-24T01:40:07Z"
+}
