@@ -1,47 +1,42 @@
 {
-  "alpha_name": "多头强平瀑布后的资金费率反转",
-  "hypothesis": "周末流动性稀薄叠加地缘风险触发杠杆多头集中强平，价格由被动抛售主导而非基本面，强平耗尽后做市商回补与空头获利平仓推动短周期均值回归；对手盘是被迫平仓的高杠杆多头与追空的情绪盘。",
-  "signal_logic": "数据字段：(1) Coinglass 聚合的 4h 多头强平金额 liq_long_4h（Binance/Bybit/OKX 合并）；(2) Binance BTCUSDT 永续 8h 资金费率 funding；(3) 1h OHLCV 计算的价格相对 20 日均线偏离 dev20 与 4h 成交量 z 分数 vol_z。触发条件（每 1 小时评估一次，仅在 UTC 00:00-23:00 整点 bar 收盘后计算）：liq_long_4h 的 30 日滚动分位数 > 95% 且 liq_long_4h > 1.5 亿美元，同时 funding 最新一期 < 0（或较前一期下降 > 0.01%），且 vol_z > 2。入场：信号 bar 收盘市价做多 BTCUSDT 永续，仓位 1x-2x。出场：持满 24h 无条件平仓，或中途 funding 回升至前 30 日中位数以上、或浮盈达 2.5% 止盈、或浮亏 3% 止损。同一时间只持一仓，信号冷却期 12h。",
+  "alpha_name": "BTC现货ETF资金流反转动量",
+  "hypothesis": "当现货ETF连续多日净流出后首次转为净流入时，边际买盘由被动配置资金主导，而做市商与短线空头尚未调整仓位；此时顺应资金流方向做多BTC，可捕捉资金再平衡带来的2–5日漂移，对手盘是滞后的趋势跟随者与逢高做空的短线交易者。",
+  "signal_logic": "数据字段：美国全部现货比特币ETF的每日净流入（USD，来源Farside/SoSoValue/CoinDesk ETF页），以及BTCUSDT永续合约的日线OHLCV与资金费率（Binance/Bybit）。计算：flow_t = 当日全部ETF净流入之和；cum3_t = 过去3个交易日flow之和。触发条件（日频，UTC 00:00收盘后计算，次日开盘执行）：① cum3_t 由负转正（前一日cum3<0且当日cum3>0）且当日flow_t>5000万美元时，开多BTCUSDT永续，方向为多；② cum3_t 由正转负且当日flow_t<-5000万美元时，开空（或平多转空）；③ 已持仓期间若cum3符号反转则平仓。附加过滤器：当资金费率8小时均值>0.03%（多头过度拥挤）时，多头仓位减半；当< -0.01%时，空头仓位减半。持仓周期：固定持有3个交易日，或直到符号反转，以先发生者为准。",
   "data_needed": [
-    "Coinglass API：聚合强平数据（long/short liquidation，按 1h/4h 粒度，Binance+Bybit+OKX）",
-    "Binance Futures API：BTCUSDT/ETHUSDT/SOLUSDT 永续 1h K 线与 8h fundingRate 历史（/fapi/v1/klines、/fapi/v1/fundingRate）",
-    "Bybit V5 API：同标的永续 1h K 线与资金费率，用于交叉验证与稳健性检验",
-    "Farside Investors：美国现货 BTC ETF 每日净流入/流出数据（作为宏观资金流辅助变量）"
+    "Farside Investors 或 SoSoValue 的现货比特币ETF每日净流入数据（含IBIT/FBTC/GBTC等分项）",
+    "Binance USDT-M 永续 BTCUSDT 日线与8小时资金费率（REST/ccxt: fetch_ohlcv('BTC/USDT:USDT','1d')、fetch_funding_rate_history）",
+    "Bybit 永续 BTCUSDT 资金费率与标记价格（用于交叉验证与执行备选）",
+    "CoinDesk/Decrypt 的ETF周度资金流汇总（用于样本外核对与人工校验）"
   ],
-  "backtest_approach": "资产池：BTCUSDT、ETHUSDT、SOLUSDT 永续（主标的 BTC，其余做样本外验证）。时间窗口：2021-01 至 2026-10，其中 2021-2024 为样本内、2025-2026 为样本外。频率：1h 信号、事件驱动持仓（平均每月 2-6 次触发）。成本假设：双边 taker 手续费 5bp + 滑点 3bp。评估指标：年化收益、夏普（按日收益年化）、最大回撤、Calmar、胜率、盈亏比、平均持仓时长；并与「仅 funding<0 无强平条件」「仅强平无 funding 条件」两个消融基线对比，另做随机同日入场对照检验超额显著性。",
+  "backtest_approach": "资产池：BTCUSDT永续（主），ETHUSDT永续（用ETHA/FETH等ETH现货ETF流量作为稳健性检验）；时间窗口：2024-01-11（现货ETF上市）至2026-10-25，样本外预留2026-07至2026-10；频率：日频信号、次日UTC 00:00开盘执行，持仓3日；成本假设：单边5bp手续费+2bp滑点，资金费率按实际结算计入；止损：入场价±2.5×ATR(14)或单笔亏损2%强制平仓；评估指标：年化收益、夏普、Sortino、最大回撤、Calmar、胜率、平均持仓收益、与BTC买入持有的相关性；稳健性：对流量阈值（3000/5000/1亿美元）与累计窗口（2/3/5日）做参数敏感性网格，并做随机化信号安慰剂检验。",
   "supporting_sources": [
     {
-      "title": "Crypto longs lose $404 million in four hours as bitcoin briefly slips below $80,000",
-      "url": "https://www.theblock.co/news/markets/2026-10-24-crypto-longs-lose-404-million-in-four-hours-as-bitcoin-briefly-slips-below-80000-431608",
-      "why": "给出 4 小时 4.04 亿美元多头强平的极端量级，直接定义了本 alpha 的核心触发变量 liq_long_4h 的阈值校准区间"
+      "title": "Bitcoin ETFs Snap Two-Week Losing Streak Despite Late-Week Slide",
+      "url": "https://decrypt.co/381777/bitcoin-etfs-snap-two-week-losing-streak-despite-late-week-slide",
+      "why": "直接提供核心信号：现货ETF周净流入3.01亿美元终结两周流出，证明资金流存在明确的“由负转正”拐点，且该拐点可作为可交易的日频事件。"
     },
     {
-      "title": "Crypto under weekend pressure, bitcoin slides below $80,000 on U.S. Middle East evacuations",
-      "url": "https://www.coindesk.com/markets/2026/10/24/crypto-under-weekend-pressure-bitcoin-slides-below-usd80-000-on-u-s-middle-east-evacuations",
-      "why": "说明本轮下跌由周末低流动性+突发地缘新闻驱动，属被动抛售型冲击，支持「冲击后短周期均值回归」而非趋势跟随的判断"
+      "title": "UK banks face 10,000 complaints in 3 months over crypto restrictions",
+      "url": "https://www.coindesk.com/policy/2026/10/22/uk-banks-face-10-000-complaints-in-3-months-over-crypto-restrictions",
+      "why": "银行渠道受限迫使增量资金通过ETF这一合规通道入场，支持“ETF净流入是边际定价力量、其拐点具有价格预测力”的假设。"
     },
     {
-      "title": "Strategy, Strive face balancing act between bitcoin buying and preferred stock dividends",
-      "url": "https://www.coindesk.com/business/2026/10/24/strategy-strive-face-balancing-act-between-bitcoin-buying-and-preferred-stock-dividends",
-      "why": "揭示 13.6 万枚 BTC 由优先股融资买入、存在股息现金流压力，构成下跌中潜在的二次抛压来源，用于设置止损纪律与仓位上限"
-    },
-    {
-      "title": "Bitcoin's wealthy holders turning to loans and yield as investment habits mature: Xapo CEO",
-      "url": "https://www.coindesk.com/business/2026/10/24/bitcoin-s-wealthy-holders-turning-to-loans-and-yield-as-investment-habits-mature-xapo-ceo",
-      "why": "长期持有者转向抵押借贷，意味着系统内杠杆结构性上升，强平瀑布的频率与幅度可能增加，支撑该信号在未来的持续有效性与样本外表现"
+      "title": "Netanyahu floats use of blockchain as solution to potential financial sanctions",
+      "url": "https://cointelegraph.com/news/netanyahu-floats-use-of-blockchain-as-solution-to-potential-financial-sanctions?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "why": "说明在地缘制裁环境下存在主权级、非ETF渠道的额外需求叙事，用于解释流量信号在宏观冲击期可能出现的偏离，作为回测中的事件哑变量。"
     }
   ],
   "risk_factors": [
-    "强平数据在极端行情下存在交易所上报延迟与聚合口径不一致，可能导致信号触发滞后于实际价格底部",
-    "周末低流动性环境下 3% 止损易被插针扫损，实际滑点可能显著高于回测假设",
-    "若下跌由趋势型宏观去杠杆驱动（如 Strategy 类财务公司被迫卖币），均值回归假设失效，会出现连续多次假信号",
-    "2021 年前 Coinglass 覆盖交易所不全，样本内早期数据质量偏差可能高估收益",
-    "资金费率极端负值有时是持续贴水的开始而非反转，需要额外过滤条件避免趋势市中逆势加仓"
+    "ETF流量数据发布存在T+1时滞，且不同数据源对创设/赎回口径（现金vs实物）处理不一致，易造成信号错位",
+    "该策略本质是动量/资金流因子，在低波动横盘期会出现频繁假突破，胜率下降、交易成本吞噬收益",
+    "资金费率与基差变化会在持仓期改变实际收益，极端行情下永续资金费可能蚕食全部alpha",
+    "样本期自2024年始仅约2.7年，事件数（拐点）可能不足100次，统计显著性有限",
+    "宏观事件（如制裁、监管表态）可在单日内主导价格，使流量信号失真"
   ],
   "confidence": "medium",
-  "confidence_reason": "强平瀑布后的短周期反转有较多文献与实盘经验支持，且本次 4.04 亿美元级强平提供了明确的事件样本，但强平数据可得性与口径一致性是主要局限，需自行做阈值稳健性检验。",
-  "quick_start": "先用 Python 拉取 Binance 永续 1h K 线与资金费率建立基线：`curl 'https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=1h&startTime=1609459200000&limit=1500'` 与 `curl 'https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1000'`，分页保存为 parquet；同时申请 Coinglass 免费 API key 拉取 2021 年至今的 4h 强平序列，先做「liq_long_4h 30 日 95 分位 + funding<0」条件下未来 24h 收益的分布统计，确认条件期望显著为正后再做完整回测。",
+  "confidence_reason": "ETF资金流与BTC短期收益的因果关系有明确机制且数据可稳定获取，但样本期短、拐点事件数量有限，需回测验证边际显著性。",
+  "quick_start": "今天先做数据拉取与对齐：1) 用 requests 抓取 https://farside.co.uk/bitcoin-etf-flow-all-data/ 的表格（或SoSoValue API）解析出日期-净流入时间序列存成 CSV；2) 用 ccxt 的 binance 拉 BTC/USDT:USDT 日线：ex.fetch_ohlcv('BTC/USDT:USDT', '1d', since=ms(2024,1,11))，并 fetch_funding_rate_history 获取8小时费率；3) 计算 cum3 = flow.rolling(3).sum()，用 sign 变化生成多空信号，先画出信号点与BTC价格叠加图，人工检查2024-01至2026-10的拐点是否与后续3日收益同向。",
   "model": "deepseek-reasoner",
-  "date": "2026-10-25",
-  "generated_at": "2026-10-25T00:58:06Z"
+  "date": "2026-10-26",
+  "generated_at": "2026-10-26T01:12:30Z"
 }
