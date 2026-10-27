@@ -1,42 +1,47 @@
 {
-  "alpha_name": "BTC现货ETF资金流反转动量",
-  "hypothesis": "当现货ETF连续多日净流出后首次转为净流入时，边际买盘由被动配置资金主导，而做市商与短线空头尚未调整仓位；此时顺应资金流方向做多BTC，可捕捉资金再平衡带来的2–5日漂移，对手盘是滞后的趋势跟随者与逢高做空的短线交易者。",
-  "signal_logic": "数据字段：美国全部现货比特币ETF的每日净流入（USD，来源Farside/SoSoValue/CoinDesk ETF页），以及BTCUSDT永续合约的日线OHLCV与资金费率（Binance/Bybit）。计算：flow_t = 当日全部ETF净流入之和；cum3_t = 过去3个交易日flow之和。触发条件（日频，UTC 00:00收盘后计算，次日开盘执行）：① cum3_t 由负转正（前一日cum3<0且当日cum3>0）且当日flow_t>5000万美元时，开多BTCUSDT永续，方向为多；② cum3_t 由正转负且当日flow_t<-5000万美元时，开空（或平多转空）；③ 已持仓期间若cum3符号反转则平仓。附加过滤器：当资金费率8小时均值>0.03%（多头过度拥挤）时，多头仓位减半；当< -0.01%时，空头仓位减半。持仓周期：固定持有3个交易日，或直到符号反转，以先发生者为准。",
+  "alpha_name": "金库mNAV收缩做空BTC",
+  "hypothesis": "市场长期把上市公司 BTC 金库的增持当成「价格不敏感的边际买盘」定价，但当 mNAV（市值/持仓净值）跌破增发增值阈值后，金库公司会转向回购或停买（Strategy 零买入+2.05 亿回购 STRC、Bitmine 4600 万回购而非买 ETH），买盘断档；对手盘是仍按「增持溢价」叙事追多的动量多头与财库股溢价套利者。",
+  "signal_logic": "日频计算 mNAV：对每家金库公司 i，mNAV_i = 流通市值 / (BTC持仓_i × BTC收盘价)，按持仓美元市值加权得 mNAV_agg（MSTR 权重最大，BMNR 用 ETH 持仓对 ETH 计价单独算 mNAV_eth）。触发条件：①mNAV_agg 的 5 日均值下穿 1.15，且 ②过去 28 天金库公司合计净增持 BTC ≤ 0（新闻/8-K 抓取的周度净买入加总），则次日开盘做空 BTCUSDT 永续；退出：mNAV_agg 5 日均值回升至 1.35 以上，或滚动 28 天净增持重新 > 0，或持有满 10 个交易日，先到先平。镜像信号用于 ETH：mNAV_eth 下穿 1.10 → 做空 ETHUSDT 永续（对应 Bitmine 回购叙事）。仓位按波动率倒数归一，单边最大 1 倍名义。",
   "data_needed": [
-    "Farside Investors 或 SoSoValue 的现货比特币ETF每日净流入数据（含IBIT/FBTC/GBTC等分项）",
-    "Binance USDT-M 永续 BTCUSDT 日线与8小时资金费率（REST/ccxt: fetch_ohlcv('BTC/USDT:USDT','1d')、fetch_funding_rate_history）",
-    "Bybit 永续 BTCUSDT 资金费率与标记价格（用于交叉验证与执行备选）",
-    "CoinDesk/Decrypt 的ETF周度资金流汇总（用于样本外核对与人工校验）"
+    "Binance/Bybit USDT 永续：BTCUSDT、ETHUSDT 日线与 8h 资金费率（ccxt 或 binance fapi klines/fundingRate）",
+    "Yahoo Finance / stooq：MSTR、BMNR、STRC、Metaplanet(3350.T) 日收盘价与流通股本（yfinance 拉 close + 手动维护 shares outstanding）",
+    "金库持仓与周度净买入：bitcointreasuries.net 快照 + 公司 8-K/新闻抓取（CoinDesk、The Block、CoinTelegraph RSS 关键词 treasury/purchase/repurchase）",
+    "链上辅助：Glassnode/CryptoQuant 交易所净流入，用于剔除信号期的流动性扰动"
   ],
-  "backtest_approach": "资产池：BTCUSDT永续（主），ETHUSDT永续（用ETHA/FETH等ETH现货ETF流量作为稳健性检验）；时间窗口：2024-01-11（现货ETF上市）至2026-10-25，样本外预留2026-07至2026-10；频率：日频信号、次日UTC 00:00开盘执行，持仓3日；成本假设：单边5bp手续费+2bp滑点，资金费率按实际结算计入；止损：入场价±2.5×ATR(14)或单笔亏损2%强制平仓；评估指标：年化收益、夏普、Sortino、最大回撤、Calmar、胜率、平均持仓收益、与BTC买入持有的相关性；稳健性：对流量阈值（3000/5000/1亿美元）与累计窗口（2/3/5日）做参数敏感性网格，并做随机化信号安慰剂检验。",
+  "backtest_approach": "资产池：BTCUSDT、ETHUSDT 永续为主，现货作对照，另加 MSTR/BMNR 股票腿做多空对冲验证。时间窗口：2020-08（MSTR 首次购 BTC）至 2026-10，样本内 2020-08~2024-12，样本外 2025-01~2026-10。频率：日频算信号、次日开盘执行，持有 10 日或触发退出。手续费 5bp/边 + 实际资金费率计入。止损：单笔价格反向 8% 或 mNAV 反向修复 10%。评估指标：年化夏普、最大回撤、Calmar、胜率、平均持有期收益、换手率、对 BTC 多头 beta 中性化后的残差 alpha、按 FOMC 日与非 FOMC 日分组的表现，以及与「28 天净增持」单因子的相关性（确认非冗余）。",
   "supporting_sources": [
     {
-      "title": "Bitcoin ETFs Snap Two-Week Losing Streak Despite Late-Week Slide",
-      "url": "https://decrypt.co/381777/bitcoin-etfs-snap-two-week-losing-streak-despite-late-week-slide",
-      "why": "直接提供核心信号：现货ETF周净流入3.01亿美元终结两周流出，证明资金流存在明确的“由负转正”拐点，且该拐点可作为可交易的日频事件。"
+      "title": "Tom Lee's Bitmine favors share buybacks to ether purchases as crypto declines",
+      "url": "https://www.coindesk.com/business/2026/10/26/tom-lee-s-bitmine-favors-share-buybacks-to-ether-purchases-as-crypto-declines",
+      "why": "直接证据：ETH 金库把 4600 万美元从增持 ETH 转向回购自家股票，说明 mNAV 收缩后买盘转为资本回吐，是 ETH 腿信号的触发样本。"
     },
     {
-      "title": "UK banks face 10,000 complaints in 3 months over crypto restrictions",
-      "url": "https://www.coindesk.com/policy/2026/10/22/uk-banks-face-10-000-complaints-in-3-months-over-crypto-restrictions",
-      "why": "银行渠道受限迫使增量资金通过ETF这一合规通道入场，支持“ETF净流入是边际定价力量、其拐点具有价格预测力”的假设。"
+      "title": "Strategy skips Bitcoin purchases, spends $205M on STRC buybacks",
+      "url": "https://cointelegraph.com/news/strategy-skips-btc-buy-205-million-strc-buyback?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "why": "最大公开市场 BTC 吸纳方单周零买入并回购优先股、现金余额砍半，是「边际买盘中断」这一信号的核心观测值。"
     },
     {
-      "title": "Netanyahu floats use of blockchain as solution to potential financial sanctions",
-      "url": "https://cointelegraph.com/news/netanyahu-floats-use-of-blockchain-as-solution-to-potential-financial-sanctions?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-      "why": "说明在地缘制裁环境下存在主权级、非ETF渠道的额外需求叙事，用于解释流量信号在宏观冲击期可能出现的偏离，作为回测中的事件哑变量。"
+      "title": "Strive closes in on second-largest corporate bitcoin treasury with $511 million purchase",
+      "url": "https://www.theblock.co/news/business/2026-10-26-strive-closes-in-second-largest-corporate-bitcoin-treasury-511-million-purchase-431729",
+      "why": "反向案例：个别公司仍在大额买入，说明信号必须用「合计净增持」而非单一公司，同时也提示信号被单笔大额买入反转的风险。"
+    },
+    {
+      "title": "Bitcoin holds near $80,000 as oil retreats and the Fed decision looms",
+      "url": "https://www.coindesk.com/markets/2026/10/26/bitcoin-holds-near-usd80-000-as-oil-retreats-and-the-fed-decision-looms",
+      "why": "提供当前价位与宏观事件窗口（FOMC），用于分层回测与判断因子是否被宏观定价淹没。"
     }
   ],
   "risk_factors": [
-    "ETF流量数据发布存在T+1时滞，且不同数据源对创设/赎回口径（现金vs实物）处理不一致，易造成信号错位",
-    "该策略本质是动量/资金流因子，在低波动横盘期会出现频繁假突破，胜率下降、交易成本吞噬收益",
-    "资金费率与基差变化会在持仓期改变实际收益，极端行情下永续资金费可能蚕食全部alpha",
-    "样本期自2024年始仅约2.7年，事件数（拐点）可能不足100次，统计显著性有限",
-    "宏观事件（如制裁、监管表态）可在单日内主导价格，使流量信号失真"
+    "样本极小：mNAV 跌破阈值的历史事件屈指可数（2022 底、2025 初等），阈值 1.15/1.35 极易过拟合，需做阈值敏感性网格与 block bootstrap",
+    "mNAV 口径噪声：可转债、优先股（STRC）、ATM 增发导致股本与市值口径频繁跳变，持仓数据为季度披露存在滞后，可能造成假信号",
+    "单笔巨额增持（如 Strive 5.11 亿美元）可在数日内逆转净增持符号，导致信号反复打脸并放大换手成本",
+    "宏观主导：AI 巨头 IPO（Anthropic 千亿、Meta 950 亿）与 FOMC 抽走风险资产流动性，BTC 短期波动可能完全盖过金库因子，需做 FOMC 日剔除的稳健性检验",
+    "永续资金费率在下跌趋势中常为负（空头付费），持有 10 天的费率成本可能侵蚀 alpha"
   ],
   "confidence": "medium",
-  "confidence_reason": "ETF资金流与BTC短期收益的因果关系有明确机制且数据可稳定获取，但样本期短、拐点事件数量有限，需回测验证边际显著性。",
-  "quick_start": "今天先做数据拉取与对齐：1) 用 requests 抓取 https://farside.co.uk/bitcoin-etf-flow-all-data/ 的表格（或SoSoValue API）解析出日期-净流入时间序列存成 CSV；2) 用 ccxt 的 binance 拉 BTC/USDT:USDT 日线：ex.fetch_ohlcv('BTC/USDT:USDT', '1d', since=ms(2024,1,11))，并 fetch_funding_rate_history 获取8小时费率；3) 计算 cum3 = flow.rolling(3).sum()，用 sign 变化生成多空信号，先画出信号点与BTC价格叠加图，人工检查2024-01至2026-10的拐点是否与后续3日收益同向。",
+  "confidence_reason": "叙事端有当日两条硬证据（Strategy 零买入、Bitmine 转回购）且 mNAV 与持仓数据公开可算，但历史触发次数少、阈值需谨慎验证，属于小样本事件型因子。",
+  "quick_start": "pip install yfinance ccxt pandas；用 yfinance.download('MSTR') 拉 MSTR 日收盘，从 filings 手工填入 MSTR 的 BTC 持仓时间序列（2020-08 起约 20 个变更点），用 ccxt.binance().fetch_ohlcv('BTC/USDT','1d') 拉 BTC 日线，算 mNAV = 市值/(持仓×价格)，先输出「mNAV 下穿 1.15 后 1/5/10/20 日 BTC 收益均值与 t 值」这张表，看方向是否成立再补 ETH 腿与股票腿。",
   "model": "deepseek-reasoner",
-  "date": "2026-10-26",
-  "generated_at": "2026-10-26T01:12:30Z"
+  "date": "2026-10-27",
+  "generated_at": "2026-10-27T02:11:37Z"
 }
