@@ -1,0 +1,42 @@
+{
+  "alpha_name": "周一波动率风险溢价择时",
+  "hypothesis": "加密 24/7 交易让周末信息（流动性稀薄、宏观消息堆积）在周一集中释放，HAR 模型在 2024 年后加入周末因子后对周一方差的样本外预测显著改善，而期权市场对周一短期限隐含波动定价滞后、未充分计入周末因子；对手盘是周五收盘前卖出周末/周一 gamma 的做市商与备兑卖方。",
+  "signal_logic": "数据字段：Binance BTCUSDT/ETHUSDT 5 分钟 K 线收盘价、Deribit DVOL 与周一到期（08:00 UTC）平值跨式报价、Binance 永续资金费率。计算：①以 UTC 日为界，周末窗口为周五 00:00 至周日 23:59，计算周末已实现方差 RV_weekend=Σr²（5 分钟收益）；②HAR 特征包含日、周、月 RV 与周末因子 RV_weekend，用滚动 2 年窗口 OLS（或带正则的 HAR-X）拟合，预测周一 00:00-23:59 UTC 的 RV_hat；③计算方差风险溢价 VRP = 周一平值跨式隐含方差 IV_mon − RV_hat。触发条件（每周五 20:00 UTC 决策、周日 23:30 UTC 复核）：VRP < −20%（预测波动高于期权定价）→ 周一 00:00 买入当周周一 08:00 UTC 到期平值跨式/宽跨式，做多 gamma；VRP > +25%（期权偏贵）→ 卖出该跨式或构建 iron condor，做空方差；−20% ≤ VRP ≤ +25% → 空仓。方向中性，只暴露方差；若模型 RV_hat 超过过去 8 周周一 RV 的 80 分位，则同时把 BTC 永续多头杠杆下调（用于趋势叠加组合）。",
+  "data_needed": [
+    "Binance 现货 K 线 REST/WebSocket：https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=5m（另 ETHUSDT）",
+    "Deribit 期权与波动率指数 API：https://www.deribit.com/api/v2/public/get_volatility_index_data?currency=BTC 及周一到期合约 order book/ticker",
+    "Binance/Bybit 永续资金费率与基差（fapi/v1/fundingRate、premiumIndex）",
+    "可选链上/宏观：CME FedWatch 12 月加息概率、稳定币净流入（用于宏观状态分层）"
+  ],
+  "backtest_approach": "资产池：BTC、ETH（后续扩展 SOL）。时间：2019-01 至 2026-10，重点分段比较 2024-01 前后（论文指出 2024 后拟合方差升 27-54%）。频率：周频决策，周一单日持仓（00:00 建仓，23:59 或到期结算平仓）。成本假设：期权双边各 0.03% 权利金 + 1 tick 滑点 + 0.5×spread，现货对冲按 taker 0.04%。评估指标：方差预测 OOS QLIKE 与 R²、策略年化收益、Sharpe、最大回撤、Calmar、胜率、VRP 分层单调性（按 VRP 五分位看平均收益），并与「每周固定卖出周一跨式」基准对比。止损：单周期权权利金亏损达 70% 即平仓；RV_hat 预测失效（连续 4 周 QLIKE 恶化）则暂停策略并重估。",
+  "supporting_sources": [
+    {
+      "title": "Weekend Crypto Volatility and Monday Market Risk",
+      "url": "http://arxiv.org/abs/2610.35702v1",
+      "why": "提供核心信号：HAR 加周末因子预测周一方差，2024 年后拟合方差升 27-54%、OOS QLIKE 降 11-22%，直接给出可复现的特征与评估指标（QLIKE）"
+    },
+    {
+      "title": "Fed’s hawkish rate hold keeps pressure on Bitcoin: Analysts",
+      "url": "https://cointelegraph.com/markets/bitcoin-faces-fresh-pressure-after-feds-hawkish-rate-hold-analysts?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "why": "说明宏观事件在周末/周初集中定价（交易员押注 12 月加息概率 78%），支持周一波动放大且周末因子含信息量的假设，并提示需按宏观状态分层回测"
+    },
+    {
+      "title": "Coinbase earnings: Wall Street divided on trading rebound after Robinhood crypto revenue sinks 55%",
+      "url": "https://www.coindesk.com/markets/2026/10/28/coinbase-earnings-wall-street-divided-on-trading-rebound-as-robinhood-crypto-revenue-sinks-55/",
+      "why": "零售交易量同比大幅下滑意味着周一流动性更薄、做市商 gamma 对冲更被动，放大周一波动并可能让期权隐含波动定价滞后，强化 VRP 机会"
+    }
+  ],
+  "risk_factors": [
+    "周一短期限期权流动性差、买卖价差宽，实际成交价可能远差于 DVOL/中价，导致回测高估收益",
+    "周末因子在极端行情（如 2024 后多次周末暴跌）可能反向：预测高波动但实际跳空单边，卖方策略尾部风险大",
+    "样本量有限（每年仅 52 个周一观测，分段后每段不足 200 个样本），VRP 分层统计显著性弱",
+    "宏观事件（如 12 月加息预期突变）导致周一波动来源与模型特征脱节，模型需频繁重估",
+    "交易所/期权结算规则差异（Deribit 08:00 UTC 到期 vs 自然日窗口）造成信号与持仓窗口错配"
+  ],
+  "confidence": "medium",
+  "confidence_reason": "论文给出了明确的周末因子增益与 OOS QLIKE 改善，逻辑可复现，但依赖期权执行成本与周一短期限流动性，且周频样本量小，需要实测滑点后才能确认净收益。",
+  "quick_start": "先用 Python 拉取数据验证方差可预测性：`python -c \"import requests,pandas as pd; d=requests.get('https://api.binance.com/api/v3/klines',params={'symbol':'BTCUSDT','interval':'5m','startTime':1577836800000,'limit':1000}).json()\"`，写循环分页拉 2019 至今 5m K 线，按 UTC 聚合出日 RV、周末 RV、周一 RV，构造 HAR（日/周/月 RV + 周末因子）滚动 OLS，先只做预测层并输出每周一的 RV_hat 与 QLIKE，与不含周末因子的基准对比；确认 2024 后增益存在，再接入 Deribit 周一到期跨式报价计算 VRP 与 PnL。",
+  "model": "deepseek-reasoner",
+  "date": "2026-10-29",
+  "generated_at": "2026-10-29T02:26:36Z"
+}
