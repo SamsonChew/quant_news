@@ -1,68 +1,52 @@
 {
-  "alpha_name": "交易所被盗事件的BNB/BTC相对价值动量反转",
-  "hypothesis": "交易所被盗或挤兑类冲击发生时，散户与做市商在第一时间无差别抛售平台币、撤离交易所资产，导致BNB相对BTC的折价在数小时内过度反应；对手盘是恐慌性抛售的散户与被迫降风险的做市商，而价差会在交易所给出偿付或储备证明后向均值回归。",
-  "signal_logic": "数据字段：①Binance与Bybit的1小时OHLCV（BNB/USDT、BTC/USDT永续与现货）；②BNB永续8小时资金费率；③CryptoQuant交易所净流出（BTC/ETH/USDT按小时、以美元计价）；④Tether与Circle链上冻结事件金额（Etherscan/Tronscan黑名单与Freeze事件）。触发条件T0：单小时交易所净流出 > 过去30日滚动99分位，且同窗口稳定币发行方冻结金额 ≥ 1亿美元，且BNB/BTC的1小时对数价差相对20日均值低于 -2σ。开仓：T0收盘做空BNB/USDT永续、做多等名义BTC/USDT永续（美元中性价差空头），持仓24小时，若期间出现官方储备证明、注资或偿付声明，则立即平仓并反手做多价差。反转腿平仓条件：价差回到T0前20日均值 ±0.5σ，最长持仓72小时。止损：价差相对入场再扩大2倍ATR(14,1h)。信号频率：小时级扫描、事件驱动（历史约3–8次/年）。",
+  "alpha_name": "强平瀑布后资金费率反转反弹",
+  "hypothesis": "交易所被盗等外生冲击触发被动去杠杆，杠杆多头被迫在流动性最差的时刻平仓，价格超跌且资金费率转负；对手盘是恐慌抛售的杠杆多头和追空的散户，冲击消化后价格均值回归。",
+  "signal_logic": "数据字段：Binance USDT-M 永续 BTCUSDT、ETHUSDT 的 5 分钟 K 线（开高低收、成交额）、8 小时资金费率、未平仓量 OI、强平流（forceOrder，含方向与名义额）。计算：①求 1 小时滚动窗口内多头强平名义额 L1h；②计算过去 90 天 L1h 分布的 99 分位阈值；③计算资金费率 z 分数：用过去 30 天同一结算时刻的资金费率均值和标准差。触发条件（三个条件同时满足）：(a) L1h > 90 天 99 分位，或 L1h > 5 亿美元；(b) 下一次结算资金费率 z 分数 < -1.5，或资金费率本身 < -0.01%；(c) 1 小时收益 < -2%。持仓方向：在触发后的第一个 5 分钟 K 线收盘时做多，BTC、ETH 等名义额配置（波动率倒数加权）。离场：持有满 48 小时；或资金费率转正且下一次结算 > 0 时平仓；或浮盈 +3% 止盈；或浮亏 -2% 止损。",
   "data_needed": [
-    "Binance与Bybit的1小时与8小时K线及永续资金费率（ccxt或交易所REST/WebSocket）",
-    "CryptoQuant交易所净流入流出（BTC/ETH/USDT，按小时，分交易所）",
-    "Glassnode或Arkham的交易所热钱包余额与地址标签、大额转账警报",
-    "Etherscan、Tronscan的USDT/USDC黑名单与Freeze事件日志（含金额与时间戳）",
-    "DefiLlama的DEX TVL与交易暂停状态（用于判断变现通道是否被阻断）"
+    "Binance USDT-M 永续合约 5 分钟 K 线（/fapi/v1/klines，BTCUSDT/ETHUSDT/SOLUSDT）",
+    "Binance 资金费率历史（/fapi/v1/fundingRate，8 小时粒度）与 OI 历史（/futures/data/openInterestHist，5 分钟）",
+    "Binance 强平订单流 WebSocket（!forceOrder@arr，实时流；历史数据可从 Coinglass API 或自行归档回补）",
+    "可选：Bybit v5 线性永续的强平流与资金费率作为交叉验证"
   ],
-  "backtest_approach": "资产池：BNB、BTC、ETH及BGB、KCS、WOO等二线平台币（用于横截面验证）。时间窗口：2019-05至今，重点事件样本：2019 Binance 7000 BTC、2022-11 FTX、2025-02 Bybit 15亿美元、2026-10 Binance 55–58亿美元。频率：1小时信号、持仓1–72小时。成本假设：双边taker 4bp（每边2bp）加实际资金费率结算。评估指标：事件窗口（T0-24h至T0+72h）年化夏普、最大回撤、单事件PnL分布、胜率、价差回归半衰期、相对“只做空BNB”“只做空BTC”基准的超额；同时做安慰剂检验（随机选取净流出高但无冻结事件的时点），验证信号并非来自单纯的BTC Beta暴露。",
+  "backtest_approach": "资产池：BTCUSDT、ETHUSDT、SOLUSDT 永续。时间段：2021-01 至 2026-10（至少覆盖 2021-05-19、2022-11 FTX、2024-08-05、2025-10-11 等瀑布日）。频率：信号在 5 分钟粒度判定，持仓以小时至日级计。成本：taker 手续费 2 个基点（bp）×2 + 滑点 5 个基点（冲击日设为 15 个基点）；资金费率按实际结算计入。止损止盈如上；另做无止损版本对照。评估指标：事件数、每次事件平均收益与胜率、年化夏普（按事件时间加权与按日历时间加权两种）、最大回撤、Calmar、与无条件做多基准及「仅价格跌幅触发」单条件的增量 alpha；再做 1000 次随机时间置换的显著性检验。",
   "supporting_sources": [
     {
-      "title": "Binance loses $5.7 billion in 'biggest crypto hack in history'",
-      "url": "https://www.coindesk.com/business/2026/10/29/potential-multi-billion-binance-hack-hitting-crypto-markets",
-      "why": "定义本次事件冲击的量级与BTC跌至7.7万美元的事实，是价差动量腿的触发样本。"
+      "title": "Crypto liquidations jump to $1.57 billion as Binance hack sends bitcoin, ether lower",
+      "url": "https://www.coindesk.com/markets/2026/10/30/crypto-liquidations-jump-to-usd1-57-billion-as-binance-hack-sends-bitcoin-ether-lower",
+      "why": "直接给出本次 15.7 亿美元强平规模和 BTC 77,350 的回落幅度，是信号触发条件的现实校准样本（L1h 阈值与跌幅阈值的设定依据）。"
     },
     {
-      "title": "Binance hack rattles markets as BNB falls 8%, Bitcoin nears $77K",
-      "url": "https://cointelegraph.com/markets/binance-hack-rattles-crypto-markets-bnb-bitcoin-slide?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-      "why": "BNB下跌8%而BTC相对抗跌，直接给出平台币相对折价这一价差超额来源。"
+      "title": "Binance Hack: Why Bitcoin Didn't Crash Like It Did in 2018",
+      "url": "https://decrypt.co/382257/binance-hack-why-bitcoin-didnt-crash",
+      "why": "BTC 仅跌 3% vs 2018 年同类事件跌 11%，说明外生冲击的价格反应已边际衰减、超跌后回补速度快，支持「强平瀑布后均值回归」而非趋势跟随的核心假设。"
     },
     {
-      "title": "Binance hack drained wallets backing customer assets, reserve data shows",
-      "url": "https://www.coindesk.com/business/2026/10/30/binance-hack-drained-wallets-backing-customer-assets-reserve-data-shows",
-      "why": "ETH储备缺口约6%，说明冲击是真实的储备损失而非纯情绪，支撑“先动量后反转”两段式结构。"
+      "title": "Live updates: Bitcoin falls below $77,000 as Binance exploit combines with tech woes",
+      "url": "https://www.coindesk.com/markets/2026/10/30/live-news-binance-hack-rattles-crypto-as-intel-plunges-and-ai-spending-fears-hit-tech",
+      "why": "确认冲击是「加密事件 + 科技股抛售」的复合冲击，提示回测需把宏观风险偏好（纳指）作为控制变量，避免把 beta 误判为 alpha。"
     },
     {
-      "title": "Binance investigating hack as suspicious outflows reach up to $5.8 billion",
-      "url": "https://www.theblock.co/news/markets/2026-10-29-binance-investigating-hack-suspicious-outflows-5-billion-432171",
-      "why": "提供链上净流出与稳定币冻结17.9亿美元的具体阈值，可直接作为信号的触发门槛标定。"
+      "title": "Secret Service, FBI Join Binance Hack Probe as Circle Freezes $823 Million",
+      "url": "https://decrypt.co/382268/secret-service-fbi-binance-hack-probe",
+      "why": "Circle 冻结 8.23 亿美元稳定币、交易所计提 63.4 亿美元，说明流动性冲击具有短期性、可修复性，支持持有期设在 48 小时而非更长的判断。"
     },
     {
-      "title": "Binance Drained of $5.5 Billion in Suspected Hack, Tether and Circle Freeze $1.8 Billion",
-      "url": "https://decrypt.co/382191/binance-suspected-hack-5-billion-tether-circle-freeze-crypto",
-      "why": "冻结金额与稳定币折价信号，是判断“变现通道受阻→恐慌尾部临近→价差反转”的关键变量。"
-    },
-    {
-      "title": "Binance Hacker Hunts for Exit Ramps as DeFi Exchanges Pause Markets",
-      "url": "https://decrypt.co/382194/binance-hack-exit-ramps-defi-exchange-ethereum",
-      "why": "DEX暂停市场意味着抛压无法持续释放，为价差在24–72小时内回归提供机制解释。"
-    },
-    {
-      "title": "4M Bitcoin Bought Above $85K Could Cap Recovery: Glassnode",
-      "url": "https://decrypt.co/382161/4m-bitcoin-bought-above-85k-could-cap-recovery-glassnode",
-      "why": "BTC上方85K的400万枚供给墙与ETF平均成本，用于设定多头腿的减仓与目标位，避免在供给区继续持有。"
-    },
-    {
-      "title": "Bitcoin slides below $77,000, BNB drops amid Binance hack",
-      "url": "https://www.theblock.co/news/markets/2026-10-29-bitcoin-slides-below-77000-binance-hack-432183",
-      "why": "给出BNB单日7.1%与BTC跌破7.7万的同步折价数据，用于计算入场时的价差z-score。"
+      "title": "Bitcoin risks worst October in 12 years as tech sell-off spreads to gold",
+      "url": "https://cointelegraph.com/markets/bitcoin-risks-worst-october-in-12-years-as-tech-sell-off-spreads-to-gold",
+      "why": "指出风险偏好承压已扩散至黄金，提示反弹做多的失败模式（系统性去杠杆而非单点事件），用于设定止损与研究分层。"
     }
   ],
   "risk_factors": [
-    "历史同类事件样本不足10个，阈值（99分位、1亿美元冻结）易过拟合，需用安慰剂检验与滚动窗口验证稳健性",
-    "交易所快速注资、获得过桥贷款或发布储备证明，可能导致价差在数分钟内瞬间回补，反转腿滑点与追高成本高",
-    "BNB永续资金费率与借币成本在极端行情下剧烈波动，美元中性组合可能因资金费率而侵蚀价差收益",
-    "链上净流出与冻结事件确认存在1–3小时延迟，信号可能在价格已反应后才触发，需测试不同延迟下的衰减曲线",
-    "交易所暂停提现或合约风控调整，导致无法建仓或平仓，实际可交易性与回测假设偏离"
+    "本次被盗规模创纪录，若链上确认资金持续外流或交易所出现挤兑，价格可能不回归而进入趋势下跌，-2% 止损会被连续触发",
+    "强平数据的历史可得性差：Binance 官方不提供长期强平历史，需自行归档或依赖第三方，样本可能有幸存者偏差",
+    "2021–2026 样本中真正满足「99 分位强平 + 资金费率极端负」的事件可能不足 30 个，统计功效低，夏普置信区间宽",
+    "冲击常与宏观事件（纳指回撤、AI 叙事降温）重叠，收益可能被市场 beta 主导，需做行业中性和纳指对冲检验",
+    "交易所对手方风险本身可能导致无法平仓或提币受限，回测无法反映该尾部风险"
   ],
   "confidence": "medium",
-  "confidence_reason": "本次事件量级空前且有多源链上数据交叉验证，机制清晰；但事件驱动策略样本稀少、反转时点依赖官方表态，存在较强的事件特异性与过拟合风险。",
-  "quick_start": "今天先用ccxt拉取2025-02-21（Bybit被盗）与2026-10-29（Binance被盗）前后的1小时数据：import ccxt; ex=ccxt.binance(); 分别fetch_ohlcv('BNB/USDT','1h',since=事件前72小时)与('BTC/USDT','1h')，计算log(BNB/BTC)价差、20小时滚动均值与标准差、z-score曲线，画出事件窗口内价差路径与回归半衰期；再用fetch_funding_rate_history补齐BNB永续资金费率，叠加成本后估算单事件PnL，确认“先扩大后回归”的形态是否存在。",
+  "confidence_reason": "强平瀑布后的短期均值回归在文献与实盘中方向一致且本次有 15.7 亿美元强平的直接样本，但事件样本稀缺、强平历史数据获取困难，且本次冲击与宏观抛售叠加，alpha 与 beta 难以干净分离。",
+  "quick_start": "第一步：用 ccxt 或直接 requests 拉取 Binance 的 `/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1000` 与 `/fapi/v1/klines?symbol=BTCUSDT&interval=5m&limit=1500` 回补近 90 天数据，同时接入 `wss://fstream.binance.com/ws/!forceOrder@arr` 开始归档强平流（写成 append 到 parquet 的常驻脚本）；先用 2024-08-05 与 2025-10-11 两个已知瀑布日做单事件复盘，确认「1h 强平额 > 99 分位 + 资金费率 z<-1.5 + 1h 跌幅>2%」这三个条件在当日是否触发、触发后 48 小时收益是否为正，再决定是否扩到全样本回测。",
   "model": "deepseek-reasoner",
-  "date": "2026-10-30",
-  "generated_at": "2026-10-30T02:37:57Z"
+  "date": "2026-10-31",
+  "generated_at": "2026-10-31T02:16:46Z"
 }
