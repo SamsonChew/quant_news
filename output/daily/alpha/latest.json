@@ -1,52 +1,58 @@
 {
-  "alpha_name": "强平瀑布后资金费率反转反弹",
-  "hypothesis": "交易所被盗等外生冲击触发被动去杠杆，杠杆多头被迫在流动性最差的时刻平仓，价格超跌且资金费率转负；对手盘是恐慌抛售的杠杆多头和追空的散户，冲击消化后价格均值回归。",
-  "signal_logic": "数据字段：Binance USDT-M 永续 BTCUSDT、ETHUSDT 的 5 分钟 K 线（开高低收、成交额）、8 小时资金费率、未平仓量 OI、强平流（forceOrder，含方向与名义额）。计算：①求 1 小时滚动窗口内多头强平名义额 L1h；②计算过去 90 天 L1h 分布的 99 分位阈值；③计算资金费率 z 分数：用过去 30 天同一结算时刻的资金费率均值和标准差。触发条件（三个条件同时满足）：(a) L1h > 90 天 99 分位，或 L1h > 5 亿美元；(b) 下一次结算资金费率 z 分数 < -1.5，或资金费率本身 < -0.01%；(c) 1 小时收益 < -2%。持仓方向：在触发后的第一个 5 分钟 K 线收盘时做多，BTC、ETH 等名义额配置（波动率倒数加权）。离场：持有满 48 小时；或资金费率转正且下一次结算 > 0 时平仓；或浮盈 +3% 止盈；或浮亏 -2% 止损。",
+  "alpha_name": "币安提现冻结期跨所价差回归",
+  "hypothesis": "币安被盗后暂停提现，链上稳定币与 BTC 无法自由跨所搬运，套利者无法抹平价差，导致币安报价相对 Bybit/OKX 出现流动性折价（或溢价）；官方宣布 90% 资产已补足、周日恢复提现，折价回归的确定性高，做对手盘的是因恐慌抛售、无法提币的场内被动卖家和不愿承担交易所对手方风险的做市商。",
+  "signal_logic": "数据字段：Binance、Bybit、OKX 三个交易所的 BTC/USDT 与 ETH/USDT 永续合约 1 分钟 last price 和 mark price、现货 1 分钟 close、三个交易所的资金费率和下一次结算时间、Binance 提现状态（官方公告时间戳）以及链上净流入。计算方式：spread_t = (P_binance,t / P_bybit,t) − 1，取过去 60 分钟滚动均值 μ 和标准差 σ，得到 z_t = (spread_t − μ) / σ；同时计算 Binance 与 Bybit 的资金费率差 funding_diff。触发条件：当 |z_t| > 2.5 且 funding_diff 与价差方向一致（符号相同），同时 Binance 提现状态仍为暂停，则进场做价差收敛交易：若 z_t < −2.5，表示币安折价，则做多币安 BTC 永续、同时做空 Bybit 等名义 BTC 永续；若 z_t > +2.5，则方向相反。出场条件：z_t 回到 0.5 以内，或官方恢复提现后 2 小时内，或持仓满 48 小时。频率为事件驱动，使用 1 分钟到 5 分钟的数据，单次持仓 4 至 48 小时。",
   "data_needed": [
-    "Binance USDT-M 永续合约 5 分钟 K 线（/fapi/v1/klines，BTCUSDT/ETHUSDT/SOLUSDT）",
-    "Binance 资金费率历史（/fapi/v1/fundingRate，8 小时粒度）与 OI 历史（/futures/data/openInterestHist，5 分钟）",
-    "Binance 强平订单流 WebSocket（!forceOrder@arr，实时流；历史数据可从 Coinglass API 或自行归档回补）",
-    "可选：Bybit v5 线性永续的强平流与资金费率作为交叉验证"
+    "Binance 现货和 U 本位永续的 1 分钟 OHLCV 与资金费率（ccxt 或 binance fapi/v1/fundingRate）",
+    "Bybit 和 OKX 的 BTC/USDT、ETH/USDT 永续 1 分钟 OHLCV 与资金费率（ccxt bybit/bybit linear、okx swap）",
+    "Binance 交易所公告和 API 系统状态页（提现暂停、恢复时间戳）",
+    "链上数据：Binance 热钱包 BTC、ETH、USDT 净流入流出（Arkham、Nansen、Dune 或 Glassnode 交易所流量接口）",
+    "USDT 在 TRON 上的转账量与合约授权变化（Tronscan API、Dune），用于确认资金外逃通道是否被冻结阻断"
   ],
-  "backtest_approach": "资产池：BTCUSDT、ETHUSDT、SOLUSDT 永续。时间段：2021-01 至 2026-10（至少覆盖 2021-05-19、2022-11 FTX、2024-08-05、2025-10-11 等瀑布日）。频率：信号在 5 分钟粒度判定，持仓以小时至日级计。成本：taker 手续费 2 个基点（bp）×2 + 滑点 5 个基点（冲击日设为 15 个基点）；资金费率按实际结算计入。止损止盈如上；另做无止损版本对照。评估指标：事件数、每次事件平均收益与胜率、年化夏普（按事件时间加权与按日历时间加权两种）、最大回撤、Calmar、与无条件做多基准及「仅价格跌幅触发」单条件的增量 alpha；再做 1000 次随机时间置换的显著性检验。",
+  "backtest_approach": "资产池为 BTC/USDT、ETH/USDT 永续合约，在 Binance、Bybit、OKX 三个场所观测价差并配对持仓；样本区间为 2024-01-01 到 2026-11-03 全部交易所重大安全事件（含本次 2026-10-28 至 11-03 Binance 事件窗口，以及 Mt.Gox、FTX、Bybit 2025 被盗等历史事件作为外样本），并以无事件窗口作为对照组。回测使用 1 分钟价差序列进行逐笔再平衡，单边成本按 2bp 手续费加 1bp 滑点计算，并考虑提现冻结造成的资金转移失败成本。止损条件为价差扩大至进场时的 2 倍（z > 5），或单一交易所价差绝对值超过 1.5%。评估指标包括年化夏普（按事件日计算）、最大回撤、单次事件平均收益、胜率、价差半衰期，以及扣除成本后的净收益曲线。",
   "supporting_sources": [
     {
-      "title": "Crypto liquidations jump to $1.57 billion as Binance hack sends bitcoin, ether lower",
-      "url": "https://www.coindesk.com/markets/2026/10/30/crypto-liquidations-jump-to-usd1-57-billion-as-binance-hack-sends-bitcoin-ether-lower",
-      "why": "直接给出本次 15.7 亿美元强平规模和 BTC 77,350 的回落幅度，是信号触发条件的现实校准样本（L1h 阈值与跌幅阈值的设定依据）。"
+      "title": "Binance says 90% of stolen assets replenished, targets Sunday withdrawals",
+      "url": "https://cointelegraph.com/news/binance-hack-90-percent-replenished?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "why": "给出明确的提现恢复时点，是可交易的收敛事件锚点（信号退出的时间戳）。"
     },
     {
-      "title": "Binance Hack: Why Bitcoin Didn't Crash Like It Did in 2018",
-      "url": "https://decrypt.co/382257/binance-hack-why-bitcoin-didnt-crash",
-      "why": "BTC 仅跌 3% vs 2018 年同类事件跌 11%，说明外生冲击的价格反应已边际衰减、超跌后回补速度快，支持「强平瀑布后均值回归」而非趋势跟随的核心假设。"
+      "title": "Binance Hack: Everything You Need to Know About the Biggest Crypto Heist in History",
+      "url": "https://decrypt.co/382306/binance-hack-everything-you-need-to-know",
+      "why": "确认约 64 亿美元被盗的规模与交易所对手方风险重估，说明场内资金为何无法跨所套利、折价为何能持续。"
     },
     {
-      "title": "Live updates: Bitcoin falls below $77,000 as Binance exploit combines with tech woes",
-      "url": "https://www.coindesk.com/markets/2026/10/30/live-news-binance-hack-rattles-crypto-as-intel-plunges-and-ai-spending-fears-hit-tech",
-      "why": "确认冲击是「加密事件 + 科技股抛售」的复合冲击，提示回测需把宏观风险偏好（纳指）作为控制变量，避免把 beta 误判为 alpha。"
+      "title": "Bitcoin held up better than expected after Binance hack, Strive CEO says",
+      "url": "https://cointelegraph.com/markets/bitcoin-binance-hack-strive-ceo?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "why": "说明全局价格跌幅温和，价格错位主要体现为跨所价差而非趋势性下跌，支持做价差回归而非方向性交易。"
     },
     {
-      "title": "Secret Service, FBI Join Binance Hack Probe as Circle Freezes $823 Million",
-      "url": "https://decrypt.co/382268/secret-service-fbi-binance-hack-probe",
-      "why": "Circle 冻结 8.23 亿美元稳定币、交易所计提 63.4 亿美元，说明流动性冲击具有短期性、可修复性，支持持有期设在 48 小时而非更长的判断。"
+      "title": "Chainalysis says hacker using 'offensive agentic techniques' accessed its customers' names and emails",
+      "url": "https://www.theblock.co/news/business/2026-10-31-chainalysis-says-hacker-using-offensive-agentic-techniques-accessed-its-customers-names-and-emails-432244",
+      "why": "披露被盗资金借 TRON 规避稳定币冻结，说明跨所搬运通道受阻，为价差持续和后续回归路径提供链上机制解释。"
     },
     {
-      "title": "Bitcoin risks worst October in 12 years as tech sell-off spreads to gold",
-      "url": "https://cointelegraph.com/markets/bitcoin-risks-worst-october-in-12-years-as-tech-sell-off-spreads-to-gold",
-      "why": "指出风险偏好承压已扩散至黄金，提示反弹做多的失败模式（系统性去杠杆而非单点事件），用于设定止损与研究分层。"
+      "title": "FBI confirms North Korea's role in $6 billion Binance hack, asks DeFi community to block BTC, ETH, SOL addresses",
+      "url": "https://www.coindesk.com/policy/2026/10/31/fbi-confirms-north-korea-s-role-in-usd6-billion-binance-hack-asks-defi-community-to-block-btc-eth-sol-addresses",
+      "why": "地址黑名单事件本身构成市场扰动，可作为事件窗口的时间切分与额外脏币折价子策略的触发变量。"
+    },
+    {
+      "title": "A Nasdaq-listed company may sell $450 million bitcoin, citing Binance hack and quantum fears",
+      "url": "https://www.coindesk.com/markets/2026/10/31/a-nasdaq-listed-company-may-sell-usd450-million-bitcoin-citing-binance-hack-and-quantum-fears",
+      "why": "提示存在 4.5 亿美元级别的潜在抛压，是回测中必须纳入的价差扩大风险场景（止损设定的依据）。"
     }
   ],
   "risk_factors": [
-    "本次被盗规模创纪录，若链上确认资金持续外流或交易所出现挤兑，价格可能不回归而进入趋势下跌，-2% 止损会被连续触发",
-    "强平数据的历史可得性差：Binance 官方不提供长期强平历史，需自行归档或依赖第三方，样本可能有幸存者偏差",
-    "2021–2026 样本中真正满足「99 分位强平 + 资金费率极端负」的事件可能不足 30 个，统计功效低，夏普置信区间宽",
-    "冲击常与宏观事件（纳指回撤、AI 叙事降温）重叠，收益可能被市场 beta 主导，需做行业中性和纳指对冲检验",
-    "交易所对手方风险本身可能导致无法平仓或提币受限，回测无法反映该尾部风险"
+    "提现恢复公告可能被再次推迟或黑客资金继续外流，价差扩大导致空头腿被迫平仓（逼仓风险）。",
+    "跨所对冲需要保证金在两个交易所同时维持，若某所临时提高保证金或限制开仓（如本次事件中的 Binance），将无法建仓或被迫裸敞口。",
+    "4.5 亿美元级机构抛售（Next Technology 议案）会造成全局跳空，价差与方向性风险耦合，历史事件样本仅数十个，结论的统计显著性有限。",
+    "监管或交易所单方面下架、地址黑名单导致部分资金彻底冻结，对冲腿无法平仓形成账面亏损。",
+    "资金费率差可能在事件期剧烈波动，使对冲腿的 carry 成本吞掉价差收益。"
   ],
   "confidence": "medium",
-  "confidence_reason": "强平瀑布后的短期均值回归在文献与实盘中方向一致且本次有 15.7 亿美元强平的直接样本，但事件样本稀缺、强平历史数据获取困难，且本次冲击与宏观抛售叠加，alpha 与 beta 难以干净分离。",
-  "quick_start": "第一步：用 ccxt 或直接 requests 拉取 Binance 的 `/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1000` 与 `/fapi/v1/klines?symbol=BTCUSDT&interval=5m&limit=1500` 回补近 90 天数据，同时接入 `wss://fstream.binance.com/ws/!forceOrder@arr` 开始归档强平流（写成 append 到 parquet 的常驻脚本）；先用 2024-08-05 与 2025-10-11 两个已知瀑布日做单事件复盘，确认「1h 强平额 > 99 分位 + 资金费率 z<-1.5 + 1h 跌幅>2%」这三个条件在当日是否触发、触发后 48 小时收益是否为正，再决定是否扩到全样本回测。",
+  "confidence_reason": "事件时点（周日恢复提现）和跨所价差机制清晰可测，但同类样本极少、且提现冻结期间两所价格可比性受流动性和保证金规则变化干扰，统计可信度受限。",
+  "quick_start": "今天用 ccxt 拉取三所 1 分钟数据做价差监控：python -c \"import ccxt, pandas as pd; b=ccxt.binance(); y=ccxt.bybit(); o1=b.fetch_ohlcv('BTC/USDT:USDT','1m',limit=1500); o2=y.fetch_ohlcv('BTC/USDT:USDT','1m',limit=1500); df=pd.DataFrame(o1,columns=['ts','o','h','l','c','v']).set_index('ts')['c'].rename('bin').to_frame().join(pd.DataFrame(o2,columns=['ts','o','h','l','c','v']).set_index('ts')['c'].rename('byb')); df['spread']=df.bin/df.byb-1; df['z']=(df.spread-df.spread.rolling(60).mean())/df.spread.rolling(60).std(); print(df.tail(20))\"，同时挂一个轮询 Binance 系统状态与公告页的脚本记录提现状态变更为事件时间戳，先把价差 z 分数与提现状态的联合序列跑出来。",
   "model": "deepseek-reasoner",
-  "date": "2026-10-31",
-  "generated_at": "2026-10-31T02:16:46Z"
+  "date": "2026-11-01",
+  "generated_at": "2026-11-01T01:59:39Z"
 }
