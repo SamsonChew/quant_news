@@ -1,58 +1,63 @@
 {
-  "alpha_name": "币安挤兑跨所资金费率价差",
-  "hypothesis": "交易所信用危机触发提币挤兑时，币安永续的多头杠杆撤离并出现做空对冲需求，使币安资金费率相对 Bybit/OKX 系统性偏低；对手盘是急于离场的散户多头和不敢套利的做市商，原因是提币受限和对手方风险，导致价差回归缓慢。",
-  "signal_logic": "数据字段：Binance fapi /premiumIndex 与 /fundingRate（BTC/ETH/SOL USDT 永续，8h 结算）、Bybit v5 /v5/market/funding/history、OKX /api/v5/public/funding-rate、Binance 现货与 Coinbase 现货的 BTC-USD 最优买卖价、CryptoQuant/Arkham 的 Binance 24h 净流出（BTC+USDT+USDC）。计算：funding_spread = funding_Binance − median(funding_Bybit, OKX)，取 7 日滚动 z-score（每 8h 一档，共 21 档）；flow_z = Binance 24h 净流出占客户总资产比例的 30 日 z-score。触发条件：funding_spread_z < −2.0 且 flow_z > 2.0（净流出 > 总资产 1%），则开仓做多币安永续、做空 Bybit（或 OKX）永续，按名义价值 1:1 对冲；仓位按 z 分档（−2~−3 半仓，<−3 满仓）。平仓：spread_z 回升至 −0.5 以上，或持仓满 72 小时，或 |spread| 再扩大 2 个标准差并触发止损。备用表达：Binance/Coinbase 现货溢价（负溢价时买币安 BTC、卖 Coinbase BTC），事件窗口内做均值回归。",
+  "alpha_name": "CEX 对手方风险溢价跨所套利",
+  "hypothesis": "交易所被黑客攻击或出现挤兑时，资金为规避对手方风险而集体迁移到「更安全」的交易所，导致被攻击交易所的永续资金费率被恐慌性砸低，与安全交易所的利差出现超额偏离；对手方是恐慌降杠杆的散户与被动风控的做市商，他们付出的风险溢价被我们以 delta 中性方式收取。",
+  "signal_logic": "① 取 Binance、Bybit、OKX 三家的 USDT 永续（BTC/ETH/SOL）每 8h 资金费率与标记价格；② 构造利差 S_t = funding(Bybit) - funding(Binance)（每 8h，bp），对过去 30 天做 z-score；③ 同时计算 Binance 链上 BTC/ETH/USDT 净流出 24h 滚动 z-score（CryptoQuant 交易所净流或 Arkham 标注钱包余额差）；④ 触发条件：S_t 的 z 值 > 2，且过去 48h 内 Binance 净流出 z 值 < -1.5（若为新闻冲击日，可用事件标志替代链上变化作为触发条件）；⑤ 持仓：做多 Binance 永续、做空 Bybit 同币种同名义永续，delta 中性、双边等额保证金；⑥ 平仓：S_t 的 z 值 < 0.5，或满 5 天，或任一交易所宣布暂停提币/提现（此时立即平掉该交易所腿）；⑦ 横截面扩展：同样的触发条件下，做空交易所代币（BNB）或交易所股票（COIN）对 BTC 的相对表现。",
   "data_needed": [
-    "Binance Futures API：/fapi/v1/fundingRate、/fapi/v1/premiumIndex（BTC/ETH/SOL USDT 永续）",
-    "Bybit v5 API：/v5/market/funding/history 与 /v5/market/tickers",
-    "OKX v5 API：/api/v5/public/funding-rate",
-    "CryptoQuant Exchange Netflow（Binance BTC/ETH/稳定币净流出）与 Arkham Intelligence 交易所地址余额",
-    "DefiLlama CEX Transparency / Binance Proof-of-Reserves 披露的总客户资产，用于标准化流出比例",
-    "Coinbase 与 Binance 现货 L2 盘口（WebSocket），用于交叉盘溢价信号"
+    "Binance USDT 永续资金费率与标记价格历史：GET https://fapi.binance.com/fapi/v1/fundingRate（8h 结算）",
+    "Bybit 线性永续资金费率：GET https://api.bybit.com/v5/market/funding/history?category=linear",
+    "OKX 永续资金费率：GET https://www.okx.com/api/v5/public/funding-rate-history",
+    "Binance/Bybit/OKX 的 BTC、ETH、USDT 热钱包与冷钱包余额（CryptoQuant Exchange Flows、Arkham 标注地址、DefiLlama CEX Transparency），用于计算净流出 z-score",
+    "上述三家各自现货与永续的 OHLCV（1h/8h），用于计算基差与滑点"
   ],
-  "backtest_approach": "资产池：BTC、ETH、SOL USDT 永续（Binance vs Bybit vs OKX 三角）加 BTC 现货 Binance/Coinbase 交叉盘。时间窗口：2024-01-01 至 2026-11-02，信号频率 8h（资金费率结算点），事件研究窗口为重大流出日前后各 7 天。成本：每条腿单边 taker 4bp、滑点 2bp，资金费率按实际结算累加，做空腿借币成本计入。止损：单次价差扩大超过入场时 2 个标准差，或滚动 30 日组合回撤 > 3%。评估指标：年化夏普、最大回撤、Calmar、每笔平均 carry（bp/天）、胜率、事件窗口内累计收益与 t 统计量，以及与纯资金费率套利基准的增量 alpha（剔除 BTC beta 后的残差收益）。",
+  "backtest_approach": "资产池：BTCUSDT、ETHUSDT、SOLUSDT 三家永续；时间窗：2021-01 至 2026-11（Bybit/OKX 数据起始日之后按可用性分段回测），8h 频率、按资金费结算点调仓；成本假设：每腿每次调仓 2bp 手续费 + 1bp 滑点，另加 5bp 的额外保证金占用成本；止损：利差 z 值反向扩大至 3σ、或单腿出现提币暂停/价格断档立即平仓；评估指标：年化夏普（日收益）、最大回撤、资金费 carry 年化、胜率、单笔平均持有期、t 统计量、分年度稳健性，以及剔除 2022 年 LUNA/FTX 事件外的表现，以排除单一事件驱动。",
   "supporting_sources": [
     {
-      "title": "Binance net outflows surge to $5.8B as withdrawals resume after record hack",
-      "url": "https://cointelegraph.com/news/binance-net-outflows-surge-to-58b-as-withdrawals-resume-after-record-hack?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-      "why": "给出净流出 58 亿美元、占客户资产 3.4% 的量化口径，直接支撑“净流出比例”作为信号阈值与标准化方式"
+      "title": "Binance begins second withdrawal phase, exchange outflows slow",
+      "url": "https://cointelegraph.com/news/binance-begins-second-withdrawal-phase-following-record-hack?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "why": "直接证明黑客事件后出现集中提现与流出脉冲，是「恐慌迁移→资金费利差」信号的触发事件源"
     },
     {
-      "title": "Binance sees $3.64 billion in net outflows after reopening withdrawals following record hack",
-      "url": "https://www.theblock.co/news/business/2026-11-01-binance-sees-3-64-billion-in-net-outflows-after-reopening-withdrawals-following-record-hack-432259",
-      "why": "提供另一独立口径的净流出 36.4 亿／占总资产 2.1%，说明流出比例是稳定的可测变量而非单源噪声"
+      "title": "South Korea urges exchanges to boost cold storage after Binance hack",
+      "url": "https://cointelegraph.com/news/south-korea-urges-exchanges-to-boost-cold-storage-after-binance-hack?utm_source=rss_feed&utm_medium=rss_partner_inbound",
+      "why": "监管要求冷存储比例升至 80%，说明交易所信用风险正在被重新定价，支撑利差具有持续性的假设"
     },
     {
-      "title": "Binance opens crypto withdrawals in phases starting with bitcoin following $6.3 billion hack",
-      "url": "https://www.coindesk.com/markets/2026/11/01/binance-opens-crypto-withdrawals-in-phases-starting-with-bitcoin-following-usd6-3-billion-hack",
-      "why": "说明提币被分阶段限制，正是跨所价差无法被套利者立即抹平、从而可交易的微观结构原因，也界定了风险窗口"
+      "title": "Binance completes latest proof of reserves as it works to restore assets, withdrawals after record hack",
+      "url": "https://www.theblock.co/news/business/2026-11-02-binance-zero-knowledge-proof-of-reserves-snapshot-hack-recovery-432321",
+      "why": "提供可验证的储备快照与损失回补进度（95%），可作为利差收敛（平仓）的基本面确认变量"
     },
     {
-      "title": "Bitcoin ETF Investors Head for the Exits After Record Binance Hack",
-      "url": "https://decrypt.co/382309/bitcoin-etf-investors-exits-record-binance-hack",
-      "why": "ETF 单日流出 6.432 亿美元验证信用冲击外溢到机构资金流，支持把流出信号与价格/费率偏离联系起来"
+      "title": "Brazil's Largest Exchange Mercado Bitcoin Halts Withdrawals After $40 Million Hack",
+      "url": "https://decrypt.co/382341/mercado-bitcoin-halts-withdrawals-40-million-hack",
+      "why": "额外的交易所停提事件样本，用于检验「提币暂停→利差跳变→强制平仓」的风控规则"
     },
     {
-      "title": "THORChain halts swaps after block reorg bug, slowing Binance hackers",
-      "url": "https://cointelegraph.com/news/thorchain-halts-swaps-after-block-reorg-bug-slowing-binance-hackers?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-      "why": "跨链通道中断意味着套利与资金迁移的路径受阻，跨所价差收敛更慢，提高该策略的持有期收益"
+      "title": "North Korea Is Laundering Binance Hack Loot at One New Wallet Every 25 Seconds",
+      "url": "https://decrypt.co/382355/north-korea-laundering-binance-hack-loot-new-wallet-every-25-seconds",
+      "why": "被盗资金链上异常钱包激增可作为高频链上风险信号，用于提前触发或加仓择时"
     },
     {
-      "title": "Billions flee Binance on reopen, THORChain founder opposes coin freeze: Hodler’s Digest",
-      "url": "https://cointelegraph.com/magazine/36b-flees-binance-on-reopen-thorchain-co-founder-opposes-coin-freeze-hodlers-digest?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-      "why": "CEX 与跨链协议信任被重新定价的叙事，支持把交易所信用风险作为独立因子而非宏观 beta"
+      "title": "On-Chain Behavioral Signatures for Classifying Centralized Exchange Addresses on Ethereum Using Proof-of-Reserves",
+      "url": "http://arxiv.org/abs/2610.41888v1",
+      "why": "提供用 PoR 标签 + 58 维链上特征识别 CEX 地址的方法，可用于自建交易所净流/储备数据，而非依赖第三方"
+    },
+    {
+      "title": "Coinbase downgraded at Morgan Stanley; price target slashed 53% on weak earnings outlook",
+      "url": "https://www.coindesk.com/markets/2026/11/02/morgan-stanley-downgrades-coinbase-slashes-price-target-53-on-weak-earnings-outlook",
+      "why": "支撑横截面腿：交易所相关股权/代币在交易量走弱 + 黑客余波下相对 BTC 有系统性折价"
     }
   ],
   "risk_factors": [
-    "币安可能再次暂停提币或限制合约保证金划转，导致对冲腿无法平仓，形成单边敞口",
-    "资金费率价差可能主要反映 BTC 方向性下跌的 beta 而非信用风险，若不剥离市场因子会误判 alpha 来源",
-    "同类黑客级事件样本极少（近 3 年个位数），阈值与持有期参数存在过拟合风险",
-    "跨所保证金需预置在两家交易所，占用资金且承担第二家交易所自身的对手方与合规风险"
+    "交易所直接违约或提币冻结，会导致套利的一条腿资金被锁死，历史回测无法反映这种「尾部即全损」风险",
+    "资金费利差可能由结构性因素（用户结构、保险基金规则、杠杆需求）长期维持而非均值回归，做空利差方向可能持续亏损",
+    "链上交易所地址标注错误或热钱包轮换会造成净流出信号误触发，且新闻事件驱动样本极少（2026 年仅数起），统计功效不足",
+    "两个交易所同时出现价格断档或标记价格机制差异，导致 delta 中性失效与强平",
+    "监管或交易所单方面调整资金费率上限/结算频率，会改变利差分布"
   ],
   "confidence": "medium",
-  "confidence_reason": "事件本身与流出比例数据扎实且多源交叉验证，但可交易窗口短、可比历史事件样本少，统计显著性需要在更长历史上做准事件研究确认。",
-  "quick_start": "先用 Python 拉取三所资金费率历史做 30 分钟可行性验证：requests 调 Binance `https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1000`、Bybit `https://api.bybit.com/v5/market/funding/history?category=linear&symbol=BTCUSDT&limit=200`、OKX `https://www.okx.com/api/v5/public/funding-rate-history?instId=BTC-USDT-SWAP&limit=100`，合并成 8h 面板，计算 spread 与 7 日滚动 z-score，先画出 2026-10-25 至 2026-11-02 的 spread 曲线，确认黑客事件当周是否出现预期负偏离，再决定是否扩展到 ETH/SOL 与完整回测。",
+  "confidence_reason": "资金费率数据完全公开可得、信号与执行逻辑清晰可复现，但核心驱动是低频黑天鹅事件，样本量小且含对手方违约尾部风险，需严格分段验证与事件剔除检验。",
+  "quick_start": "今天先拉取三所资金费率历史并对齐到 8h 时间戳：curl 'https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1000' 分页抓完，curl 'https://api.bybit.com/v5/market/funding/history?category=linear&symbol=BTCUSDT&limit=200' 分页抓完，用 pandas 合并到 UTC 8h 网格，计算 spread = funding_bybit - funding_binance 的 30 天滚动 z-score，先画 2026-10 至 2026-11 黑客事件窗口内利差的时序图，确认利差是否在事件后出现显著的 2σ 以上偏离并随后收敛。",
   "model": "deepseek-reasoner",
-  "date": "2026-11-02",
-  "generated_at": "2026-11-02T02:16:41Z"
+  "date": "2026-11-03",
+  "generated_at": "2026-11-03T04:08:38Z"
 }
