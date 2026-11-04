@@ -1,0 +1,40 @@
+{
+  "alpha_name": "Uniswap 流量背离反转",
+  "hypothesis": "链上 Uniswap v3 跨账户同向成交中真正羊群占比很低（κ 仅 0.05–0.10），大部分极端的净流量失衡来自无信息的 CEX-DEX 抢价与散户跟单，而非知情交易；这些被噪声推高的失衡会在数十分钟内被做市商回补，对手盘是延迟套利机器人和被动 AMM 曲线。",
+  "signal_logic": "数据字段：(a) Uniswap v3 ETH/USDC 0.05% 池每笔 swap 的 sender 地址、amount0/amount1、block timestamp；(b) Binance ETHUSDT 永续 5m OHLCV 与资金费率。计算：按 5 分钟桶聚合，对有符号成交量 signed_vol = Σ(+amount_usd if buy else −amount_usd)，得到净失衡 IMB_t = signed_vol / total_vol；剔除已知套利/MEV 机器人地址（高频、与 CEX 价差同步的 top 地址白名单外置）；对 IMB 做 30 分钟滚动 z-score。触发条件：|z(IMB_5m)| > 2.0 且该 5m 桶内跨账户方向相关 κ_proxy（桶内同向地址占比减去随机基线）< 0.15（即确认非羊群），则反向开仓：z>+2 做空 ETHUSDT 永续，z<−2 做多。持仓 15–60 分钟或 z 回到 ±0.5 平仓；若期间 CEX 永续 1 分钟收益与信号方向相反超过 1.5×ATR(20) 立即止损。",
+  "data_needed": [
+    "Uniswap v3 ETH/USDC 0.05% 池 swap 事件（Dune Analytics SQL 或 The Graph subgraph，含 sender/recipient、amount0、amount1、block_time）",
+    "Binance 与 Bybit ETHUSDT / BTCUSDT 永续 5m 与 1m K 线、资金费率历史（ccxt 或交易所 REST/数据归档）",
+    "Ethereum 区块时间戳与交易 to/from 用于对齐并识别高频套利机器人地址（Etherscan API / 本地归档节点）"
+  ],
+  "backtest_approach": "资产池：ETHUSDT、WBTCUSDT 永续（对应 Uniswap v3 ETH/USDC、WBTC/USDC 主池）。时间窗口：2024-01-01 至 2026-10-31，样本内 2024-01~2025-09 调参，2025-10~2026-10 强制 holdout。频率：5 分钟信号、1 分钟执行对齐。成本：双边 2bps 手续费 + 1.5bps 滑点，计入永续资金费率。仓位：波动率目标化（每笔风险 10bps 权益）。评估指标：年化夏普、最大回撤、胜率、平均持仓时长、换手率、按季度稳健性、随机起点 500 次蒙特卡洛分布，并做 κ 阈值敏感性（0.10/0.15/0.20）与剔除套利地址前后的对比。",
+  "supporting_sources": [
+    {
+      "title": "Herding or Racing? Decomposing Cross-Account Order-Flow Persistence in On-Chain Markets",
+      "url": "http://arxiv.org/abs/2611.02616v1",
+      "why": "核心依据：Uniswap v3 羊群占比 0.65–0.86 但跨账户信号相关 κ 仅 0.05–0.10，说明链上极端同向流量多为 CEX 抢价而非知情羊群，支持对极端失衡做反向。"
+    },
+    {
+      "title": "AIDA: An AI Outage Registry with Evidence from On-Chain MEV",
+      "url": "http://arxiv.org/abs/2611.01656v1",
+      "why": "证明知情/抢跑流主要通过私有执行器而非公开内存池，公开池内可见的 swap 流量信息含量低，强化「反向公开流量」的逻辑。"
+    },
+    {
+      "title": "I tested 748 crypto trading strategies and open-sourced the code and autopsy reports of the corpses",
+      "url": "https://www.reddit.com/r/algotrading/comments/1xmtc3e/i_tested_748_crypto_trading_strategies_and/",
+      "why": "提供七阶段过拟合防线（IS→OOS→滚动 walk-forward→随机起点→滑点压力→强制 holdout），直接复用为本 alpha 的回测与验收流程。"
+    }
+  ],
+  "risk_factors": [
+    "κ 与羊群分解依赖地址聚类，同一实体多地址会低估 κ，导致把知情流量误判为噪声",
+    "5 分钟高频反转策略对延迟与手续费极度敏感，Binance taker 费率上调或滑点扩大即可吞噬全部边际",
+    "Uniswap v3 集中流动性使池子构成随价格区间迁移，2024 与 2026 的微观结构差异可能使参数失效",
+    "监管/事件冲击（如 MEV 或私有执行器规则变化）会系统性改变公开池流量的信息含量"
+  ],
+  "confidence": "medium",
+  "confidence_reason": "κ 极低这一实证结果提供了清晰的机制性依据，且数据全部公开可获取，但论文未直接给出可交易的收益预测，需自行验证反转幅度是否覆盖成本。",
+  "quick_start": "今天先跑通数据管线：用 ccxt 拉取 Binance ETHUSDT 永续近 180 天 1m K 线（fetch_ohlcv('ETH/USDT:USDT','1m',limit=1000) 循环翻页），同时在 Dune 上执行一条 Uniswap v3 ETH/USDC 0.05% 池的 swap 查询按 5 分钟桶聚合 signed volume，把两者按 UTC 时间戳对齐，画出 |z(IMB)|>2 后 15/30/60 分钟的永续收益均值曲线，先确认反转方向与量级再写完整回测。",
+  "model": "deepseek-reasoner",
+  "date": "2026-11-04",
+  "generated_at": "2026-11-04T03:19:59Z"
+}
