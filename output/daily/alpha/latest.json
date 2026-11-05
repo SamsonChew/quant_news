@@ -1,40 +1,46 @@
 {
-  "alpha_name": "Uniswap 流量背离反转",
-  "hypothesis": "链上 Uniswap v3 跨账户同向成交中真正羊群占比很低（κ 仅 0.05–0.10），大部分极端的净流量失衡来自无信息的 CEX-DEX 抢价与散户跟单，而非知情交易；这些被噪声推高的失衡会在数十分钟内被做市商回补，对手盘是延迟套利机器人和被动 AMM 曲线。",
-  "signal_logic": "数据字段：(a) Uniswap v3 ETH/USDC 0.05% 池每笔 swap 的 sender 地址、amount0/amount1、block timestamp；(b) Binance ETHUSDT 永续 5m OHLCV 与资金费率。计算：按 5 分钟桶聚合，对有符号成交量 signed_vol = Σ(+amount_usd if buy else −amount_usd)，得到净失衡 IMB_t = signed_vol / total_vol；剔除已知套利/MEV 机器人地址（高频、与 CEX 价差同步的 top 地址白名单外置）；对 IMB 做 30 分钟滚动 z-score。触发条件：|z(IMB_5m)| > 2.0 且该 5m 桶内跨账户方向相关 κ_proxy（桶内同向地址占比减去随机基线）< 0.15（即确认非羊群），则反向开仓：z>+2 做空 ETHUSDT 永续，z<−2 做多。持仓 15–60 分钟或 z 回到 ±0.5 平仓；若期间 CEX 永续 1 分钟收益与信号方向相反超过 1.5×ATR(20) 立即止损。",
+  "alpha_name": "20分钟滞后趋势→波动率预测",
+  "hypothesis": "波动率对前序价格趋势的响应存在约 20 分钟的最强滞后与约 1.5 小时半衰期，且带时间反演不对称：做市商与被动止损流（止损簇、期权做市商 gamma 对冲）在趋势形成后延迟放大波动，导致短期已实现波动可被前序趋势方向与幅度预测；对手盘是把波动当白噪声、按固定持仓周期交易的短线投机者与网格策略。",
+  "signal_logic": "数据字段：Binance/Bybit 1 分钟 OHLCV 的 close。①1 分钟对数收益 r_t=ln(C_t/C_{t-1})；②前序趋势项 T_t=Σ_{i=1..20} r_{t-i}（20 分钟滞后窗，论文最强滞后点），并用 sign(T_t) 保留方向做时间反演不对称分解：Tplus=max(T_t,0)，Tminus=max(-T_t,0)；③当前已实现波动 RV_t=sqrt(Σ_{i=1..20} r_{t-i}^2)；④用滚动 30 天窗口做 OLS：RV_{t+1..t+20}（未来 20 分钟 RV）~ a + b1*|T_t| + b2*Tplus + b3*Tminus + b4*RV_t，得到波动预测 RVhat_{t+20}。触发条件：当 RVhat_{t+20} / RV_t > 1.3（预期波动扩张）且 |T_t| 超过其 30 天 80 分位数时：(a) 若只用 OHLCV 交易，则在 t+20 分钟窗口内做 delta 中性双边挂单（网格/做市）胜率下降，反向操作：不做均值回复入场，改为 20 分钟动量顺 T_t 方向持有 20 分钟；(b) 若有期权数据，则买入 60–90 分钟到期的平值跨式（long gamma）或在 RVhat 显著低于 RV_t 时卖出跨式。信号频率：每 1 分钟更新，每 20 分钟一个决策点；持仓周期 20–90 分钟（半衰期 1.5 小时内的衰减曲线）。",
   "data_needed": [
-    "Uniswap v3 ETH/USDC 0.05% 池 swap 事件（Dune Analytics SQL 或 The Graph subgraph，含 sender/recipient、amount0、amount1、block_time）",
-    "Binance 与 Bybit ETHUSDT / BTCUSDT 永续 5m 与 1m K 线、资金费率历史（ccxt 或交易所 REST/数据归档）",
-    "Ethereum 区块时间戳与交易 to/from 用于对齐并识别高频套利机器人地址（Etherscan API / 本地归档节点）"
+    "Binance 现货与 USDT 永续 1 分钟 K 线（BTCUSDT、ETHUSDT，data.binance.vision 月度 zip 或 ccxt/binance API）",
+    "Bybit 永续 1 分钟 K 线与资金费率历史（资金费率用于剥离 carry 对短波动头寸的污染）",
+    "Deribit 期权隐含波动率与 DVOL 指数、25-delta skew（用于验证预测波动 vs 隐含波动的价差）",
+    "链上/事件标记（可选）：THORChain 跨链兑换量、交易所净流入，用于剔除黑客洗钱等异常时段"
   ],
-  "backtest_approach": "资产池：ETHUSDT、WBTCUSDT 永续（对应 Uniswap v3 ETH/USDC、WBTC/USDC 主池）。时间窗口：2024-01-01 至 2026-10-31，样本内 2024-01~2025-09 调参，2025-10~2026-10 强制 holdout。频率：5 分钟信号、1 分钟执行对齐。成本：双边 2bps 手续费 + 1.5bps 滑点，计入永续资金费率。仓位：波动率目标化（每笔风险 10bps 权益）。评估指标：年化夏普、最大回撤、胜率、平均持仓时长、换手率、按季度稳健性、随机起点 500 次蒙特卡洛分布，并做 κ 阈值敏感性（0.10/0.15/0.20）与剔除套利地址前后的对比。",
+  "backtest_approach": "资产池：BTCUSDT、ETHUSDT（现货+永续），可扩展至 SOL、BNB 做横截面稳健性。时间段：2021-01-01 至 2026-10-31 的 1 分钟数据，前 70% 训练（估计 b 系数）、后 30% 严格样本外，另做 2024 年后单独 walk-forward（每月滚动重估系数）。频率：1 分钟计算、20 分钟决策。止损：单笔持仓亏损达 2×ATR(20m) 或持仓满 90 分钟强制平仓；短波动头寸在单分钟 |r|>4σ 时立即平仓。评估指标：①预测力——RVhat 与未来 20 分钟 RV 的 Spearman IC 及按分位分组的单调性、Newey-West t 值；②策略层——波动率择时叠加前后夏普差、年化收益、最大回撤、换手率与手续费敏感性（taker 2bp / maker 0bp 两档）、Calmar；③剔除美股时段（论文称 SPY 无同效应）做子样本对照，检验是否为 crypto 特有微观结构。",
   "supporting_sources": [
     {
-      "title": "Herding or Racing? Decomposing Cross-Account Order-Flow Persistence in On-Chain Markets",
-      "url": "http://arxiv.org/abs/2611.02616v1",
-      "why": "核心依据：Uniswap v3 羊群占比 0.65–0.86 但跨账户信号相关 κ 仅 0.05–0.10，说明链上极端同向流量多为 CEX 抢价而非知情羊群，支持对极端失衡做反向。"
+      "title": "How market volatility responds to a preceding price trend: a lag-resolved measurement in cryptocurrencies and equities",
+      "url": "http://arxiv.org/abs/2611.04533v1",
+      "why": "直接给出核心可测参数：BTC/ETH 波动对前序趋势的响应在 20 分钟滞后最强、约 1.5 小时半衰、含 0.4–0.9 的时间反演不对称成分，且股票市场检测不到，说明是 crypto 微观结构效应，可直接转成 1 分钟级信号与持仓周期。"
     },
     {
-      "title": "AIDA: An AI Outage Registry with Evidence from On-Chain MEV",
-      "url": "http://arxiv.org/abs/2611.01656v1",
-      "why": "证明知情/抢跑流主要通过私有执行器而非公开内存池，公开池内可见的 swap 流量信息含量低，强化「反向公开流量」的逻辑。"
+      "title": "THORChain's RUNE jumps 10% as North Korean hackers resume laundering Binance loot",
+      "url": "https://www.coindesk.com/markets/2026/11/04/thorchain-s-rune-jumps-10-as-north-korean-hackers-resume-laundering-binance-loot",
+      "why": "提供事件型异常波动来源（跨链洗钱引发的单日 10% 拉升），支持在回测中对事件窗口做标记与剔除，避免把事件驱动的波动误判为趋势-波动滞后效应。"
     },
     {
-      "title": "I tested 748 crypto trading strategies and open-sourced the code and autopsy reports of the corpses",
-      "url": "https://www.reddit.com/r/algotrading/comments/1xmtc3e/i_tested_748_crypto_trading_strategies_and/",
-      "why": "提供七阶段过拟合防线（IS→OOS→滚动 walk-forward→随机起点→滑点压力→强制 holdout），直接复用为本 alpha 的回测与验收流程。"
+      "title": "Riot shares surge on $28B AI lease as Hut 8 sinks on revenue miss",
+      "url": "https://cointelegraph.com/news/riots-28b-ai-deal-lifts-shares-as-hut-8-faces-transition-costs?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "why": "矿企卖 BTC 融资等个股级事件会在现货端造成突发供给冲击，是波动率外生跳升的典型样本，用于检验信号在剔除事件日后是否仍稳健。"
+    },
+    {
+      "title": "BitMart founder says security team ‘severely understaffed’ after new hack",
+      "url": "https://cointelegraph.com/news/bitmart-hack-security-staffing-crypto-exchange-restructuring?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "why": "交易所被黑属于尾部波动事件，提示波动率预测模型需设置跳变鲁棒层（如对单分钟 >4σ 收益做 winsorize 或切换 regime 参数）。"
     }
   ],
   "risk_factors": [
-    "κ 与羊群分解依赖地址聚类，同一实体多地址会低估 κ，导致把知情流量误判为噪声",
-    "5 分钟高频反转策略对延迟与手续费极度敏感，Binance taker 费率上调或滑点扩大即可吞噬全部边际",
-    "Uniswap v3 集中流动性使池子构成随价格区间迁移，2024 与 2026 的微观结构差异可能使参数失效",
-    "监管/事件冲击（如 MEV 或私有执行器规则变化）会系统性改变公开池流量的信息含量"
+    "论文结论可能来自特定样本期（低费率、做市主导时期），在 2024 年后 ETF/机构化、做市商结构变化后滞后结构可能漂移甚至消失",
+    "效应量级可能极小（波动率变化仅数个基点），在 taker 手续费与滑点下无法变现，尤其纯 OHLCV 版本的动量变体换手极高",
+    "短波动（卖跨式）腿存在显著负偏与跳变风险：宏观数据、清算瀑布、黑客事件可在数分钟内吞掉数月权利金",
+    "期权端需要 Deribit 逐笔与隐含波动数据，链上/期权数据获取成本与延迟导致实盘可执行性弱于回测"
   ],
   "confidence": "medium",
-  "confidence_reason": "κ 极低这一实证结果提供了清晰的机制性依据，且数据全部公开可获取，但论文未直接给出可交易的收益预测，需自行验证反转幅度是否覆盖成本。",
-  "quick_start": "今天先跑通数据管线：用 ccxt 拉取 Binance ETHUSDT 永续近 180 天 1m K 线（fetch_ohlcv('ETH/USDT:USDT','1m',limit=1000) 循环翻页），同时在 Dune 上执行一条 Uniswap v3 ETH/USDC 0.05% 池的 swap 查询按 5 分钟桶聚合 signed volume，把两者按 UTC 时间戳对齐，画出 |z(IMB)|>2 后 15/30/60 分钟的永续收益均值曲线，先确认反转方向与量级再写完整回测。",
+  "confidence_reason": "信号参数（20 分钟滞后、1.5 小时半衰、时间反演不对称）有明确的论文量化结果且数据完全可用公开 1 分钟 K 线复现，但论文未给出经济显著性与交易成本后的净收益，变现路径需自行验证。",
+  "quick_start": "今天先下载数据验证滞后结构：`for m in 2025-01 2025-02; do wget https://data.binance.vision/data/futures/um/monthly/klines/BTCUSDT/1m/BTCUSDT-1m-$m.zip; done`，读入 pandas 后计算 r=log(close).diff()，构造 RV_t=rolling(20).apply(lambda x:(x**2).sum()**.5)、T_t=rolling(20).sum().shift(1)，对未来 20 分钟 RV 按 T_t 的十分位分组求均值，画出「滞后 1..120 分钟」的响应曲线，复现 20 分钟峰值与 ~90 分钟半衰即进入第二步估计 OLS 系数。",
   "model": "deepseek-reasoner",
-  "date": "2026-11-04",
-  "generated_at": "2026-11-04T03:19:59Z"
+  "date": "2026-11-05",
+  "generated_at": "2026-11-05T03:27:25Z"
 }
