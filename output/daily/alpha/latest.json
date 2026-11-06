@@ -1,46 +1,42 @@
 {
-  "alpha_name": "20分钟滞后趋势→波动率预测",
-  "hypothesis": "波动率对前序价格趋势的响应存在约 20 分钟的最强滞后与约 1.5 小时半衰期，且带时间反演不对称：做市商与被动止损流（止损簇、期权做市商 gamma 对冲）在趋势形成后延迟放大波动，导致短期已实现波动可被前序趋势方向与幅度预测；对手盘是把波动当白噪声、按固定持仓周期交易的短线投机者与网格策略。",
-  "signal_logic": "数据字段：Binance/Bybit 1 分钟 OHLCV 的 close。①1 分钟对数收益 r_t=ln(C_t/C_{t-1})；②前序趋势项 T_t=Σ_{i=1..20} r_{t-i}（20 分钟滞后窗，论文最强滞后点），并用 sign(T_t) 保留方向做时间反演不对称分解：Tplus=max(T_t,0)，Tminus=max(-T_t,0)；③当前已实现波动 RV_t=sqrt(Σ_{i=1..20} r_{t-i}^2)；④用滚动 30 天窗口做 OLS：RV_{t+1..t+20}（未来 20 分钟 RV）~ a + b1*|T_t| + b2*Tplus + b3*Tminus + b4*RV_t，得到波动预测 RVhat_{t+20}。触发条件：当 RVhat_{t+20} / RV_t > 1.3（预期波动扩张）且 |T_t| 超过其 30 天 80 分位数时：(a) 若只用 OHLCV 交易，则在 t+20 分钟窗口内做 delta 中性双边挂单（网格/做市）胜率下降，反向操作：不做均值回复入场，改为 20 分钟动量顺 T_t 方向持有 20 分钟；(b) 若有期权数据，则买入 60–90 分钟到期的平值跨式（long gamma）或在 RVhat 显著低于 RV_t 时卖出跨式。信号频率：每 1 分钟更新，每 20 分钟一个决策点；持仓周期 20–90 分钟（半衰期 1.5 小时内的衰减曲线）。",
+  "alpha_name": "纳指隔夜暴跌外溢做空BTC",
+  "hypothesis": "美股大幅下跌后，跨资产风险偏好收缩会在亚洲和欧洲时段继续传导到加密市场，因为杠杆多头、做市商库存和被动风控的减仓还没完成；对手盘就是反应滞后、仍以“数字黄金”框架持有高 Beta 山寨币和 BTC 多头的散户和趋势跟随 CTA。",
+  "signal_logic": "数据字段：Binance USDⓈ-M 永续 BTCUSDT、ETHUSDT、SOLUSDT 的 1h OHLCV 与 fundingRate；QQQ（或 ES 期货）日线收盘。计算：(1) 每日 13:30 UTC 计算 QQQ 前一交易日收益 r_eq 及其 60 日滚动 z-score；(2) 计算 BTC 过去 24h 收益 r_btc；(3) 触发条件：z_eq < -1.5（约日跌幅 2-3%）且 r_btc > 0.6 * beta_60d * r_eq（beta_60d 为 BTC 对 QQQ 的 60 日滚动回归斜率），也就是 BTC 尚未充分定价；(4) 过滤：若 BTC 永续当期资金费率 8h 均值 < -0.01%（空头已经拥挤），跳过做空；(5) 持仓方向：14:00 UTC 开空 BTCUSDT 永续，持有 8 小时至 22:00 UTC 平仓；镜像条件 z_eq > +1.5 且 BTC 未跟涨则做多。",
   "data_needed": [
-    "Binance 现货与 USDT 永续 1 分钟 K 线（BTCUSDT、ETHUSDT，data.binance.vision 月度 zip 或 ccxt/binance API）",
-    "Bybit 永续 1 分钟 K 线与资金费率历史（资金费率用于剥离 carry 对短波动头寸的污染）",
-    "Deribit 期权隐含波动率与 DVOL 指数、25-delta skew（用于验证预测波动 vs 隐含波动的价差）",
-    "链上/事件标记（可选）：THORChain 跨链兑换量、交易所净流入，用于剔除黑客洗钱等异常时段"
+    "Binance USDⓈ-M Futures REST/WebSocket：/fapi/v1/klines（BTCUSDT/ETHUSDT/SOLUSDT，1h）与 /fapi/v1/fundingRate",
+    "Bybit V5 market/kline 作为交叉验证与备选执行场所",
+    "Yahoo Finance / Polygon：QQQ、SPY 日线与 ES 期货隔夜报价",
+    "Coinglass 或 Binance 强平流（allForceOrders）作为清算级联辅助变量"
   ],
-  "backtest_approach": "资产池：BTCUSDT、ETHUSDT（现货+永续），可扩展至 SOL、BNB 做横截面稳健性。时间段：2021-01-01 至 2026-10-31 的 1 分钟数据，前 70% 训练（估计 b 系数）、后 30% 严格样本外，另做 2024 年后单独 walk-forward（每月滚动重估系数）。频率：1 分钟计算、20 分钟决策。止损：单笔持仓亏损达 2×ATR(20m) 或持仓满 90 分钟强制平仓；短波动头寸在单分钟 |r|>4σ 时立即平仓。评估指标：①预测力——RVhat 与未来 20 分钟 RV 的 Spearman IC 及按分位分组的单调性、Newey-West t 值；②策略层——波动率择时叠加前后夏普差、年化收益、最大回撤、换手率与手续费敏感性（taker 2bp / maker 0bp 两档）、Calmar；③剔除美股时段（论文称 SPY 无同效应）做子样本对照，检验是否为 crypto 特有微观结构。",
+  "backtest_approach": "资产池：BTCUSDT、ETHUSDT、SOLUSDT 永续（Binance 为主，Bybit 复现）。时间窗口：2021-01-01 至 2026-10-31，1h 频率，事件驱动逐笔回测。执行假设：14:00 UTC 用下一根 1h 开盘价成交，单边成本 5bp（含滑点），资金费率按实际 8h 结算计入持仓成本。风控：单笔止损 +2%，止盈 -3% 或 22:00 UTC 强制平仓，单品种最大仓位 1x 名义。对照组：(a) 同窗口无条件持有收益；(b) 随机入场 1000 次 bootstrap 分布；(c) 只用 z_eq 不过滤 BTC 未定价条件的简化版。评估指标：年化夏普、最大回撤、单笔胜率、盈亏比、Profit Factor、触发次数与分年度稳定性、与 BTC 现货 30 日相关性。",
   "supporting_sources": [
     {
-      "title": "How market volatility responds to a preceding price trend: a lag-resolved measurement in cryptocurrencies and equities",
-      "url": "http://arxiv.org/abs/2611.04533v1",
-      "why": "直接给出核心可测参数：BTC/ETH 波动对前序趋势的响应在 20 分钟滞后最强、约 1.5 小时半衰、含 0.4–0.9 的时间反演不对称成分，且股票市场检测不到，说明是 crypto 微观结构效应，可直接转成 1 分钟级信号与持仓周期。"
+      "title": "Bitcoin erases post-election gains as Wall Street selloff triggers over $1 billion in crypto liquidations",
+      "url": "https://www.theblock.co/news/markets/2026-11-05-bitcoin-erases-post-election-gains-wall-street-selloff-liquidations-435434",
+      "why": "提供当日 BTC -6%、ETH -7% 与 10.3 亿美元清算的实证，说明美股抛售到加密的传导链条真实存在且伴随清算放大。"
     },
     {
-      "title": "THORChain's RUNE jumps 10% as North Korean hackers resume laundering Binance loot",
-      "url": "https://www.coindesk.com/markets/2026/11/04/thorchain-s-rune-jumps-10-as-north-korean-hackers-resume-laundering-binance-loot",
-      "why": "提供事件型异常波动来源（跨链洗钱引发的单日 10% 拉升），支持在回测中对事件窗口做标记与剔除，避免把事件驱动的波动误判为趋势-波动滞后效应。"
+      "title": "S&P 500 Plunges, Wall Street Fears Circuit Breaker, Just One Day After Trump Celebrated Record Highs",
+      "url": "https://decrypt.co/382637/sp-500-plunges-wall-street-circuit-breaker-trump-record-highs",
+      "why": "标普单日跌 3.8%、AI 股领跌，直接给出跨资产风险偏好冲击的自变量，可作为信号触发端。"
     },
     {
-      "title": "Riot shares surge on $28B AI lease as Hut 8 sinks on revenue miss",
-      "url": "https://cointelegraph.com/news/riots-28b-ai-deal-lifts-shares-as-hut-8-faces-transition-costs?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-      "why": "矿企卖 BTC 融资等个股级事件会在现货端造成突发供给冲击，是波动率外生跳升的典型样本，用于检验信号在剔除事件日后是否仍稳健。"
-    },
-    {
-      "title": "BitMart founder says security team ‘severely understaffed’ after new hack",
-      "url": "https://cointelegraph.com/news/bitmart-hack-security-staffing-crypto-exchange-restructuring?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-      "why": "交易所被黑属于尾部波动事件，提示波动率预测模型需设置跳变鲁棒层（如对单分钟 >4σ 收益做 winsorize 或切换 regime 参数）。"
+      "title": "Anchorage Digital seeks CFTC swap dealer registration for crypto options business",
+      "url": "https://www.theblock.co/news/business/2026-11-05-anchorage-digital-seeks-cftc-swap-dealer-registration-for-crypto-options-business-434437",
+      "why": "受监管 BTC/ETH 期权扩容意味着可以用期权对冲或构建跨资产波动率版本，扩展该 alpha 的执行形态。"
     }
   ],
   "risk_factors": [
-    "论文结论可能来自特定样本期（低费率、做市主导时期），在 2024 年后 ETF/机构化、做市商结构变化后滞后结构可能漂移甚至消失",
-    "效应量级可能极小（波动率变化仅数个基点），在 taker 手续费与滑点下无法变现，尤其纯 OHLCV 版本的动量变体换手极高",
-    "短波动（卖跨式）腿存在显著负偏与跳变风险：宏观数据、清算瀑布、黑客事件可在数分钟内吞掉数月权利金",
-    "期权端需要 Deribit 逐笔与隐含波动数据，链上/期权数据获取成本与延迟导致实盘可执行性弱于回测"
+    "触发样本稀疏（约 30-60 次），统计显著性弱，容易过拟合阈值",
+    "BTC 与美股相关性时变，2024-2025 出现多次脱钩期，beta 估计滞后会放大误触发",
+    "事件被广泛报道后（如本条新闻）存在抢跑，实盘超额可能大幅衰减",
+    "清算级联时段点差走阔与滑点可达 20-50bp，侵蚀 8 小时短持仓的收益",
+    "美股夏令时与冬令时切换导致入场时间漂移，需按 US/Eastern 动态对齐"
   ],
   "confidence": "medium",
-  "confidence_reason": "信号参数（20 分钟滞后、1.5 小时半衰、时间反演不对称）有明确的论文量化结果且数据完全可用公开 1 分钟 K 线复现，但论文未给出经济显著性与交易成本后的净收益，变现路径需自行验证。",
-  "quick_start": "今天先下载数据验证滞后结构：`for m in 2025-01 2025-02; do wget https://data.binance.vision/data/futures/um/monthly/klines/BTCUSDT/1m/BTCUSDT-1m-$m.zip; done`，读入 pandas 后计算 r=log(close).diff()，构造 RV_t=rolling(20).apply(lambda x:(x**2).sum()**.5)、T_t=rolling(20).sum().shift(1)，对未来 20 分钟 RV 按 T_t 的十分位分组求均值，画出「滞后 1..120 分钟」的响应曲线，复现 20 分钟峰值与 ~90 分钟半衰即进入第二步估计 OLS 系数。",
+  "confidence_reason": "跨资产风险外溢方向有当日实证与充分文献支撑，但触发频率低、相关性不稳定，需回测确认净收益是否覆盖成本。",
+  "quick_start": "今天先做数据拉取与事件标注：用 ccxt 拉取 Binance BTCUSDT 1h K 线（fetch_ohlcv('BTC/USDT:USDT','1h',since=...)）与 fundingRate 历史，用 yfinance 或 pandas_datareader 下载 QQQ 日线；对齐到 UTC 后计算 r_eq 的 60 日 z-score，标出 z<-1.5 的全部事件日，先统计事件日 14:00→22:00 UTC 的 BTC 平均收益与胜率，判断方向是否成立，再决定是否加入 beta 与资金费率过滤。",
   "model": "deepseek-reasoner",
-  "date": "2026-11-05",
-  "generated_at": "2026-11-05T03:27:25Z"
+  "date": "2026-11-06",
+  "generated_at": "2026-11-06T03:28:26Z"
 }

@@ -1,0 +1,42 @@
+{
+  "alpha_name": "纳指隔夜暴跌外溢做空BTC",
+  "hypothesis": "美股大幅下跌后，跨资产风险偏好收缩会在亚洲和欧洲时段继续传导到加密市场，因为杠杆多头、做市商库存和被动风控的减仓还没完成；对手盘就是反应滞后、仍以“数字黄金”框架持有高 Beta 山寨币和 BTC 多头的散户和趋势跟随 CTA。",
+  "signal_logic": "数据字段：Binance USDⓈ-M 永续 BTCUSDT、ETHUSDT、SOLUSDT 的 1h OHLCV 与 fundingRate；QQQ（或 ES 期货）日线收盘。计算：(1) 每日 13:30 UTC 计算 QQQ 前一交易日收益 r_eq 及其 60 日滚动 z-score；(2) 计算 BTC 过去 24h 收益 r_btc；(3) 触发条件：z_eq < -1.5（约日跌幅 2-3%）且 r_btc > 0.6 * beta_60d * r_eq（beta_60d 为 BTC 对 QQQ 的 60 日滚动回归斜率），也就是 BTC 尚未充分定价；(4) 过滤：若 BTC 永续当期资金费率 8h 均值 < -0.01%（空头已经拥挤），跳过做空；(5) 持仓方向：14:00 UTC 开空 BTCUSDT 永续，持有 8 小时至 22:00 UTC 平仓；镜像条件 z_eq > +1.5 且 BTC 未跟涨则做多。",
+  "data_needed": [
+    "Binance USDⓈ-M Futures REST/WebSocket：/fapi/v1/klines（BTCUSDT/ETHUSDT/SOLUSDT，1h）与 /fapi/v1/fundingRate",
+    "Bybit V5 market/kline 作为交叉验证与备选执行场所",
+    "Yahoo Finance / Polygon：QQQ、SPY 日线与 ES 期货隔夜报价",
+    "Coinglass 或 Binance 强平流（allForceOrders）作为清算级联辅助变量"
+  ],
+  "backtest_approach": "资产池：BTCUSDT、ETHUSDT、SOLUSDT 永续（Binance 为主，Bybit 复现）。时间窗口：2021-01-01 至 2026-10-31，1h 频率，事件驱动逐笔回测。执行假设：14:00 UTC 用下一根 1h 开盘价成交，单边成本 5bp（含滑点），资金费率按实际 8h 结算计入持仓成本。风控：单笔止损 +2%，止盈 -3% 或 22:00 UTC 强制平仓，单品种最大仓位 1x 名义。对照组：(a) 同窗口无条件持有收益；(b) 随机入场 1000 次 bootstrap 分布；(c) 只用 z_eq 不过滤 BTC 未定价条件的简化版。评估指标：年化夏普、最大回撤、单笔胜率、盈亏比、Profit Factor、触发次数与分年度稳定性、与 BTC 现货 30 日相关性。",
+  "supporting_sources": [
+    {
+      "title": "Bitcoin erases post-election gains as Wall Street selloff triggers over $1 billion in crypto liquidations",
+      "url": "https://www.theblock.co/news/markets/2026-11-05-bitcoin-erases-post-election-gains-wall-street-selloff-liquidations-435434",
+      "why": "提供当日 BTC -6%、ETH -7% 与 10.3 亿美元清算的实证，说明美股抛售到加密的传导链条真实存在且伴随清算放大。"
+    },
+    {
+      "title": "S&P 500 Plunges, Wall Street Fears Circuit Breaker, Just One Day After Trump Celebrated Record Highs",
+      "url": "https://decrypt.co/382637/sp-500-plunges-wall-street-circuit-breaker-trump-record-highs",
+      "why": "标普单日跌 3.8%、AI 股领跌，直接给出跨资产风险偏好冲击的自变量，可作为信号触发端。"
+    },
+    {
+      "title": "Anchorage Digital seeks CFTC swap dealer registration for crypto options business",
+      "url": "https://www.theblock.co/news/business/2026-11-05-anchorage-digital-seeks-cftc-swap-dealer-registration-for-crypto-options-business-434437",
+      "why": "受监管 BTC/ETH 期权扩容意味着可以用期权对冲或构建跨资产波动率版本，扩展该 alpha 的执行形态。"
+    }
+  ],
+  "risk_factors": [
+    "触发样本稀疏（约 30-60 次），统计显著性弱，容易过拟合阈值",
+    "BTC 与美股相关性时变，2024-2025 出现多次脱钩期，beta 估计滞后会放大误触发",
+    "事件被广泛报道后（如本条新闻）存在抢跑，实盘超额可能大幅衰减",
+    "清算级联时段点差走阔与滑点可达 20-50bp，侵蚀 8 小时短持仓的收益",
+    "美股夏令时与冬令时切换导致入场时间漂移，需按 US/Eastern 动态对齐"
+  ],
+  "confidence": "medium",
+  "confidence_reason": "跨资产风险外溢方向有当日实证与充分文献支撑，但触发频率低、相关性不稳定，需回测确认净收益是否覆盖成本。",
+  "quick_start": "今天先做数据拉取与事件标注：用 ccxt 拉取 Binance BTCUSDT 1h K 线（fetch_ohlcv('BTC/USDT:USDT','1h',since=...)）与 fundingRate 历史，用 yfinance 或 pandas_datareader 下载 QQQ 日线；对齐到 UTC 后计算 r_eq 的 60 日 z-score，标出 z<-1.5 的全部事件日，先统计事件日 14:00→22:00 UTC 的 BTC 平均收益与胜率，判断方向是否成立，再决定是否加入 beta 与资金费率过滤。",
+  "model": "deepseek-reasoner",
+  "date": "2026-11-06",
+  "generated_at": "2026-11-06T03:28:26Z"
+}
