@@ -1,48 +1,42 @@
 {
-  "alpha_name": "币安欧洲退场折价套利",
-  "hypothesis": "币安在西班牙、法国和波兰强制清退用户，导致本地散户在截止日前集中卖出并把资产提走，而做市商不愿继续为即将关停的 EUR 订单簿提供流动性，于是币安 BTC/EUR 相对 Kraken、Bitstamp 出现结构性折价；能承受跨所转移摩擦的套利者就是这种折价的对手盘。",
-  "signal_logic": "频率为每小时计算一次。数据字段包括：Binance 现货 BTC/EUR 与 ETH/EUR 的 1h close、bid 和 ask，Kraken 与 Bitstamp 的 BTC/EUR、BTC/USD 的 1h mid，以及 EUR/USD 1h 汇率（用以把美元报价统一折算成欧元），还有 Binance 的挂单深度（top5 累计）。计算 basis_bps = 10000×(Binance_EUR_mid / 外部EUR_mid − 1)。触发条件：在 07:00–17:00 UTC 欧洲交易时段内，basis_bps ≤ −15 且连续持续 2 根 1h K 线，同时 Binance 的 top5 买盘深度较此前 7 日均值低 30% 以上；满足这些条件后，就做多 Binance BTC/EUR（或 ETH/EUR）现货，并在 Bybit 做空等额 BTCUSDT 永续，以对冲方向暴露。平仓条件：basis 回到 −3bps 以内，或持有满 48 小时，或资金费率转为负值并超过 0.03%/8h。再加一层过滤条件来提升胜率：当周 BTC 现货 ETF 净流出超过 5 亿美元时，只做多、不做空对冲的方向仓位减半，并把触发阈值放宽到 −25bps。",
+  "alpha_name": "ETH/BTC 净发行背离反转",
+  "hypothesis": "市场把 Vitalik『价值存储』叙事当作利好追多 ETH/BTC，但 ETH 的估值锚已从手续费销毁转向 SOV，销毁量萎缩（净发行转正）时多头叙事缺乏现金流支撑，对手盘是叙事驱动的追涨资金与被动 ETH 多头，价格随后向基本面回归。",
+  "signal_logic": "每日 00:00 UTC 计算：①ETH 年化净通胀率 inflation_7d = 近 7 日 (新增发行 − 销毁) / 流通量 × 365；②ETH/BTC 7 日对数收益 r7。触发做空：inflation_7d > 0（销毁不足以抵消发行）且 r7 > +3%；触发做多：inflation_7d < 0 且 r7 < −3%。信号日次日 00:00 UTC 开盘建仓 ETHBTC，持有 5 个交易日或直至 funding 差值（ETHUSDT funding − BTCUSDT funding，3 日滚动均值）符号反转即平仓，同时用 funding 差值作为二级过滤，避免在 ETH 拥挤多头 funding 极端为负时空头被挤。仓位按 20 日 ATR 波动率目标归一化（目标年化 15%）。",
   "data_needed": [
-    "Binance 现货 BTC/EUR、ETH/EUR、BTC/USDT 1h OHLCV 与盘口深度（ccxt binance fetch_ohlcv / fetch_order_book）",
-    "Kraken、Bitstamp 现货 BTC/EUR 与 BTC/USD 1h OHLCV（ccxt kraken / bitstamp）",
-    "Bybit BTCUSDT 永续资金费率与 1h K 线（ccxt bybit fetch_funding_rate_history）",
-    "EUR/USD 1h 汇率（ECB 或 yfinance EURUSD=X）",
-    "Binance 交易所链上净流入流出（Glassnode / Nansen / Arkham API）与每周 BTC 现货 ETF 净流量（Farside Investors 或 Bloomberg ETF flow）"
+    "Binance API：ETHBTC、ETHUSDT、BTCUSDT 现货与永续 4h/1d K线（/api/v3/klines、/fapi/v1/klines）",
+    "Binance/Bybit 永续资金费率历史（/fapi/v1/fundingRate）",
+    "链上 ETH 供应与销毁：ultrasound.money API（或 Etherscan  Burn + beaconcha.in 发行量）计算净发行",
+    "辅助：Lido/beaconcha.in 质押净流入，用于区分销毁萎缩是需求下滑还是质押迁移"
   ],
-  "backtest_approach": "资产池为 BTC/EUR、ETH/EUR（币安现货）、BTCUSDT（Bybit 永续），并在 2025-11 至 2026-12-31 的事件窗口上做样本内测试；用 2023 年币安退出加拿大、荷兰的类似事件进行样本外事件研究来校准参数。频率为 1h 信号、持仓最长 48h，单笔仓位按月均波动率倒数分配，单标的敞口不超过 20%。止损规则：若 basis 继续扩大到 −60bps，或累计亏损超过 80bps，则强制平仓；对冲腿滑点按 3bps 计入。评估指标包括：年化夏普、最大回撤、胜率、平均持有期收益（bps）、basis 均值回归半衰期、换手率与容量（按 EUR 对日均成交额估算）。",
+  "backtest_approach": "资产池：Binance ETHBTC 现货为主，ETHUSDT/BTCUSDT 永续作对冲与费率验证。时间窗口：2019-01 至 2026-10（覆盖 2021 伦敦升级前后、2022 合并转 PoS 后销毁机制变化，分段检验）。频率：信号日频、持仓 5 日、每日检查平仓条件。成本：单边 10bps 手续费 + 5bps 滑点，资金费率按实际结算计入。止损：入场价反向 2×ATR(20) 或持有期超过 10 日强制平仓。评估指标：年化收益、夏普、最大回撤、胜率、盈亏比、换手率，并与单纯 ETH/BTC 7 日动量反转、纯 funding 差值策略做对照，做 Newey-West 调整 t 检验与 bootstrap 显著性。",
   "supporting_sources": [
     {
-      "title": "Binance users in some European countries told to pull crypto before fees kick in, with accounts closing by year end",
-      "url": "https://www.coindesk.com/business/2026/11/07/binance-users-in-some-european-countries-told-to-pull-crypto-before-fees-kick-in-with-accounts-closing-by-year-end",
-      "why": "提供了明确的强制清退时间和国家名单，构成 EUR 交易对折价产生的具体事件驱动与可回测窗口。"
+      "title": "Vitalik Buterin says ETH should be valued as a store of value, not a fee-burning token",
+      "url": "https://www.theblock.co/news/ecosystems/2026-11-08-vitalik-buterin-says-eth-should-be-valued-as-a-store-of-value-not-a-fee-burning-token-436022",
+      "why": "直接给出估值锚从『手续费销毁』切换到『价值存储』的核心事件，意味着销毁率不再是 ETH 的定价变量，为『净发行转正 + 价格仍涨』的背离信号提供基本面依据"
     },
     {
-      "title": "Bitcoin ETFs flip negative for 2026 after $1.28 billion outflow week, worst since June",
-      "url": "https://www.theblock.co/news/markets/2026-11-07-bitcoin-etfs-flip-negative-for-2026-after-1-28-billion-outflow-week-worst-since-june-435984",
-      "why": "验证整体资金面正在净流出，说明本地折价更可能是真实供给冲击，并非单纯做市商撤单噪声，可作为信号过滤器。"
+      "title": "Vitalik 'pivots' ETH to store of value, crypto suffers after US midterms: Hodler's Digest",
+      "url": "https://cointelegraph.com/magazine/vitaliks-pivots-to-eth-as-a-store-of-value-us-election-weighs-on-crypto-hodlers-digest",
+      "why": "说明叙事切换叠加中期选举后情绪承压，影响 ETH/BTC 相对定价，支持用相对价值而非单币方向表达该 alpha"
     },
     {
-      "title": "U.S. Treasury moves to cut off crypto exchange MEXC over $16 billion in alleged illicit flows",
-      "url": "https://www.coindesk.com/business/2026/11/07/u-s-treasury-moves-to-cut-off-crypto-exchange-mexc-over-usd16-billion-in-alleged-illicit-flows",
-      "why": "说明交易所层面的监管与清算风险正在上升，支持跨所价差会系统性走阔的判断，并提示需选择更安全的外部腿（Kraken、Bitstamp）。"
-    },
-    {
-      "title": "Binance CFO steps down nine days after record hack; co-CEO says transition was planned six months ago",
-      "url": "https://www.theblock.co/news/business/2026-11-07-binance-cfo-steps-down-nine-days-after-record-hack-co-ceo-says-transition-was-planned-six-months-ago-435992",
-      "why": "高管动荡叠加黑客事件，会抬高在币安持有头寸的对手方风险溢价，是折价长期化的制度性支撑。"
+      "title": "Stablecoin growth has stalled. The payments boom hasn't",
+      "url": "https://www.coindesk.com/business/2026/11/08/stablecoin-growth-has-stalled-the-payments-boom-hasn-t",
+      "why": "提供『存量指标与链上活动脱钩』的旁证，说明链上基本面指标（如销毁/供应）与价格叙事可长期背离，支持用链上发行量做慢变量过滤"
     }
   ],
   "risk_factors": [
-    "折价可能主要来自做市商撤单导致的流动性折价，套利者入场后无法吃到真实成交，反而承受挤兑式跳空风险",
-    "EUR/USD 换算与不同交易所收盘时间不一致，可能产生虚假 basis 信号",
-    "12 月 31 日截止后事件消失，样本期短且不可重复，参数容易过拟合",
-    "在币安持有现货本身存在对手方风险（刚发生创纪录黑客事件），对冲腿无法覆盖交易所违约",
-    "Bybit 永续资金费率与借币成本可能吞掉 basis 收敛收益"
+    "叙事类信号反映慢、可能已被提前定价，样本内有效样本（净发行符号切换）每年仅数次，统计功效低",
+    "ETH/BTC 波动率低，扣费后 edge 易被手续费与资金费率吞掉",
+    "合并后销毁机制与 L2 结算迁移使历史销毁数据非平稳，2019-2021 段与 2023 年后不可直接比较",
+    "执行层面 ETHBTC 现货深度弱于 USDT 对，大额下单滑点可能超过回测假设"
   ],
   "confidence": "medium",
-  "confidence_reason": "事件驱动的时间点和国家名单明确、价差数据可实时获取，但样本期仅约两个月且缺乏同规模历史先例，需靠 2023 年币安退出荷兰、加拿大的事件做类比校准。",
-  "quick_start": "用 ccxt 拉取 Binance 与 Kraken 的 BTC/EUR 1h 收盘价：先执行 `pip install ccxt pandas`，再对每个交易所调用 `fetch_ohlcv('BTC/EUR','1h',since=...limit=1000)` 做分页，拉取近 90 天数据；然后用 yfinance 取 EURUSD=X 1h，计算 basis_bps 时间序列，画出按小时的分布并统计 07:00–17:00 UTC 内 basis ≤ −15bps 的出现频率与随后 24h/48h 的收敛幅度，先确认信号存在再写回测。",
+  "confidence_reason": "有清晰可量化的链上净发行与价格背离逻辑且数据全部公开可得，但事件样本稀疏、叙事切换难以证伪，需先做分段回测确认稳健性。",
+  "quick_start": "先拉数据做可视化验证：curl 'https://api.binance.com/api/v3/klines?symbol=ETHBTC&interval=1d&limit=1000' 拿 ETHBTC 日线，同时请求 'https://api.binance.com/fapi/v1/fundingRate?symbol=ETHUSDT&limit=1000' 与 BTCUSDT 对应费率，再调 ultrasound.money 的 /api/v1/ethereum（或 Etherscan 供应接口）取日度销毁与发行量，合成 inflation_7d 与 r7 两列，画 2021 年至今的散点/分位数图，确认『r7>3% 且 inflation_7d>0』之后 5 日 ETH/BTC 收益均值是否为负。",
+  "confidence_note": "",
   "model": "deepseek-reasoner",
-  "date": "2026-11-08",
-  "generated_at": "2026-11-08T02:12:36Z"
+  "date": "2026-11-09",
+  "generated_at": "2026-11-09T02:31:33Z"
 }
