@@ -1,36 +1,42 @@
 {
-  "alpha_name": "矿工投降哈希带反转做多BTC",
-  "hypothesis": "当BTC价格跌破矿工成本、上市矿企产量增但收入降时，边际矿工被迫关机抛售，形成超卖；哈希率30日均线重新上穿60日均线时卖压衰竭、算力回归，对手盘是投降期被迫清仓的矿工与追空动量资金。",
-  "signal_logic": "数据字段：①mempool.space 日度全网哈希率（3日平滑后取30日SMA与60日SMA）；②Binance BTCUSDT 永续日线收盘价；③日发行量=区块奖励(2024减半后3.125)×144；④Binance BTCUSDT永续当期资金费率。计算：Puell Multiple = (日发行量×BTC收盘价) / 该序列365日SMA；哈希带状态 = 30D SMA(hashrate) < 60D SMA(hashrate) 记为『投降中』。触发条件（日频，UTC 00:00 收盘评估）：在过去60个交易日内曾出现 Puell < 0.6 且处于『投降中』，且当日首次出现 30D SMA 上穿 60D SMA → 次日开盘做多 BTCUSDT 永续，杠杆按20%年化波动率目标动态调整。平仓条件（任一触发）：持有满30个交易日；或 Puell > 2.5；或年化资金费率 > 60%（多头拥挤）；或收盘价跌破入场价8%止损。方向：仅做多，不加空。",
+  "alpha_name": "巴西溢价事件回归",
+  "hypothesis": "交易所被黑后本地加密转账冻结、法币通道受限，本地 BTC/USDT 相对全球平价的溢价被出金挤兑推高，对手盘是急于离场、无法跨市场套利的本地散户与流动性撤出的做市商。",
+  "signal_logic": "每 1 分钟抓取 Mercado Bitcoin/Foxbit 的 BTC-BRL 最新成交价与 Binance BTCUSDT 现货价，乘巴西央行 PTAX 美元兑雷亚尔汇率，计算本地溢价 premium_t = P_BTCBRL_local,t /(P_BTCUSDT_binance,t × PTAX_t) − 1，聚合成小时序列；用过去 30 天滚动中位数与 MAD 标准化得 z_t。触发条件：z_t > 2.0 且事件标记 event=1（交易所公告冻结加密提币，或同类安全事件后 72 小时内），则做空溢价：本地卖出现货 BTC/BRL 或在本地卖 USDT/BRL，同时在 Binance BTCUSDT 永续开等名义多单对冲方向敞口；平仓条件：z_t 回落至 <0.5，或官方恢复提币公告后 48 小时，或最长持有 10 个交易日。方向亦可反过来：若黑客事件导致本地折价（z_t < −2），则做多本地、做空永续。",
   "data_needed": [
-    "mempool.space REST API /api/v1/mining/hashrate/3d 与 /api/blocks（全网哈希率与出块奖励）",
-    "Binance Futures API（ccxt binanceusdm）BTCUSDT 永续日线 OHLCV 与 fundingRate 历史",
-    "（校验用）Blockchain.com 或 Glassnode 免费档的矿工净流出/矿工持仓变化"
+    "Mercado Bitcoin 公共 API v4 ticker/trades（BTC-BRL、USDT-BRL），Foxbit 与 Bitso 公共 API 作为交叉校验",
+    "Binance 现货与 USDT 本位永续 API（BTCUSDT 价格、资金费率、深度）作为全球平价与对冲成本基准",
+    "巴西央行 BCB PTAX 日度美元兑雷亚尔汇率 API（olinda bcb.gov.br 的 CotacaoDolarDia）",
+    "链上 USDT/USDC 转账数据（Etherscan、TronGrid）加 Nansen/Arkham 交易所地址标签，用来衡量流入巴西交易所的稳定币流量",
+    "交易所公告与提币状态时间戳（手工或抓取官方 status 页面），用于构造事件标记 event"
   ],
-  "backtest_approach": "资产池：BTCUSDT 永续（Binance），另用 Bybit/OKX 永续做稳健性复核。时间窗口：2019-01-01 至 2026-11-10，日频信号、次日开盘执行，含手续费双边 5bp 与资金费率损益。基准：BTC 买入持有、以及单纯 Puell<0.6 无哈希带确认的版本。评估指标：年化收益、Sharpe、最大回撤、Calmar、胜率、平均持仓天数、单次最大不利偏移(MAE)；并对参数（Puell 阈值 0.5/0.6/0.7、SMA 20/30/60/90、持有 20/30/45 日）做网格与 block bootstrap 显著性检验。",
+  "backtest_approach": "资产池：BTC/BRL（Mercado Bitcoin、Foxbit、Bitso）与 Binance BTCUSDT 永续/USDTBRL 的配对组合。时间窗口：2019-01 至 2026-11，主频为小时级信号、日级再平衡，并单独跑事件子样本（每次冻结或黑客事件前后 ±15 天）。成本设定：本地现货单边 20bp、法币出入金 50bp、永续 5bp 加持有期资金费率。评估指标：年化夏普、最大回撤、Calmar、事件命中率、单次事件平均溢价收敛幅度与半衰期、与无条件溢价均值回归策略及纯持有 BTC 的对比；并用 bootstrap 检验事件子样本收益显著性。",
   "supporting_sources": [
     {
-      "title": "HIVE, MARA mine more Bitcoin but earn less as crypto prices fall",
-      "url": "https://cointelegraph.com/markets/hives-bitcoin-output-jumps-49-but-mining-revenue-falls?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-      "why": "直接证据：上市矿企产量增49%但收入下降，说明单位算力收入（hashprice）被压缩，矿工经济性恶化，是矿工投降/关机的前兆信号。"
+      "title": "Mercado Bitcoin to resume cash withdrawals after $49M hack",
+      "url": "https://cointelegraph.com/news/pix-withdrawals-resume-mercado-bitcoin-hack?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "why": "这直接给出事件触发源：加密转账冻结、Pix 法币通道下周恢复，意味着本地流动性受限期间的 BRL 场内溢价与流动性需重定价，溢价收敛时点可以交易。"
     },
     {
-      "title": "Bitcoin faces U.S. CPI test as analysts warn inflation relief may not be enough",
-      "url": "https://www.coindesk.com/markets/2026/11/10/bitcoin-faces-u-s-cpi-test-as-analysts-warn-inflation-relief-may-not-be-enough",
-      "why": "BTC 已跌破 75,000 美元且宏观情绪偏空，符合『价格低于矿工成本、投降条件正在形成』的当前环境，可用于判定该信号当前是否处于可触发区间。"
+      "title": "LNbits rushes emergency patch after reported Bitcoin wallet thefts",
+      "url": "https://cointelegraph.com/news/lnbits-rushes-emergency-patch-after-reported-bitcoin-wallet-thefts?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "why": "说明钱包/节点被盗与紧急补丁类安全事件仍在高频发生，为「安全事件驱动本地通道流动性溢价」提供同类事件样本，可扩充回测的事件池。"
+    },
+    {
+      "title": "Will stablecoins survive once the banks catch up?",
+      "url": "https://www.coindesk.com/opinion/2026/11/10/will-stablecoins-survive-once-the-banks-catch-up",
+      "why": "提示稳定币作为跨境/出入金媒介的护城河正被银行代币化存款侵蚀，因此本地 USDT 溢价的持续性与可交易窗口可能缩短，需要用该视角设定最长持有期。"
     }
   ],
   "risk_factors": [
-    "投降事件样本稀少（2019以来约5-8次），统计显著性有限，容易过拟合阈值",
-    "减半后发行量固定但手续费收入波动大，Puell Multiple 在手续费占比高时失真",
-    "ETF/机构资金流主导价格的2024-2026新范式下，矿工卖压对价格的边际解释力可能显著下降",
-    "哈希率数据存在矿池上报延迟与短期抖动，SMA交叉可能给出假信号",
-    "做多时点若叠加高资金费率，carry 成本会侵蚀收益"
+    "同类冻结/黑客事件样本稀少（2019 年至今不足 10 次），统计功效弱，容易过拟合到单次事件",
+    "加密提币冻结期间对冲腿与本地腿无法自由调拨，实盘执行风险显著高于回测假设",
+    "本地交易所报价可能滞后或流动性极薄，观测到的溢价可能是不可成交的报价噪声，而非真实可套利价差",
+    "巴西监管与资本管制（外汇、Pix 限额）变化可能改变溢价形成机制，使历史参数失效"
   ],
   "confidence": "medium",
-  "confidence_reason": "矿工压力→投降→算力回归的反转逻辑有公开文献与链上数据支撑且数据免费可得，但事件样本少、参数敏感，且当前机构资金主导的行情可能削弱该因子效力。",
-  "quick_start": "今天先跑数据管道：用 ccxt 拉 Binance 永续日线 `ccxt.binanceusdm().fetch_ohlcv('BTCUSDT','1d', since=1546300800000, limit=1000)` 全量分页取回；同时 `curl https://mempool.space/api/v1/mining/hashrate/3d` 与 `curl https://mempool.space/api/v1/mining/hashrate/1m` 取哈希率序列，按日对齐后计算 30/60 日 SMA 与 Puell Multiple，先打印历史上下穿日期清单，肉眼确认每次上穿后 30 日的前瞻收益分布，再决定是否接回测框架。",
+  "confidence_reason": "事件与溢价重定价的因果链条清晰，且溢价、汇率、资金费率数据均可免费获取；但事件样本少、执行受限，且信号高度依赖本地交易所真实可成交价，实盘收益可能明显低于回测。",
+  "quick_start": "先跑通数据链：curl 'https://api.mercadobitcoin.net/api/v4/BTC-BRL/ticker' 取本地价，curl 'https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT' 取全球价，再从 'https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/CotacaoDolarDia(dataCotacao=@d)?@d='MM-DD-YYYY'&$format=json' 拉 PTAX；用 pandas 计算过去 90 天的 premium_t 序列并画出 11 月 10 日前后曲线，先确认黑客事件后是否出现 >2σ 的溢价尖峰与随后的收敛轨迹（即 z_t 峰值与回落所需小时数）。",
   "model": "deepseek-reasoner",
-  "date": "2026-11-10",
-  "generated_at": "2026-11-10T04:53:30Z"
+  "date": "2026-11-11",
+  "generated_at": "2026-11-11T02:49:23Z"
 }
