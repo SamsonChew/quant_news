@@ -1,42 +1,42 @@
 {
-  "alpha_name": "巴西溢价事件回归",
-  "hypothesis": "交易所被黑后本地加密转账冻结、法币通道受限，本地 BTC/USDT 相对全球平价的溢价被出金挤兑推高，对手盘是急于离场、无法跨市场套利的本地散户与流动性撤出的做市商。",
-  "signal_logic": "每 1 分钟抓取 Mercado Bitcoin/Foxbit 的 BTC-BRL 最新成交价与 Binance BTCUSDT 现货价，乘巴西央行 PTAX 美元兑雷亚尔汇率，计算本地溢价 premium_t = P_BTCBRL_local,t /(P_BTCUSDT_binance,t × PTAX_t) − 1，聚合成小时序列；用过去 30 天滚动中位数与 MAD 标准化得 z_t。触发条件：z_t > 2.0 且事件标记 event=1（交易所公告冻结加密提币，或同类安全事件后 72 小时内），则做空溢价：本地卖出现货 BTC/BRL 或在本地卖 USDT/BRL，同时在 Binance BTCUSDT 永续开等名义多单对冲方向敞口；平仓条件：z_t 回落至 <0.5，或官方恢复提币公告后 48 小时，或最长持有 10 个交易日。方向亦可反过来：若黑客事件导致本地折价（z_t < −2），则做多本地、做空永续。",
+  "alpha_name": "Base快块CEX-DEX价差套利",
+  "hypothesis": "Base 采用 Flashblocks 将出块速度提升十倍后，块内套利竞争加剧、优先费竞价下降，使 DEX 与 CEX 之间的价格偏离（basis）在变宽的有效价差下仍残留可捕获的净空间；对手盘是反应慢的手工 LP、以及为规避 MEV 而不愿跨链搬砖的被动做市资金",
+  "signal_logic": "数据字段：①Base 链 Uniswap v3 WETH/USDC(0.05%) 与 Aerodrome WETH/USDC 池的 Swap 事件（sqrtPriceX96、amount0/amount1、block_number、block_timestamp，按 Flashblocks 200ms 子块归集）；②Binance ETHUSDT 永续 aggTrades 与 bookTicker 最优买一卖一；③Coinbase ETH-USD 现货中间价；④Base 每块 base_fee 与实际 priority fee（可从区块交易回执聚合）。计算：按 200ms 桶构造 P_dex（用 sqrtPriceX96 还原的池中间价，扣 5bp 池费后的可实现卖出/买入价）与 P_cex（Binance 永续中间价，扣 2bp taker 费）；basis_bps = (P_dex - P_cex)/P_cex*10000；取过去 60s 的 basis 标准差 σ，并用过去 1 小时中位 priority_fee（以 USD 计）加 gas 折算成 bps 作为成本下限 C。触发条件：当 basis_bps > max(2.5σ, C + 2bp) 时做空 DEX 侧/做多 CEX 侧（在 DEX 卖 ETH、在 Binance 永续开多 ETH 等名义 delta 中性）；当 basis_bps < -max(2.5σ, C+2bp) 时反向（在 DEX 买 ETH、Binance 永续开空）。平仓条件：|basis_bps| 回落至入场阈值的 30% 以下，或持仓超过 30s，或累计 priority fee 超过预期毛利 50% 即止损离场。作为该 alpha 的附加检验：统计 Flashblocks 上线前后相同阈值下的成交笔数、每笔净 PnL(bps) 与有效价差，验证“竞价下降→套利净利上升、池深下降→价差扩大”的方向",
   "data_needed": [
-    "Mercado Bitcoin 公共 API v4 ticker/trades（BTC-BRL、USDT-BRL），Foxbit 与 Bitso 公共 API 作为交叉校验",
-    "Binance 现货与 USDT 本位永续 API（BTCUSDT 价格、资金费率、深度）作为全球平价与对冲成本基准",
-    "巴西央行 BCB PTAX 日度美元兑雷亚尔汇率 API（olinda bcb.gov.br 的 CotacaoDolarDia）",
-    "链上 USDT/USDC 转账数据（Etherscan、TronGrid）加 Nansen/Arkham 交易所地址标签，用来衡量流入巴西交易所的稳定币流量",
-    "交易所公告与提币状态时间戳（手工或抓取官方 status 页面），用于构造事件标记 event"
+    "Base 链节点/QuickNode RPC 或 Dune Analytics：Uniswap v3 WETH/USDC 池与 Aerodrome WETH/USDC 池的 Swap 事件（sqrtPriceX96、amount0/amount1、block_number、transaction 内 priority fee）",
+    "Binance 永续 ETHUSDT / BTCUSDT 的 aggTrades 与 bookTicker（data.binance.vision 历史归档 + WebSocket 实时）",
+    "Coinbase Exchange ETH-USD / BTC-USD ticker 与成交（作为第二 CEX 参照与三角校验）",
+    "Base 区块头 base_fee_per_gas 与每笔交易 effective_gas_price（用于实时成本折算 bps）"
   ],
-  "backtest_approach": "资产池：BTC/BRL（Mercado Bitcoin、Foxbit、Bitso）与 Binance BTCUSDT 永续/USDTBRL 的配对组合。时间窗口：2019-01 至 2026-11，主频为小时级信号、日级再平衡，并单独跑事件子样本（每次冻结或黑客事件前后 ±15 天）。成本设定：本地现货单边 20bp、法币出入金 50bp、永续 5bp 加持有期资金费率。评估指标：年化夏普、最大回撤、Calmar、事件命中率、单次事件平均溢价收敛幅度与半衰期、与无条件溢价均值回归策略及纯持有 BTC 的对比；并用 bootstrap 检验事件子样本收益显著性。",
+  "backtest_approach": "资产池：ETH（Binance ETHUSDT 永续 vs Base 上 WETH/USDC 主池）与 BTC（Binance BTCUSDT 永续 vs Base 上 cbBTC/USDC 池）。时间窗口：2025-01-01 至 2026-11-11，重点分段对比 Flashblocks 提速前后（以公告/上线日为切点）各至少 60 天。频率：事件驱动回测，按 200ms 桶撮合，强制执行 1 个块（200ms）+ 100ms 网络延迟的成交延迟，DEX 侧按池内实际深度计算滑点，CEX 侧按 taker 费率与盘口前 5 档成交量加权。止损：单笔最大持有 30s、单笔亏损上限 15bp、日内累计回撤超过 1% 停止当日交易。评估指标：年化收益、夏普（按日收益）、最大回撤、Calmar、每笔净 PnL(bps)、胜率、平均持仓时长、成交笔数随阈值的敏感性曲线、以及扣除费用前后的毛利/净利分解（用于验证 priority fee 下降是否被价差扩大部分抵消）",
   "supporting_sources": [
     {
-      "title": "Mercado Bitcoin to resume cash withdrawals after $49M hack",
-      "url": "https://cointelegraph.com/news/pix-withdrawals-resume-mercado-bitcoin-hack?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-      "why": "这直接给出事件触发源：加密转账冻结、Pix 法币通道下周恢复，意味着本地流动性受限期间的 BRL 场内溢价与流动性需重定价，溢价收敛时点可以交易。"
+      "title": "Optimal Trading Speed on Blockchain",
+      "url": "http://arxiv.org/abs/2611.13616v1",
+      "why": "直接给出 Base Flashblocks 十倍增块速的实证：优先费竞价骤降、套利净利润上升，同时 AMM 池深度下降、有效价差扩大，是本案核心机制与成本参数（池费、priority fee、滑点）的来源"
     },
     {
-      "title": "LNbits rushes emergency patch after reported Bitcoin wallet thefts",
-      "url": "https://cointelegraph.com/news/lnbits-rushes-emergency-patch-after-reported-bitcoin-wallet-thefts?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-      "why": "说明钱包/节点被盗与紧急补丁类安全事件仍在高频发生，为「安全事件驱动本地通道流动性溢价」提供同类事件样本，可扩充回测的事件池。"
+      "title": "Modeling a 3,640-Trade Asymmetrical Execution Strategy: Frictions, Equity Linearity (R² 0.945), and Handling 152-Day Drawdown Regimes",
+      "url": "https://www.reddit.com/r/algotrading/comments/1xtgi6s/modeling_a_3640trade_asymmetrical_execution/",
+      "why": "提供低胜率、高盈亏比的挂单执行策略在 BTC 永续上的实操框架（摩擦成本建模、权益曲线线性度 R² 0.945、152 天回撤区间处理），可用于对齐套利腿在 CEX 侧的执行成本与回撤管理假设"
     },
     {
-      "title": "Will stablecoins survive once the banks catch up?",
-      "url": "https://www.coindesk.com/opinion/2026/11/10/will-stablecoins-survive-once-the-banks-catch-up",
-      "why": "提示稳定币作为跨境/出入金媒介的护城河正被银行代币化存款侵蚀，因此本地 USDT 溢价的持续性与可交易窗口可能缩短，需要用该视角设定最长持有期。"
+      "title": "I open-sourced 2,000 more dead crypto bots. My best ideas did no better than my random ones.",
+      "url": "https://www.reddit.com/r/algotrading/comments/1xtj1lw/i_opensourced_2000_more_dead_crypto_bots_my_best/",
+      "why": "1,980 个机器人过 7 级验证仅 0.3% 存活，说明必须做参数敏感性、前后分段样本外与多重检验校正，避免把 basis 阈值过拟合为噪声"
     }
   ],
   "risk_factors": [
-    "同类冻结/黑客事件样本稀少（2019 年至今不足 10 次），统计功效弱，容易过拟合到单次事件",
-    "加密提币冻结期间对冲腿与本地腿无法自由调拨，实盘执行风险显著高于回测假设",
-    "本地交易所报价可能滞后或流动性极薄，观测到的溢价可能是不可成交的报价噪声，而非真实可套利价差",
-    "巴西监管与资本管制（外汇、Pix 限额）变化可能改变溢价形成机制，使历史参数失效"
+    "延迟与 MEV 竞争：200ms 块下专业搜索者已同链抢先，回测中的 1 块延迟假设可能过于乐观，实盘成交率与净 PnL 显著低于回测",
+    "池深下降导致执行差异：Flashblocks 后 AMM 有效价差扩大，大额 DEX 腿滑点可能吞掉全部 basis，需按池内实际 tick 流动性重算而非用中间价",
+    "成本状态漂移：priority fee 在行情剧烈时段可飙升 10 倍以上，且 Base 排序规则（是否引入 sequencer 拍卖）若再变，历史成本参数失效",
+    "regime 突变风险：本次机会可能只存在于提速后的数十天内，样本外衰减快，需做上线日切点的分段稳健性和严格样本外验证",
+    "跨市场结算与对手方风险：DEX 腿与 CEX 永续腿存在资金占用不对称、稳定币 depeg 与交易所提币限制，可能导致对冲失效"
   ],
   "confidence": "medium",
-  "confidence_reason": "事件与溢价重定价的因果链条清晰，且溢价、汇率、资金费率数据均可免费获取；但事件样本少、执行受限，且信号高度依赖本地交易所真实可成交价，实盘收益可能明显低于回测。",
-  "quick_start": "先跑通数据链：curl 'https://api.mercadobitcoin.net/api/v4/BTC-BRL/ticker' 取本地价，curl 'https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT' 取全球价，再从 'https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/CotacaoDolarDia(dataCotacao=@d)?@d='MM-DD-YYYY'&$format=json' 拉 PTAX；用 pandas 计算过去 90 天的 premium_t 序列并画出 11 月 10 日前后曲线，先确认黑客事件后是否出现 >2σ 的溢价尖峰与随后的收敛轨迹（即 z_t 峰值与回落所需小时数）。",
+  "confidence_reason": "机制链条（出块加速→优先费竞价下降→套利净利上升、池深变薄→价差扩大）有明确论文实证支撑且数据全部公开可获取，但优势幅度与持续性高度依赖延迟和当时段的 fee 水平，样本期短、易衰减，实盘滑点假设敏感",
+  "quick_start": "今天先跑两步：①用 Dune 写 SQL 拉取 Base 上 Uniswap v3 WETH/USDC 0.05% 池 2025-01-01 至今的 Swap 事件，按 block_number 与 block_time 计算每块池中间价，并 join Base 区块的 base_fee 与交易 effective_gas_price 得到每块中位 priority fee；②从 data.binance.vision 下载 ETHUSDT 永续同期的 aggTrades 日归档（https://data.binance.vision/data/futures/um/daily/aggTrades/ETHUSDT/），用 pandas 重采样成 200ms 桶并取中间价，与 DEX 价格按时间戳 asof-merge，画出 basis_bps 的分布与自相关图，先确认 |basis| 是否稳定超过 (池费 5bp + CEX taker 2bp + 折算后的 priority fee + 滑点) 这一成本线，再决定是否进入事件驱动回测",
   "model": "deepseek-reasoner",
-  "date": "2026-11-11",
-  "generated_at": "2026-11-11T02:49:23Z"
+  "date": "2026-11-12",
+  "generated_at": "2026-11-12T03:51:06Z"
 }
