@@ -1,42 +1,47 @@
 {
-  "alpha_name": "Base快块CEX-DEX价差套利",
-  "hypothesis": "Base 采用 Flashblocks 将出块速度提升十倍后，块内套利竞争加剧、优先费竞价下降，使 DEX 与 CEX 之间的价格偏离（basis）在变宽的有效价差下仍残留可捕获的净空间；对手盘是反应慢的手工 LP、以及为规避 MEV 而不愿跨链搬砖的被动做市资金",
-  "signal_logic": "数据字段：①Base 链 Uniswap v3 WETH/USDC(0.05%) 与 Aerodrome WETH/USDC 池的 Swap 事件（sqrtPriceX96、amount0/amount1、block_number、block_timestamp，按 Flashblocks 200ms 子块归集）；②Binance ETHUSDT 永续 aggTrades 与 bookTicker 最优买一卖一；③Coinbase ETH-USD 现货中间价；④Base 每块 base_fee 与实际 priority fee（可从区块交易回执聚合）。计算：按 200ms 桶构造 P_dex（用 sqrtPriceX96 还原的池中间价，扣 5bp 池费后的可实现卖出/买入价）与 P_cex（Binance 永续中间价，扣 2bp taker 费）；basis_bps = (P_dex - P_cex)/P_cex*10000；取过去 60s 的 basis 标准差 σ，并用过去 1 小时中位 priority_fee（以 USD 计）加 gas 折算成 bps 作为成本下限 C。触发条件：当 basis_bps > max(2.5σ, C + 2bp) 时做空 DEX 侧/做多 CEX 侧（在 DEX 卖 ETH、在 Binance 永续开多 ETH 等名义 delta 中性）；当 basis_bps < -max(2.5σ, C+2bp) 时反向（在 DEX 买 ETH、Binance 永续开空）。平仓条件：|basis_bps| 回落至入场阈值的 30% 以下，或持仓超过 30s，或累计 priority fee 超过预期毛利 50% 即止损离场。作为该 alpha 的附加检验：统计 Flashblocks 上线前后相同阈值下的成交笔数、每笔净 PnL(bps) 与有效价差，验证“竞价下降→套利净利上升、池深下降→价差扩大”的方向",
+  "alpha_name": "BTC清算规模激增后的均值回归多头",
+  "hypothesis": "在指数事件（MSCI 剔除 Strategy）、人事冲击（黄仁勋离开 Nvidia）等外生利空同时出现时，杠杆多头被动平仓会制造出非理性的短时超卖；对手盘是那些被强平的高杠杆多头，以及追跌的趋势跟随资金，它们为流动性提供了补偿。",
+  "signal_logic": "数据字段包括：币安 BTCUSDT 永续的 1h OHLCV、8h 资金费率、5m 未平仓合约（OI），以及 Coinglass 或 Binance forceOrder WebSocket 推送的多空强平名义额。触发条件是在滚动 4h 窗口内同时满足四项：(a) 多头强平名义额高于过去 30 天 4h 滚动中位数的 3 倍；(b) 价格相对 24h 最高价回撤不低于 5%；(c) 当期资金费率低于过去 30 天的第 10 百分位，或转为负值；(d) 4h 内 OI 下降不低于 4%，即确认去杠杆。信号确认后，在下一根 1h K 线开盘时做多 BTCUSDT 永续，持有 24h 至 72h，或止盈 +3% / 资金费率回归 30 天中位数，止损 -3% 或跌破强平低点。反向信号是当价格反弹超过 24h 跌幅的 60% 且资金费率回到 70 百分位之上时，用于平仓，而不用于建立空头。",
   "data_needed": [
-    "Base 链节点/QuickNode RPC 或 Dune Analytics：Uniswap v3 WETH/USDC 池与 Aerodrome WETH/USDC 池的 Swap 事件（sqrtPriceX96、amount0/amount1、block_number、transaction 内 priority fee）",
-    "Binance 永续 ETHUSDT / BTCUSDT 的 aggTrades 与 bookTicker（data.binance.vision 历史归档 + WebSocket 实时）",
-    "Coinbase Exchange ETH-USD / BTC-USD ticker 与成交（作为第二 CEX 参照与三角校验）",
-    "Base 区块头 base_fee_per_gas 与每笔交易 effective_gas_price（用于实时成本折算 bps）"
+    "币安 USDⓈ-M 期货 API：BTCUSDT/ETHUSDT/SOLUSDT 永续 1h、5m K 线（/fapi/v1/klines）",
+    "币安 /fapi/v1/fundingRate 资金费率历史，以及 /futures/data/openInterestHist 未平仓合约",
+    "Coinglass API 或币安 forceOrder WebSocket 的聚合强平数据（按多空方向拆分）",
+    "可选的 Bybit v5 market/liquidation 作为交叉验证；Deribit DVOL 或 25d 偏斜作为情绪辅助过滤"
   ],
-  "backtest_approach": "资产池：ETH（Binance ETHUSDT 永续 vs Base 上 WETH/USDC 主池）与 BTC（Binance BTCUSDT 永续 vs Base 上 cbBTC/USDC 池）。时间窗口：2025-01-01 至 2026-11-11，重点分段对比 Flashblocks 提速前后（以公告/上线日为切点）各至少 60 天。频率：事件驱动回测，按 200ms 桶撮合，强制执行 1 个块（200ms）+ 100ms 网络延迟的成交延迟，DEX 侧按池内实际深度计算滑点，CEX 侧按 taker 费率与盘口前 5 档成交量加权。止损：单笔最大持有 30s、单笔亏损上限 15bp、日内累计回撤超过 1% 停止当日交易。评估指标：年化收益、夏普（按日收益）、最大回撤、Calmar、每笔净 PnL(bps)、胜率、平均持仓时长、成交笔数随阈值的敏感性曲线、以及扣除费用前后的毛利/净利分解（用于验证 priority fee 下降是否被价差扩大部分抵消）",
+  "backtest_approach": "资产池为 BTCUSDT、ETHUSDT、SOLUSDT 永续；测试期为 2021-01 至 2026-11（含 2022-05 LUNA、2022-11 FTX 等清算规模激增样本）。频率为事件驱动，每小时扫描一次。入场按下一根 1h 开盘价加 5bp 滑点，出场按时间 72h、止损 -3%、止盈 +3% 三者中的先触发者，并加入资金费率成本。评估指标为事件数（目标不少于 200 个样本）、24/48/72h 平均收益与胜率、年化夏普、最大回撤、Calmar、相对 buy-and-hold 的超额收益，以及 Newey-West t 统计量。另外做分组测试：按波动率、趋势 regime（200 日均线上下）和强平强度分位做稳健性检验，并与随机日期对照组比较。",
   "supporting_sources": [
     {
-      "title": "Optimal Trading Speed on Blockchain",
-      "url": "http://arxiv.org/abs/2611.13616v1",
-      "why": "直接给出 Base Flashblocks 十倍增块速的实证：优先费竞价骤降、套利净利润上升，同时 AMM 池深度下降、有效价差扩大，是本案核心机制与成本参数（池费、priority fee、滑点）的来源"
+      "title": "Bitcoin falls to 12-week low as Jensen Huang’s exit from Nvidia rattles markets",
+      "url": "https://www.theblock.co/news/markets/2026-11-12-bitcoin-12-week-low-jensen-huang-exit-nvidia-438992",
+      "why": "提供核心事件样本：BTC 跌至 71,200 的 12 周低点并触发 7.5 亿美元强平，这是清算规模激增的典型触发点，也给出了具体的价格与强平规模参照。"
     },
     {
-      "title": "Modeling a 3,640-Trade Asymmetrical Execution Strategy: Frictions, Equity Linearity (R² 0.945), and Handling 152-Day Drawdown Regimes",
-      "url": "https://www.reddit.com/r/algotrading/comments/1xtgi6s/modeling_a_3640trade_asymmetrical_execution/",
-      "why": "提供低胜率、高盈亏比的挂单执行策略在 BTC 永续上的实操框架（摩擦成本建模、权益曲线线性度 R² 0.945、152 天回撤区间处理），可用于对齐套利腿在 CEX 侧的执行成本与回撤管理假设"
+      "title": "Bitcoin weakness erases September's bullish signal",
+      "url": "https://www.coindesk.com/daybook-us/2026/11/12/bitcoin-weakness-erases-september-s-bullish-signal",
+      "why": "确认趋势类信号发生反转，说明趋势跟随资金会在低点追跌，从而构成均值回归策略的对手盘与超额收益来源。"
     },
     {
-      "title": "I open-sourced 2,000 more dead crypto bots. My best ideas did no better than my random ones.",
-      "url": "https://www.reddit.com/r/algotrading/comments/1xtj1lw/i_opensourced_2000_more_dead_crypto_bots_my_best/",
-      "why": "1,980 个机器人过 7 级验证仅 0.3% 存活，说明必须做参数敏感性、前后分段样本外与多重检验校正，避免把 basis 阈值过拟合为噪声"
+      "title": "Strategy stock sheds 5% amid MSCI index removal, Bitcoin sell-off",
+      "url": "https://cointelegraph.com/markets/strategy-shares-fall-5-msci-index-removal-bitcoin",
+      "why": "说明外生指数事件（MSCI 剔除）与加密 beta 冲击叠加，可用于构建事件冲击标签，并作为回测中的外生冲击哑变量。"
+    },
+    {
+      "title": "Tron, Tether and Chainalysis Form a New Crypto-Crime Task Force—Replacing One That Just Collapsed",
+      "url": "https://decrypt.co/383139/tron-tether-chainalysis-new-crypto-crime-task-force-replacing-trm",
+      "why": "提示稳定币链上冻结和风控可能收紧，可能放大流动性与清算冲击，是需要控制的风险变量。"
     }
   ],
   "risk_factors": [
-    "延迟与 MEV 竞争：200ms 块下专业搜索者已同链抢先，回测中的 1 块延迟假设可能过于乐观，实盘成交率与净 PnL 显著低于回测",
-    "池深下降导致执行差异：Flashblocks 后 AMM 有效价差扩大，大额 DEX 腿滑点可能吞掉全部 basis，需按池内实际 tick 流动性重算而非用中间价",
-    "成本状态漂移：priority fee 在行情剧烈时段可飙升 10 倍以上，且 Base 排序规则（是否引入 sequencer 拍卖）若再变，历史成本参数失效",
-    "regime 突变风险：本次机会可能只存在于提速后的数十天内，样本外衰减快，需做上线日切点的分段稳健性和严格样本外验证",
-    "跨市场结算与对手方风险：DEX 腿与 CEX 永续腿存在资金占用不对称、稳定币 depeg 与交易所提币限制，可能导致对冲失效"
+    "历史样本少且集中在极端行情，事件重叠（同一周多次触发）会造成样本不独立、统计功效不足",
+    "强平数据在交易所或聚合商处存在口径差异与延迟，实盘触发时点可能落后于行情",
+    "熊市趋势下反弹可能是死猫跳，均值回归策略连续触发会累积亏损（如 2022-11 后），需要 regime 过滤",
+    "交易所强制平仓后，资金费率极值可能持续数日，持有成本侵蚀收益；监管变动（如伊利诺伊州税收）会改变做市深度与滑点",
+    "滑点与流动性冲击：在强平规模激增的时点，盘口极薄，回测的加 5bp 假设可能偏乐观"
   ],
   "confidence": "medium",
-  "confidence_reason": "机制链条（出块加速→优先费竞价下降→套利净利上升、池深变薄→价差扩大）有明确论文实证支撑且数据全部公开可获取，但优势幅度与持续性高度依赖延迟和当时段的 fee 水平，样本期短、易衰减，实盘滑点假设敏感",
-  "quick_start": "今天先跑两步：①用 Dune 写 SQL 拉取 Base 上 Uniswap v3 WETH/USDC 0.05% 池 2025-01-01 至今的 Swap 事件，按 block_number 与 block_time 计算每块池中间价，并 join Base 区块的 base_fee 与交易 effective_gas_price 得到每块中位 priority fee；②从 data.binance.vision 下载 ETHUSDT 永续同期的 aggTrades 日归档（https://data.binance.vision/data/futures/um/daily/aggTrades/ETHUSDT/），用 pandas 重采样成 200ms 桶并取中间价，与 DEX 价格按时间戳 asof-merge，画出 basis_bps 的分布与自相关图，先确认 |basis| 是否稳定超过 (池费 5bp + CEX taker 2bp + 折算后的 priority fee + 滑点) 这一成本线，再决定是否进入事件驱动回测",
+  "confidence_reason": "清算规模激增后价格反转在文献与实盘中都有一定先验支持，且所需数据（K 线、资金费率、OI、强平）全部公开可获取；但由于缺少原文价格细节，且极端样本稀疏，需要回测确认显著性。",
+  "quick_start": "今天就安装 ccxt 与 requests，用 ccxt.binanceusdm().fetch_ohlcv('BTC/USDT:USDT','1h',since=...)，并调用 https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=5m 与 /fapi/v1/fundingRate 拉取 2021 年至今的数据；同时注册 Coinglass 免费 API key 获取聚合强平历史，先算出每 4h 的强平名义额序列及其 30 天滚动中位数，标记出强平额超过中位数 3 倍的日期，再画锚定 0 点的 24/48/72h 收益事件曲线做初步验证。",
   "model": "deepseek-reasoner",
-  "date": "2026-11-12",
-  "generated_at": "2026-11-12T03:51:06Z"
+  "date": "2026-11-13",
+  "generated_at": "2026-11-13T03:25:57Z"
 }
