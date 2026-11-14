@@ -1,47 +1,50 @@
 {
-  "alpha_name": "BTC清算规模激增后的均值回归多头",
-  "hypothesis": "在指数事件（MSCI 剔除 Strategy）、人事冲击（黄仁勋离开 Nvidia）等外生利空同时出现时，杠杆多头被动平仓会制造出非理性的短时超卖；对手盘是那些被强平的高杠杆多头，以及追跌的趋势跟随资金，它们为流动性提供了补偿。",
-  "signal_logic": "数据字段包括：币安 BTCUSDT 永续的 1h OHLCV、8h 资金费率、5m 未平仓合约（OI），以及 Coinglass 或 Binance forceOrder WebSocket 推送的多空强平名义额。触发条件是在滚动 4h 窗口内同时满足四项：(a) 多头强平名义额高于过去 30 天 4h 滚动中位数的 3 倍；(b) 价格相对 24h 最高价回撤不低于 5%；(c) 当期资金费率低于过去 30 天的第 10 百分位，或转为负值；(d) 4h 内 OI 下降不低于 4%，即确认去杠杆。信号确认后，在下一根 1h K 线开盘时做多 BTCUSDT 永续，持有 24h 至 72h，或止盈 +3% / 资金费率回归 30 天中位数，止损 -3% 或跌破强平低点。反向信号是当价格反弹超过 24h 跌幅的 60% 且资金费率回到 70 百分位之上时，用于平仓，而不用于建立空头。",
+  "alpha_name": "BTC永续效率比门控均值回归",
+  "hypothesis": "高波动时段的多数价格跳动是流动性噪声而非信息驱动，做市商与追涨杀跌的散户在震荡窗口提供过度反应后的均值回归溢价，但只在方向性弱（低效率比）的窗口成立，趋势窗口里均值回归是负期望。",
+  "signal_logic": "标的：Binance USDT-M 永续 BTCUSDT（辅 ETHUSDT/SOLUSDT），15 分钟 K 线。① 效率比 ER20 = |close_t − close_{t−20}| / Σ|close_i − close_{i−1}|（i 取最近 20 根），衡量方向位移占总位移比；② 波动状态：ATR14/close 取过去 30 天滚动分位，要求 >60 分位（高波动但非趋势）；③ 偏离度：z = (close − SMA20)/std20，用 15m 收益的 EWMA 波动归一。触发：ER20 < 0.30 且 ATR 分位 >60% 且 |z| ≥ 2.0 → 反向开仓（z>+2 做空，z<−2 做多），下一根开盘价成交。④ 日区间过滤：用前一日 high−low 作预期区间代理，若当日已实现区间 ≥1.2×预期区间则当日不开新仓。出场：z 回落至 0 或持仓 8 根（2 小时）超时，止损 1.5×ATR14，反向信号不叠仓。仓位按 15m 波动率倒数做目标波动 10% 年化缩放，单笔名义上限 1x 权益。",
   "data_needed": [
-    "币安 USDⓈ-M 期货 API：BTCUSDT/ETHUSDT/SOLUSDT 永续 1h、5m K 线（/fapi/v1/klines）",
-    "币安 /fapi/v1/fundingRate 资金费率历史，以及 /futures/data/openInterestHist 未平仓合约",
-    "Coinglass API 或币安 forceOrder WebSocket 的聚合强平数据（按多空方向拆分）",
-    "可选的 Bybit v5 market/liquidation 作为交叉验证；Deribit DVOL 或 25d 偏斜作为情绪辅助过滤"
+    "Binance USDT-M Futures REST/WebSocket：BTCUSDT、ETHUSDT、SOLUSDT 的 15m OHLCV（/fapi/v1/klines），2023-01 至今，含成交量",
+    "Binance/Bybit 永续资金费率历史（/fapi/v1/fundingRate），用于计持仓成本",
+    "（可选）CoinGlass 或交易所 openInterestHist 15m 未平仓合约，用于剔除 OI 剧烈变化窗口（如 Hyperliquid OI 份额跃迁期）"
   ],
-  "backtest_approach": "资产池为 BTCUSDT、ETHUSDT、SOLUSDT 永续；测试期为 2021-01 至 2026-11（含 2022-05 LUNA、2022-11 FTX 等清算规模激增样本）。频率为事件驱动，每小时扫描一次。入场按下一根 1h 开盘价加 5bp 滑点，出场按时间 72h、止损 -3%、止盈 +3% 三者中的先触发者，并加入资金费率成本。评估指标为事件数（目标不少于 200 个样本）、24/48/72h 平均收益与胜率、年化夏普、最大回撤、Calmar、相对 buy-and-hold 的超额收益，以及 Newey-West t 统计量。另外做分组测试：按波动率、趋势 regime（200 日均线上下）和强平强度分位做稳健性检验，并与随机日期对照组比较。",
+  "backtest_approach": "资产池：BTCUSDT、ETHUSDT、SOLUSDT 永续；时间窗口 2023-01-01 至 2026-11-13，样本内 2023-01~2025-06，样本外 2025-07~2026-11；频率 15m 信号、逐 bar 撮合，手续费 2bps taker + 1bp 滑点，计入资金费率。核心做消融实验：A 组=纯 |z|≥2 均值回归（无过滤），B 组=加 ER 门控，C 组=ER+ATR 分位+日区间三重过滤，比较交易数、单笔期望、胜率。评估指标：年化夏普、Sortino、最大回撤、Calmar、每笔期望收益（bps）、胜率、盈亏比、换手率与容量估计；对 ER 阈值 (0.25/0.30/0.35) 与 z 阈值 (1.8/2.0/2.5) 做网格+置换检验（1000 次打乱标签）检验 p 值是否 <0.05，参照 [1] 的教训不把 88/100 盈利当显著。",
   "supporting_sources": [
     {
-      "title": "Bitcoin falls to 12-week low as Jensen Huang’s exit from Nvidia rattles markets",
-      "url": "https://www.theblock.co/news/markets/2026-11-12-bitcoin-12-week-low-jensen-huang-exit-nvidia-438992",
-      "why": "提供核心事件样本：BTC 跌至 71,200 的 12 周低点并触发 7.5 亿美元强平，这是清算规模激增的典型触发点，也给出了具体的价格与强平规模参照。"
+      "title": "does high volatility mean more directional movement,or just wider price swings?",
+      "url": "https://www.reddit.com/r/algotrading/comments/1xuy38a/does_high_volatility_mean_more_directional/",
+      "why": "直接把“高波动=机会”量化为方向位移/总位移比即 Kaufman 效率比 ER，是本 Alpha 的核心状态变量与门控定义来源"
     },
     {
-      "title": "Bitcoin weakness erases September's bullish signal",
-      "url": "https://www.coindesk.com/daybook-us/2026/11/12/bitcoin-weakness-erases-september-s-bullish-signal",
-      "why": "确认趋势类信号发生反转，说明趋势跟随资金会在低点追跌，从而构成均值回归策略的对手盘与超额收益来源。"
+      "title": "Filtering a BTC mean-reversion bot by the day's expected range: 6 weeks of notes",
+      "url": "https://www.reddit.com/r/algotrading/comments/1xvffd9/filtering_a_btc_meanreversion_bot_by_the_days/",
+      "why": "提供同频（15m）BTC 均值回归加日预期区间过滤的实证：交易减 35%、胜率 52%→56%，支撑“过滤换质量”的设计假设与日区间过滤模块"
     },
     {
-      "title": "Strategy stock sheds 5% amid MSCI index removal, Bitcoin sell-off",
-      "url": "https://cointelegraph.com/markets/strategy-shares-fall-5-msci-index-removal-bitcoin",
-      "why": "说明外生指数事件（MSCI 剔除）与加密 beta 冲击叠加，可用于构建事件冲击标签，并作为回测中的外生冲击哑变量。"
+      "title": "Bitcoin’s momentum gauge is turning red, could send prices back below $60,000",
+      "url": "https://www.coindesk.com/daybook-us/2026/11/13/bitcoin-s-momentum-gauge-is-turning-red-could-send-prices-back-below-usd60-000",
+      "why": "说明当前动量状态正切换、趋势与震荡边界在移动，正是需要 ER 这类自适应状态变量而非静态参数的理由"
     },
     {
-      "title": "Tron, Tether and Chainalysis Form a New Crypto-Crime Task Force—Replacing One That Just Collapsed",
-      "url": "https://decrypt.co/383139/tron-tether-chainalysis-new-crypto-crime-task-force-replacing-trm",
-      "why": "提示稳定币链上冻结和风控可能收紧，可能放大流动性与清算冲击，是需要控制的风险变量。"
+      "title": "Bitcoin plunges to $68,000 as Anthropic IPO frenzy adds to market jitters",
+      "url": "https://www.coindesk.com/markets/2026/11/13/bitcoin-slides-to-usd68k-as-nvidia-turmoil-anthropic-ipo-fuel-broader-market-sell-off",
+      "why": "证实当下处于高波动+外生流动性冲击环境（BTC 跌至 68k），为样本外区间提供充足的均值回归检验样本，也提示需剥离宏观事件窗口"
+    },
+    {
+      "title": "I tested 100 versions of my Kalshi Bitcoin pullback strategy",
+      "url": "https://www.reddit.com/r/algotrading/comments/1xvau5s/i_tested_100_versions_of_my_kalshi_bitcoin/",
+      "why": "反面教材：88/100 参数组盈利但均值仅 +$9.26、置换检验 p=0.0693 未过线，直接决定本 Alpha 必须做置换检验与消融而非看盈利组数"
     }
   ],
   "risk_factors": [
-    "历史样本少且集中在极端行情，事件重叠（同一周多次触发）会造成样本不独立、统计功效不足",
-    "强平数据在交易所或聚合商处存在口径差异与延迟，实盘触发时点可能落后于行情",
-    "熊市趋势下反弹可能是死猫跳，均值回归策略连续触发会累积亏损（如 2022-11 后），需要 regime 过滤",
-    "交易所强制平仓后，资金费率极值可能持续数日，持有成本侵蚀收益；监管变动（如伊利诺伊州税收）会改变做市深度与滑点",
-    "滑点与流动性冲击：在强平规模激增的时点，盘口极薄，回测的加 5bp 假设可能偏乐观"
+    "ER 与 ATR 均为滞后指标，状态切换点附近会出现“假震荡”误判，导致在趋势启动首段逆势加仓",
+    "均值回归在极端行情（如 Anthropic IPO 类流动性冲击、宏观数据）中尾部亏损大，1.5×ATR 止损可能被跳空穿透",
+    "15m 高频换手对费率与滑点极敏感，taker 成本上升 1bp 即可能吞掉全部单笔期望；小市值永续（SOL）深度不足放大冲击成本",
+    "参数（ER 阈值、z 阈值、20 根窗口）存在过拟合风险，样本外可能退化；Kalshi 案例显示看似稳健的参数簇仍可能不显著"
   ],
   "confidence": "medium",
-  "confidence_reason": "清算规模激增后价格反转在文献与实盘中都有一定先验支持，且所需数据（K 线、资金费率、OI、强平）全部公开可获取；但由于缺少原文价格细节，且极端样本稀疏，需要回测确认显著性。",
-  "quick_start": "今天就安装 ccxt 与 requests，用 ccxt.binanceusdm().fetch_ohlcv('BTC/USDT:USDT','1h',since=...)，并调用 https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=5m 与 /fapi/v1/fundingRate 拉取 2021 年至今的数据；同时注册 Coinglass 免费 API key 获取聚合强平历史，先算出每 4h 的强平名义额序列及其 30 天滚动中位数，标记出强平额超过中位数 3 倍的日期，再画锚定 0 点的 24/48/72h 收益事件曲线做初步验证。",
+  "confidence_reason": "信号完全可由公开 15m OHLCV 与资金费率复现且有两篇同频论坛实证支撑，但 ER 门控的超额收益尚未在公开数据上被独立验证，需消融与置换检验确认。",
+  "quick_start": "先跑数据管道与基线：pip install ccxt pandas numpy；用 ccxt.binanceusdm().fetch_ohlcv('BTC/USDT:USDT','15m',since=...) 拉取 2023-01 至今约 13 万根 15m K 线并存 parquet；然后 20 行代码算 ER20 = abs(close.diff(20))/close.diff().abs().rolling(20).sum() 与 z=(close-close.rolling(20).mean())/close.rolling(20).std()，先只统计 |z|≥2 后 8 根内的回归率，按 ER 三分位分组对比（低 ER 组回归率是否显著高于高 ER 组），这是今天就能验证假设成立与否的最小实验，再决定是否搭建完整回测。",
   "model": "deepseek-reasoner",
-  "date": "2026-11-13",
-  "generated_at": "2026-11-13T03:25:57Z"
+  "date": "2026-11-14",
+  "generated_at": "2026-11-14T03:12:00Z"
 }

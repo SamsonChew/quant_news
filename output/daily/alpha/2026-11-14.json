@@ -1,0 +1,50 @@
+{
+  "alpha_name": "BTC永续效率比门控均值回归",
+  "hypothesis": "高波动时段的多数价格跳动是流动性噪声而非信息驱动，做市商与追涨杀跌的散户在震荡窗口提供过度反应后的均值回归溢价，但只在方向性弱（低效率比）的窗口成立，趋势窗口里均值回归是负期望。",
+  "signal_logic": "标的：Binance USDT-M 永续 BTCUSDT（辅 ETHUSDT/SOLUSDT），15 分钟 K 线。① 效率比 ER20 = |close_t − close_{t−20}| / Σ|close_i − close_{i−1}|（i 取最近 20 根），衡量方向位移占总位移比；② 波动状态：ATR14/close 取过去 30 天滚动分位，要求 >60 分位（高波动但非趋势）；③ 偏离度：z = (close − SMA20)/std20，用 15m 收益的 EWMA 波动归一。触发：ER20 < 0.30 且 ATR 分位 >60% 且 |z| ≥ 2.0 → 反向开仓（z>+2 做空，z<−2 做多），下一根开盘价成交。④ 日区间过滤：用前一日 high−low 作预期区间代理，若当日已实现区间 ≥1.2×预期区间则当日不开新仓。出场：z 回落至 0 或持仓 8 根（2 小时）超时，止损 1.5×ATR14，反向信号不叠仓。仓位按 15m 波动率倒数做目标波动 10% 年化缩放，单笔名义上限 1x 权益。",
+  "data_needed": [
+    "Binance USDT-M Futures REST/WebSocket：BTCUSDT、ETHUSDT、SOLUSDT 的 15m OHLCV（/fapi/v1/klines），2023-01 至今，含成交量",
+    "Binance/Bybit 永续资金费率历史（/fapi/v1/fundingRate），用于计持仓成本",
+    "（可选）CoinGlass 或交易所 openInterestHist 15m 未平仓合约，用于剔除 OI 剧烈变化窗口（如 Hyperliquid OI 份额跃迁期）"
+  ],
+  "backtest_approach": "资产池：BTCUSDT、ETHUSDT、SOLUSDT 永续；时间窗口 2023-01-01 至 2026-11-13，样本内 2023-01~2025-06，样本外 2025-07~2026-11；频率 15m 信号、逐 bar 撮合，手续费 2bps taker + 1bp 滑点，计入资金费率。核心做消融实验：A 组=纯 |z|≥2 均值回归（无过滤），B 组=加 ER 门控，C 组=ER+ATR 分位+日区间三重过滤，比较交易数、单笔期望、胜率。评估指标：年化夏普、Sortino、最大回撤、Calmar、每笔期望收益（bps）、胜率、盈亏比、换手率与容量估计；对 ER 阈值 (0.25/0.30/0.35) 与 z 阈值 (1.8/2.0/2.5) 做网格+置换检验（1000 次打乱标签）检验 p 值是否 <0.05，参照 [1] 的教训不把 88/100 盈利当显著。",
+  "supporting_sources": [
+    {
+      "title": "does high volatility mean more directional movement,or just wider price swings?",
+      "url": "https://www.reddit.com/r/algotrading/comments/1xuy38a/does_high_volatility_mean_more_directional/",
+      "why": "直接把“高波动=机会”量化为方向位移/总位移比即 Kaufman 效率比 ER，是本 Alpha 的核心状态变量与门控定义来源"
+    },
+    {
+      "title": "Filtering a BTC mean-reversion bot by the day's expected range: 6 weeks of notes",
+      "url": "https://www.reddit.com/r/algotrading/comments/1xvffd9/filtering_a_btc_meanreversion_bot_by_the_days/",
+      "why": "提供同频（15m）BTC 均值回归加日预期区间过滤的实证：交易减 35%、胜率 52%→56%，支撑“过滤换质量”的设计假设与日区间过滤模块"
+    },
+    {
+      "title": "Bitcoin’s momentum gauge is turning red, could send prices back below $60,000",
+      "url": "https://www.coindesk.com/daybook-us/2026/11/13/bitcoin-s-momentum-gauge-is-turning-red-could-send-prices-back-below-usd60-000",
+      "why": "说明当前动量状态正切换、趋势与震荡边界在移动，正是需要 ER 这类自适应状态变量而非静态参数的理由"
+    },
+    {
+      "title": "Bitcoin plunges to $68,000 as Anthropic IPO frenzy adds to market jitters",
+      "url": "https://www.coindesk.com/markets/2026/11/13/bitcoin-slides-to-usd68k-as-nvidia-turmoil-anthropic-ipo-fuel-broader-market-sell-off",
+      "why": "证实当下处于高波动+外生流动性冲击环境（BTC 跌至 68k），为样本外区间提供充足的均值回归检验样本，也提示需剥离宏观事件窗口"
+    },
+    {
+      "title": "I tested 100 versions of my Kalshi Bitcoin pullback strategy",
+      "url": "https://www.reddit.com/r/algotrading/comments/1xvau5s/i_tested_100_versions_of_my_kalshi_bitcoin/",
+      "why": "反面教材：88/100 参数组盈利但均值仅 +$9.26、置换检验 p=0.0693 未过线，直接决定本 Alpha 必须做置换检验与消融而非看盈利组数"
+    }
+  ],
+  "risk_factors": [
+    "ER 与 ATR 均为滞后指标，状态切换点附近会出现“假震荡”误判，导致在趋势启动首段逆势加仓",
+    "均值回归在极端行情（如 Anthropic IPO 类流动性冲击、宏观数据）中尾部亏损大，1.5×ATR 止损可能被跳空穿透",
+    "15m 高频换手对费率与滑点极敏感，taker 成本上升 1bp 即可能吞掉全部单笔期望；小市值永续（SOL）深度不足放大冲击成本",
+    "参数（ER 阈值、z 阈值、20 根窗口）存在过拟合风险，样本外可能退化；Kalshi 案例显示看似稳健的参数簇仍可能不显著"
+  ],
+  "confidence": "medium",
+  "confidence_reason": "信号完全可由公开 15m OHLCV 与资金费率复现且有两篇同频论坛实证支撑，但 ER 门控的超额收益尚未在公开数据上被独立验证，需消融与置换检验确认。",
+  "quick_start": "先跑数据管道与基线：pip install ccxt pandas numpy；用 ccxt.binanceusdm().fetch_ohlcv('BTC/USDT:USDT','15m',since=...) 拉取 2023-01 至今约 13 万根 15m K 线并存 parquet；然后 20 行代码算 ER20 = abs(close.diff(20))/close.diff().abs().rolling(20).sum() 与 z=(close-close.rolling(20).mean())/close.rolling(20).std()，先只统计 |z|≥2 后 8 根内的回归率，按 ER 三分位分组对比（低 ER 组回归率是否显著高于高 ER 组），这是今天就能验证假设成立与否的最小实验，再决定是否搭建完整回测。",
+  "model": "deepseek-reasoner",
+  "date": "2026-11-14",
+  "generated_at": "2026-11-14T03:12:00Z"
+}
