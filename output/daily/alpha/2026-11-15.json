@@ -1,0 +1,41 @@
+{
+  "alpha_name": "ETF流出动量做空BTC",
+  "hypothesis": "现货 ETF 的申购赎回由慢速配置资金（RIA、养老金、模型组合）驱动，对价格反应滞后且分批执行，因此连续净流出会在随后 1–3 日继续压价；对手盘是依赖『机构逢跌买入』叙事、在资金流出期仍做多的散户与高杠杆多头。",
+  "signal_logic": "数据字段：美国现货 BTC ETF 每日净流入（美元，Farside/CoinGlass 聚合）+ 贝莱德 IBIT 单日净流符号 + 币安 BTCUSDT 永续 8h 资金费率。计算：F_t = 当日全 ETF 净流入；S_t = 5 日滚动求和；Z_t = (S_t - mean60(S)) / std60(S)；STREAK_t = IBIT 连续净流出天数。触发（每日 UTC 00:05 判定，使用 T-1 已公布数据）：若 Z_t <= -1.5 且 STREAK_t >= 5 且 最近一次 8h 资金费率 > 0，则在 BTCUSDT 永续开空，仓位 = min(1, |Z_t|/2.5) × 基础 1x。持仓与退出：持有 24h 后若 Z_t 仍 <= -0.5 则滚动续持，最长 72h；Z_t 回升至 > 0 或触发止损即平仓。对称多头版本用于 Z_t >= +1.5 且 资金费率 < 0（样本较少，仅作对照）。",
+  "data_needed": [
+    "Farside Investors 美国现货比特币 ETF 每日净流入表（或 CoinGlass ETF Flows API，含 IBIT/FBTC/GBTC 分项）",
+    "币安 USDⓈ-M BTCUSDT 永续 1h/8h K线与资金费率（ccxt: binanceusdm fetch_ohlcv / fetch_funding_rate_history）",
+    "Coinbase 现货 BTCUSD 日线（用于构造 Coinbase 溢价与 ETF 流量共线性检验）"
+  ],
+  "backtest_approach": "资产池：BTCUSDT 永续为主，ETHUSDT 永续与 IBIT 现货作稳健性对照。时间窗口：2024-01-11（ETF 上市）至 2026-11-14，日频信号、按 UTC 00:00 开盘价成交，避免使用事后数据。成本假设：单边 5 bps 滑点 + 手续费（永续 taker 4.5 bps），资金费率按实际结算计入 PnL。止损：单笔 -2.5% 硬止损，或持仓期内 Z_t 反转到 0 以上。评估指标：年化夏普、最大回撤、Calmar、胜率、单笔期望收益、与买入持有相关性；并对 Z 阈值（-1.0/-1.5/-2.0）与持仓上限（24/48/72h）做参数敏感性网格，做 block bootstrap 检验显著性。",
+  "supporting_sources": [
+    {
+      "title": "Bitcoin ETFs shed $2.35B in 2 weeks, BlackRock’s losing streak hits 11",
+      "url": "https://cointelegraph.com/markets/bitcoin-etf-outflows-2-35-billion-blackrock-11-session-streak?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "why": "提供核心信号定义：IBIT 连续 11 日净流出的『连续失血天数』与两周 23.5 亿美元流出规模，直接构成 STREAK 与 Z 值的触发条件与量级参考。"
+    },
+    {
+      "title": "Bitcoin ETFs lose $1 billion for the second week in a row as crypto funds, except one, continue bleeding",
+      "url": "https://www.theblock.co/news/markets/2026-11-14-bitcoin-etfs-lose-1-billion-for-the-second-week-in-a-row-as-crypto-funds-except-one-continue-bleeding-440337",
+      "why": "确认流出是跨两周持续性、且几乎全市场基金同步（仅 Avalanche 流入 22.7 万美元），说明这是系统性配置撤离而非单产品扰动，支持用聚合流量而非单 ETF 构建因子。"
+    },
+    {
+      "title": "A behind the scenes force may amplify bitcoin and ether price volatility",
+      "url": "https://www.coindesk.com/markets/2026/11/14/a-behind-the-scenes-force-may-amplify-bitcoin-and-ether-price-volatility",
+      "why": "解释传导机制：做市商/期权 gamma 对冲在敏感价位放大日内波动，说明 ETF 流出冲击会被 dealer hedging 放大，为持有 24–72h 而非仅日内提供了逻辑支撑，并提示可用波动率过滤。"
+    }
+  ],
+  "risk_factors": [
+    "ETF 流量与价格互为因果（reverse causality），流出本身可能是价格下跌的结果，因子可能只是动量代理而非独立 alpha，需用 Coinbase 溢价与滞后价格做正交化检验",
+    "流量数据公布时点滞后（美股收盘后 T+1 披露），若使用不严谨可能引入前视偏差；实盘 00:05 UTC 下单已接近美股收盘后 5 小时，部分信息已被 price in",
+    "样本仅约 700 个交易日且集中在单一宏观 regime（ETF 化+高利率），参数易过拟合；Z 阈值敏感",
+    "资金费率过滤在极端行情下可能长期为正，导致空头持续付出 funding 成本侵蚀收益",
+    "流量高度集中于 IBIT 单一发行商与基差交易平仓，发行商行为变化（如赎回机制调整）会使历史关系失效"
+  ],
+  "confidence": "medium",
+  "confidence_reason": "流量→价格的传导链条有报道与机制支撑且数据免费可获取、可当日复现，但因果方向存疑且样本期短，需正交化与样本外验证后才能提升信心。",
+  "quick_start": "今天先跑数据管道：`pip install ccxt pandas` 后用 ccxt 的 binanceusdm 拉取 BTCUSDT 永续 2024-01-01 起 1h K线与完整资金费率历史存 CSV；同时从 Farside 页面（https://farside.co.uk/btc/）解析每日净流入表为 DataFrame，构造 S_t/Z_t/STREAK_t 三列，与 BTC 次日 00:00→次日 00:00 收益率做初步事件研究（按 Z 分五档看平均前瞻收益与 t 值），30 分钟内即可判断信号方向与单调性是否存在。",
+  "model": "deepseek-reasoner",
+  "date": "2026-11-15",
+  "generated_at": "2026-11-15T02:31:15Z"
+}
