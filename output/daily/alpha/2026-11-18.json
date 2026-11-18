@@ -1,0 +1,42 @@
+{
+  "alpha_name": "BTC投降式已实现亏损抄底",
+  "hypothesis": "现货持有者在深度浮亏下的集中止损抛售，往往由短期情绪型资金和杠杆多头接盘；一旦投降式抛压耗尽，边际卖盘枯竭，中期均值回归带来的收益可弥补时点风险。",
+  "signal_logic": "数据字段：BTC 日频已实现亏损（realized loss，链上移动币龄×成本基础与现价之差，可用 CoinMetrics 的 CapRealUSD 与 PriceUSD 近似推导）、BTC 日收盘价、永续资金费率。计算：RL_7d = 过去 7 日已实现亏损之和；CapitZ = (RL_7d / RealizedCap) 相对过去 2 年滚动分布的 z-score。触发条件（日频收盘后判定）：CapitZ >= 1.5，且收盘价处于过去 180 日最低价的 1.25 倍以内，且当日资金费率 <= 0（散户偏空、拥挤度低）。持仓方向：做多 BTCUSDT 永续（1x–2x）或现货，T+1 开盘入场；仓位按 CapitZ 分档（1.5–2.0 半仓，>2.0 满仓）。平仓：持有 30 个自然日后离场，或 CapitZ 回落至 1.0 以下，或浮亏达 -12% 止损。",
+  "data_needed": [
+    "CoinMetrics Community API：btc 的 CapRealUSD / PriceUSD / PriceRealizedUSD 日频序列（community-api.coinmetrics.io），用于构造已实现亏损与 RealizedCap",
+    "Binance / Bybit：BTCUSDT 永续日线 OHLCV 与历史资金费率（fapi/v1/fundingRate、bybit v5 funding history）",
+    "Glassnode 或 bitcoin-data.com：链上已实现亏损（realized loss）与 LTH/STH 成本基础，作为交叉验证源",
+    "可选：Chainalysis / Glassnode 交易所净流入与稳定币流入（乌克兰/东欧口径）作为宏观控制变量"
+  ],
+  "backtest_approach": "资产池：BTCUSDT（Binance 永续为主，Bybit 永续做稳健性复现），可选对标 ETHUSDT 与 BTC 现货。时间窗口：2018-01-01 至 2026-11-18，日频信号、T+1 开盘执行，避免使用未来数据。对照组：无条件做多 BTC 的基准、随机同日入场基准、以及去掉资金费率过滤的版本。评估指标：事件数、胜率、10/20/60 日前瞻收益均值与中位数、年化夏普、最大回撤、Calmar、换手与资金费率成本后的净收益；另做 2018/2020/2022/2023 分年度稳健性与 bootstrap 显著性检验。止损：单次 -12% 硬止损，最长持有 30 日强制离场。",
+  "supporting_sources": [
+    {
+      "title": "Bitcoin Investors Are Capitulating—That’s Historically Been a Bottom Signal",
+      "url": "https://decrypt.co/383466/bitcoin-investors-capitulating-historical-bottom-signal",
+      "why": "直接给出信号核心：已实现亏损触及 2018/2020/2022/2023 初四次底部同级水平，并指出 6.2 万–6.6 万美元支撑区间，提供可量化的历史事件样本"
+    },
+    {
+      "title": "Binance Hack Wallets Move $137 Million in Ethereum After Two Weeks of Silence",
+      "url": "https://decrypt.co/383446/binance-hack-wallets-move-ethereum-after-two-weeks",
+      "why": "证明链上大额转账可作为可监控的抛压预警信号，说明链上流数据在日频策略中具备可用性与时效性"
+    },
+    {
+      "title": "Eastern Europe crypto flows fall 7.9% as Ukraine draws $12B in stablecoins",
+      "url": "https://cointelegraph.com/news/eastern-europe-crypto-activity-decline-chainalysis?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "why": "提供稳定币跨境流这类链上宏观控制变量的可用口径，用于剥离地缘资金流对投降信号收益的混淆"
+    }
+  ],
+  "risk_factors": [
+    "样本极少：2018 年以来仅 4–6 次触发，统计功效弱，容易过拟合阈值",
+    "链上已实现亏损数据存在发布延迟与提供商口径差异（Glassnode 与 CoinMetrics 定义不同），可能引入前视偏差",
+    "投降后仍可能继续下跌（如 2022 年多次级联清算），-12% 止损可能被反复触发导致成本累积",
+    "BTC 永续资金费率与基差成本在极端行情下显著抬升，侵蚀策略净收益",
+    "2024 年后 ETF 与机构资金改变了边际定价者结构，历史底部形态可能失效"
+  ],
+  "confidence": "medium",
+  "confidence_reason": "信号有明确链上数据支撑且历史四次底部形成一致模式，但事件样本过少、数据供应商口径差异与市场结构变化限制其统计可靠性与外推性。",
+  "quick_start": "先拉数据验证：`curl -s \"https://community-api.coinmetrics.io/v4/timeseries/asset-metrics?assets=btc&metrics=CapRealUSD,PriceUSD,PriceRealizedUSD&frequency=1d&start_time=2018-01-01&format=csv\" > btc_onchain.csv` 与 `curl -s \"https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=1d&limit=1500\" > btc_perp.json`（分页补齐历史），随后用 pandas 计算 RL_7d/RealizedCap 的 730 日滚动 z-score，标出 CapitZ>=1.5 且价格距 180 日低点 <=25% 的日期，先看这些日期后 10/20/60 日的前瞻收益分布是否显著优于基准，再决定是否加资金费率过滤与建仓分档。",
+  "model": "deepseek-reasoner",
+  "date": "2026-11-18",
+  "generated_at": "2026-11-18T04:21:38Z"
+}
