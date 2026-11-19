@@ -1,42 +1,46 @@
 {
-  "alpha_name": "BTC投降式已实现亏损抄底",
-  "hypothesis": "现货持有者在深度浮亏下的集中止损抛售，往往由短期情绪型资金和杠杆多头接盘；一旦投降式抛压耗尽，边际卖盘枯竭，中期均值回归带来的收益可弥补时点风险。",
-  "signal_logic": "数据字段：BTC 日频已实现亏损（realized loss，链上移动币龄×成本基础与现价之差，可用 CoinMetrics 的 CapRealUSD 与 PriceUSD 近似推导）、BTC 日收盘价、永续资金费率。计算：RL_7d = 过去 7 日已实现亏损之和；CapitZ = (RL_7d / RealizedCap) 相对过去 2 年滚动分布的 z-score。触发条件（日频收盘后判定）：CapitZ >= 1.5，且收盘价处于过去 180 日最低价的 1.25 倍以内，且当日资金费率 <= 0（散户偏空、拥挤度低）。持仓方向：做多 BTCUSDT 永续（1x–2x）或现货，T+1 开盘入场；仓位按 CapitZ 分档（1.5–2.0 半仓，>2.0 满仓）。平仓：持有 30 个自然日后离场，或 CapitZ 回落至 1.0 以下，或浮亏达 -12% 止损。",
+  "alpha_name": "机构减仓×多空拥挤反转因子",
+  "hypothesis": "当机构级抛售信号（ETF 净流出、企业财库卖币、基金清仓）与仍处高位的永续资金费率同时出现时，散户与被动多头仍在杠杆做多高 beta 币，对手盘是这些滞后的杠杆多头；在 1-3 日内高 beta 山寨相对 BTC 会补跌，从而形成可捕获的负 alpha。",
+  "signal_logic": "日频（UTC 00:00 结算后计算）。三个输入：(1) 机构流出事件 E_t：当日 Farside/CoinShares 数据显示 BTC 或 ETH 现货 ETF 净流出 > 1.5 亿美元，或出现已公告的企业/基金减持（如 MARA 卖币、CoinShares 清仓 ETH 减持 SOL），记 E_t=1；(2) 拥挤度 C_t：取 SOLUSDT、ETHUSDT、SUIUSDT 等一篮子高 beta 永续的 8h 资金费率 3 期均值，若 > +0.01%（年化约 11%）记 C_t=1；(3) 趋势过滤：BTC 20 日动量 < 0。触发条件 E_t=1 且 C_t=1 且趋势向下，则在次日 00:00 UTC 开盘建仓：做空高 beta 篮子（等权 SOL/ETH/AVAX/SUI 永续，1x 名义）、做多 BTCUSDT 永续对冲 60% beta，净敞口约 -0.4 beta。持仓 3 天或当资金费率回落至 0.005% 以下或篮子相对 BTC 3 日跌幅 > 6% 时平仓；信号消失但未满 72h 也强制平仓。反向信号（E_t=0、C_t=1 且价格创新高）不交易，只做空头侧。",
   "data_needed": [
-    "CoinMetrics Community API：btc 的 CapRealUSD / PriceUSD / PriceRealizedUSD 日频序列（community-api.coinmetrics.io），用于构造已实现亏损与 RealizedCap",
-    "Binance / Bybit：BTCUSDT 永续日线 OHLCV 与历史资金费率（fapi/v1/fundingRate、bybit v5 funding history）",
-    "Glassnode 或 bitcoin-data.com：链上已实现亏损（realized loss）与 LTH/STH 成本基础，作为交叉验证源",
-    "可选：Chainalysis / Glassnode 交易所净流入与稳定币流入（乌克兰/东欧口径）作为宏观控制变量"
+    "Binance USDⓈ-M 永续资金费率与价格：GET https://fapi.binance.com/fapi/v1/fundingRate?symbol=SOLUSDT&limit=1000，以及 /fapi/v1/klines 日线与 8h K 线",
+    "Bybit v5 永续 markPrice/fundingRate 作为交叉验证与备选执行场所（GET /v5/market/funding/history）",
+    "Farside Investors 美国现货 BTC/ETH ETF 日度净流入表（或 CoinShares 周报 API/网页抓取）",
+    "CryptoQuant / Glassnode 交易所净流入与矿工持仓（用于 MARA 类财库卖币事件确认）"
   ],
-  "backtest_approach": "资产池：BTCUSDT（Binance 永续为主，Bybit 永续做稳健性复现），可选对标 ETHUSDT 与 BTC 现货。时间窗口：2018-01-01 至 2026-11-18，日频信号、T+1 开盘执行，避免使用未来数据。对照组：无条件做多 BTC 的基准、随机同日入场基准、以及去掉资金费率过滤的版本。评估指标：事件数、胜率、10/20/60 日前瞻收益均值与中位数、年化夏普、最大回撤、Calmar、换手与资金费率成本后的净收益；另做 2018/2020/2022/2023 分年度稳健性与 bootstrap 显著性检验。止损：单次 -12% 硬止损，最长持有 30 日强制离场。",
+  "backtest_approach": "资产池：BTC、ETH、SOL、AVAX、SUI、DOGE 等 Binance 永续流动性前 15 名（剔除上线不足 180 天的合约）。时间段：2024-01-01 至 2026-11-18，日频调仓，事件驱动持仓 1-3 天。成本假设：单边 5bp 手续费 + 3bp 滑点，资金费率按实际 8h 结算计入盈亏。评估指标：年化收益、夏普、最大回撤、Calmar、胜率、事件后 1/3/5 日 CAR（累计异常收益）、相对纯做空 BTC 与纯做空 SOL 的增量 alpha；并按 ETF 流出规模分档做分层测试，以及做 2024 与 2025-26 分段稳健性检验，剔除单事件（如 MARA）依赖。",
   "supporting_sources": [
     {
-      "title": "Bitcoin Investors Are Capitulating—That’s Historically Been a Bottom Signal",
-      "url": "https://decrypt.co/383466/bitcoin-investors-capitulating-historical-bottom-signal",
-      "why": "直接给出信号核心：已实现亏损触及 2018/2020/2022/2023 初四次底部同级水平，并指出 6.2 万–6.6 万美元支撑区间，提供可量化的历史事件样本"
+      "title": "Bitcoin Tanks Ahead of Anthropic’s IPO. Should We Really Blame AI?",
+      "url": "https://decrypt.co/383551/bitcoin-tanks-ahead-anthropics-ipo-should-we-really-blame-ai",
+      "why": "指出本轮下跌主因是 ETF 流出、杠杆强平与利率上行，直接支持『机构流出 + 杠杆拥挤』组合信号的有效性"
     },
     {
-      "title": "Binance Hack Wallets Move $137 Million in Ethereum After Two Weeks of Silence",
-      "url": "https://decrypt.co/383446/binance-hack-wallets-move-ethereum-after-two-weeks",
-      "why": "证明链上大额转账可作为可监控的抛压预警信号，说明链上流数据在日频策略中具备可用性与时效性"
+      "title": "Why CoinShares Just Sold All Its Ethereum and Half Its Solana",
+      "url": "https://decrypt.co/383570/why-coinshares-just-sold-all-ethereum-half-solana",
+      "why": "提供具体的机构减持事件样本（清仓 ETH、减半 SOL），并且恰好是高 beta 篮子成分，用于事件定义与事后 CAR 检验"
     },
     {
-      "title": "Eastern Europe crypto flows fall 7.9% as Ukraine draws $12B in stablecoins",
-      "url": "https://cointelegraph.com/news/eastern-europe-crypto-activity-decline-chainalysis?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-      "why": "提供稳定币跨境流这类链上宏观控制变量的可用口径，用于剥离地缘资金流对投降信号收益的混淆"
+      "title": "MARA prices $185M debt offering after $1.1B Bitcoin sale",
+      "url": "https://cointelegraph.com/markets/mara-long-ridge-debt-offering-bitcoin-sales?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "why": "企业财库级卖币（11 亿美元 BTC）是 BTC 供给冲击的典型事件，用于构建 E_t 事件库并检验 BTC 相对山寨的对冲腿表现"
+    },
+    {
+      "title": "Fed's Waller Calls for 50-Basis-Point Rate Hike, Says Tokenized Finance Still Needs Traditional Banks",
+      "url": "https://decrypt.co/383566/fed-waller-50-basis-point-rate-hike-tokenized-finance-banks",
+      "why": "利率上行风险压制长久期风险资产，是让高 beta 山寨跌幅大于 BTC 的宏观驱动，支持 beta 中性多空结构而非纯方向做空"
     }
   ],
   "risk_factors": [
-    "样本极少：2018 年以来仅 4–6 次触发，统计功效弱，容易过拟合阈值",
-    "链上已实现亏损数据存在发布延迟与提供商口径差异（Glassnode 与 CoinMetrics 定义不同），可能引入前视偏差",
-    "投降后仍可能继续下跌（如 2022 年多次级联清算），-12% 止损可能被反复触发导致成本累积",
-    "BTC 永续资金费率与基差成本在极端行情下显著抬升，侵蚀策略净收益",
-    "2024 年后 ETF 与机构资金改变了边际定价者结构，历史底部形态可能失效"
+    "事件样本稀疏：ETF 大额流出叠加高资金费率的共同触发日可能一年仅 15-30 次，统计显著性不足，易被单次事件主导",
+    "资金费率数据在极端行情下瞬时反转，8h 均值滞后可能导致信号触发时拥挤度已解除，产生假信号",
+    "机构减持公告常在盘后或周末发布，次日开盘已部分定价，存在跳空导致做空腿滑点放大",
+    "BTC 对冲腿在系统性下跌中相关性上升（beta 漂移），名义 60% 对冲可能失效变成净空敞口"
   ],
   "confidence": "medium",
-  "confidence_reason": "信号有明确链上数据支撑且历史四次底部形成一致模式，但事件样本过少、数据供应商口径差异与市场结构变化限制其统计可靠性与外推性。",
-  "quick_start": "先拉数据验证：`curl -s \"https://community-api.coinmetrics.io/v4/timeseries/asset-metrics?assets=btc&metrics=CapRealUSD,PriceUSD,PriceRealizedUSD&frequency=1d&start_time=2018-01-01&format=csv\" > btc_onchain.csv` 与 `curl -s \"https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=1d&limit=1500\" > btc_perp.json`（分页补齐历史），随后用 pandas 计算 RL_7d/RealizedCap 的 730 日滚动 z-score，标出 CapitZ>=1.5 且价格距 180 日低点 <=25% 的日期，先看这些日期后 10/20/60 日的前瞻收益分布是否显著优于基准，再决定是否加资金费率过滤与建仓分档。",
+  "confidence_reason": "信号由多条独立机构资金流新闻交叉印证、数据全部公开可获取且逻辑清晰，但触发事件稀疏、样本期短，统计功效与参数（阈值、对冲比例）稳健性需实测验证。",
+  "quick_start": "先拉取 Binance 资金费率与日线做事件研究：python -c \"import requests,pandas as pd; d=requests.get('https://fapi.binance.com/fapi/v1/fundingRate',params={'symbol':'SOLUSDT','limit':1000}).json(); df=pd.DataFrame(d); df['fundingTime']=pd.to_datetime(df.fundingTime,unit='ms'); print(df.tail())\"，同时用 /fapi/v1/klines?symbol=SOLUSDT&interval=8h 取价格，手工录入近 12 个月的 20-30 个 ETF 大额流出日，计算事件后 1/3/5 日 SOL/BTC 相对收益均值与 t 值，作为最小可行验证。",
   "model": "deepseek-reasoner",
-  "date": "2026-11-18",
-  "generated_at": "2026-11-18T04:21:38Z"
+  "date": "2026-11-19",
+  "generated_at": "2026-11-19T04:13:54Z"
 }
