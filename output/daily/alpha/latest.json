@@ -1,46 +1,54 @@
 {
-  "alpha_name": "机构减仓×多空拥挤反转因子",
-  "hypothesis": "当机构级抛售信号（ETF 净流出、企业财库卖币、基金清仓）与仍处高位的永续资金费率同时出现时，散户与被动多头仍在杠杆做多高 beta 币，对手盘是这些滞后的杠杆多头；在 1-3 日内高 beta 山寨相对 BTC 会补跌，从而形成可捕获的负 alpha。",
-  "signal_logic": "日频（UTC 00:00 结算后计算）。三个输入：(1) 机构流出事件 E_t：当日 Farside/CoinShares 数据显示 BTC 或 ETH 现货 ETF 净流出 > 1.5 亿美元，或出现已公告的企业/基金减持（如 MARA 卖币、CoinShares 清仓 ETH 减持 SOL），记 E_t=1；(2) 拥挤度 C_t：取 SOLUSDT、ETHUSDT、SUIUSDT 等一篮子高 beta 永续的 8h 资金费率 3 期均值，若 > +0.01%（年化约 11%）记 C_t=1；(3) 趋势过滤：BTC 20 日动量 < 0。触发条件 E_t=1 且 C_t=1 且趋势向下，则在次日 00:00 UTC 开盘建仓：做空高 beta 篮子（等权 SOL/ETH/AVAX/SUI 永续，1x 名义）、做多 BTCUSDT 永续对冲 60% beta，净敞口约 -0.4 beta。持仓 3 天或当资金费率回落至 0.005% 以下或篮子相对 BTC 3 日跌幅 > 6% 时平仓；信号消失但未满 72h 也强制平仓。反向信号（E_t=0、C_t=1 且价格创新高）不交易，只做空头侧。",
+  "alpha_name": "死亡交叉趋势跟随+资金费率确认",
+  "hypothesis": "散户与情绪型交易者把「死亡交叉」当作抄底信号(「death cross is a buy」的民间共识)而持续接多，同时趋势跟随资金在50/200日均线下穿后系统性做空；正资金费率证明多头拥挤，做空方赚取趋势延续与资金费双重收益。",
+  "signal_logic": "频率：日频，UTC 00:00 收盘后计算。字段：Binance USDⓈ-M BTCUSDT 永续日线 close，50DMA 与 200DMA，8h 资金费率。触发条件(做空)：T 日 close 使 50DMA 下穿 200DMA(前一日 50DMA≥200DMA 且当日 <)，且过去 3 日 8h 资金费率均值 >0(多头仍付费)，且 close < 200DMA。持仓方向：做空 BTCUSDT 永续，每 20 个交易日滚动复核，若 50DMA 重新上穿 200DMA 或 3 日均资金费率转负至 <-0.005%，立即平仓。扩展截面版：对成交额前 30 的 USDT 永续逐币执行同一规则，只做空同时满足死亡交叉且资金费率>0 的币，等权分配，空头组合对 BTC 做 beta 中性化。",
   "data_needed": [
-    "Binance USDⓈ-M 永续资金费率与价格：GET https://fapi.binance.com/fapi/v1/fundingRate?symbol=SOLUSDT&limit=1000，以及 /fapi/v1/klines 日线与 8h K 线",
-    "Bybit v5 永续 markPrice/fundingRate 作为交叉验证与备选执行场所（GET /v5/market/funding/history）",
-    "Farside Investors 美国现货 BTC/ETH ETF 日度净流入表（或 CoinShares 周报 API/网页抓取）",
-    "CryptoQuant / Glassnode 交易所净流入与矿工持仓（用于 MARA 类财库卖币事件确认）"
+    "Binance USDⓈ-M Futures REST：GET /fapi/v1/klines（symbol=BTCUSDT, interval=1d，2019-09 至今）与全部 USDT 永续日线",
+    "Binance GET /fapi/v1/fundingRate（8 小时粒度历史资金费率）与 GET /fapi/v1/premiumIndex",
+    "Bybit V5 GET /v5/market/kline + /v5/market/funding/history 用于跨交易所交叉验证",
+    "Coinglass API：BTC 永续未平仓量 OI 与多空账户比（可选过滤器）",
+    "Farside / CoinDesk ETF 流量表：美国现货 BTC ETF 日度净流入（作为 regime 过滤，流出期放大空头权重）",
+    "RWA.xyz 或 The Block 代币化股票链上规模（月度，用于判断跨资产脱钩 regime）"
   ],
-  "backtest_approach": "资产池：BTC、ETH、SOL、AVAX、SUI、DOGE 等 Binance 永续流动性前 15 名（剔除上线不足 180 天的合约）。时间段：2024-01-01 至 2026-11-18，日频调仓，事件驱动持仓 1-3 天。成本假设：单边 5bp 手续费 + 3bp 滑点，资金费率按实际 8h 结算计入盈亏。评估指标：年化收益、夏普、最大回撤、Calmar、胜率、事件后 1/3/5 日 CAR（累计异常收益）、相对纯做空 BTC 与纯做空 SOL 的增量 alpha；并按 ETF 流出规模分档做分层测试，以及做 2024 与 2025-26 分段稳健性检验，剔除单事件（如 MARA）依赖。",
+  "backtest_approach": "资产池：BTCUSDT 永续为主，加成交额前 30 USDT 永续做截面扩展；时间窗口 2019-09 至 2026-11(含 2021 牛市、2022 熊市、2023-24 复苏、2025-26 回撤)；频率日频、持仓期 20 日或至反向信号；成本假设单边 5bp 手续费+2bp 滑点，含资金费率实付/实收；止损：持仓期浮亏达 8% 或 50DMA 上穿即离场；对照组为「死亡交叉后做多」与 buy-and-hold BTC；评估指标：年化收益、Sharpe、Sortino、最大回撤、Calmar、胜率、平均持仓天数、资金费率贡献拆解，并对 20 日持仓期做参数敏感性(10/20/40 日)与 block bootstrap 显著性检验。",
   "supporting_sources": [
     {
-      "title": "Bitcoin Tanks Ahead of Anthropic’s IPO. Should We Really Blame AI?",
-      "url": "https://decrypt.co/383551/bitcoin-tanks-ahead-anthropics-ipo-should-we-really-blame-ai",
-      "why": "指出本轮下跌主因是 ETF 流出、杠杆强平与利率上行，直接支持『机构流出 + 杠杆拥挤』组合信号的有效性"
+      "title": "Bitcoin Enters Death Cross as Anthropic IPO Fails to Lift Wall Street",
+      "url": "https://decrypt.co/383655/bitcoin-enters-death-cross-anthropic-ipo",
+      "why": "直接给出今日 50DMA 下穿 200DMA 的死亡交叉事件与「动量深度超卖、趋势确立」判断，是本 alpha 的信号触发源与最新样本外事件。"
     },
     {
-      "title": "Why CoinShares Just Sold All Its Ethereum and Half Its Solana",
-      "url": "https://decrypt.co/383570/why-coinshares-just-sold-all-ethereum-half-solana",
-      "why": "提供具体的机构减持事件样本（清仓 ETH、减半 SOL），并且恰好是高 beta 篮子成分，用于事件定义与事后 CAR 检验"
+      "title": "Bitcoin ETF outflows show waning crypto appetite ahead of Anthropic's Nasdaq debut",
+      "url": "https://www.coindesk.com/daybook-us/2026/11/19/bitcoin-etf-outflows-show-waning-crypto-appetite-ahead-of-anthropic-s-nasdaq-debut",
+      "why": "现货 ETF 由净流入转净流出，说明边际买盘(被动资金)撤离，支持趋势延续而非反转，可作为 regime 过滤器加大空头权重。"
     },
     {
-      "title": "MARA prices $185M debt offering after $1.1B Bitcoin sale",
-      "url": "https://cointelegraph.com/markets/mara-long-ridge-debt-offering-bitcoin-sales?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-      "why": "企业财库级卖币（11 亿美元 BTC）是 BTC 供给冲击的典型事件，用于构建 E_t 事件库并检验 BTC 相对山寨的对冲腿表现"
+      "title": "Institutions pile back into US Bitcoin ETFs in Q3 after selling streak",
+      "url": "https://cointelegraph.com/markets/institutional-bitcoin-etf-holdings-clock-record-quarter-after-selling-streak?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "why": "Q3 机构净增 49,229 BTC 后转为四季度价格走弱，说明机构持仓是慢变量、对短期趋势不敏感，短线对手盘是杠杆散户而非机构，验证了资金费率过滤的有效性。"
     },
     {
-      "title": "Fed's Waller Calls for 50-Basis-Point Rate Hike, Says Tokenized Finance Still Needs Traditional Banks",
-      "url": "https://decrypt.co/383566/fed-waller-50-basis-point-rate-hike-tokenized-finance-banks",
-      "why": "利率上行风险压制长久期风险资产，是让高 beta 山寨跌幅大于 BTC 的宏观驱动，支持 beta 中性多空结构而非纯方向做空"
+      "title": "Tokenized Stocks Shrug Off the Crypto Selloff",
+      "url": "https://www.theblock.co/newsletters/tokenization-briefing/2026-11-19-tokenized-stocks-shrug-off-crypto-selloff-442829",
+      "why": "BTC 六周连跌而代币化股票规模破 40 亿美元，提供跨资产脱钩的证据，支持把「加密内部下跌」与「外部风险偏好」区分开，避免用纳指做错误过滤。"
+    },
+    {
+      "title": "Bitcoin hits four-month low after Anthropic's IPO as tech stocks wilt",
+      "url": "https://www.coindesk.com/markets/2026/11/20/bitcoin-hits-four-month-low-after-anthropic-s-ipo-as-tech-stocks-wilt",
+      "why": "BTC 创四个月新低且纳指期货跌破 200 日均线，属于典型的趋势共振下跌环境，为做空信号提供当下的样本外验证场景。"
     }
   ],
   "risk_factors": [
-    "事件样本稀疏：ETF 大额流出叠加高资金费率的共同触发日可能一年仅 15-30 次，统计显著性不足，易被单次事件主导",
-    "资金费率数据在极端行情下瞬时反转，8h 均值滞后可能导致信号触发时拥挤度已解除，产生假信号",
-    "机构减持公告常在盘后或周末发布，次日开盘已部分定价，存在跳空导致做空腿滑点放大",
-    "BTC 对冲腿在系统性下跌中相关性上升（beta 漂移），名义 60% 对冲可能失效变成净空敞口"
+    "死亡交叉是滞后指标，历史上多次出现「交叉即反转」的假信号(如 2019 年初、2023 年初)，胜率可能低于 50%，依赖盈亏比",
+    "样本量稀少：BTC 日线 50/200 交叉自 2019 年仅约 10-12 次，统计显著性弱，容易过拟合",
+    "资金费率过滤在极端行情中会剧烈反转，若空头过度拥挤，负费率会吞噬趋势收益",
+    "事件风险：Trump Media 11 月 30 日现金赎回窗口等突发消息可能引发单日暴力反弹导致止损被击穿",
+    "交易所数据口径差异(Binance/Bybit 资金费率结算频率与上限不同)，跨所回测需统一处理"
   ],
   "confidence": "medium",
-  "confidence_reason": "信号由多条独立机构资金流新闻交叉印证、数据全部公开可获取且逻辑清晰，但触发事件稀疏、样本期短，统计功效与参数（阈值、对冲比例）稳健性需实测验证。",
-  "quick_start": "先拉取 Binance 资金费率与日线做事件研究：python -c \"import requests,pandas as pd; d=requests.get('https://fapi.binance.com/fapi/v1/fundingRate',params={'symbol':'SOLUSDT','limit':1000}).json(); df=pd.DataFrame(d); df['fundingTime']=pd.to_datetime(df.fundingTime,unit='ms'); print(df.tail())\"，同时用 /fapi/v1/klines?symbol=SOLUSDT&interval=8h 取价格，手工录入近 12 个月的 20-30 个 ETF 大额流出日，计算事件后 1/3/5 日 SOL/BTC 相对收益均值与 t 值，作为最小可行验证。",
+  "confidence_reason": "信号逻辑清晰、数据全部可从 Binance/Bybit 公开 API 免费获取，但死亡交叉事件样本极少、本质是低频趋势跟随，超额收益高度依赖少数几次大行情，统计稳健性有限。",
+  "quick_start": "今天先跑数据拉取与事件统计：用 Python 请求 https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=1d&limit=1500 获取日线，循环 startTime 参数翻页至 2019-09；同时拉 https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1000 翻页获取 8h 资金费率。用 pandas 计算 ma50/ma200，标记 sign(ma50-ma200) 变号日，统计每次交叉后 5/10/20/40 日的收益分布与资金费率累计，先看「交叉后做空」相对「交叉后做多」与 buy-and-hold 的差异是否稳定，再决定是否加入截面扩展。",
   "model": "deepseek-reasoner",
-  "date": "2026-11-19",
-  "generated_at": "2026-11-19T04:13:54Z"
+  "date": "2026-11-20",
+  "generated_at": "2026-11-20T04:09:58Z"
 }
