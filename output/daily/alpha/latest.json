@@ -1,54 +1,46 @@
 {
-  "alpha_name": "死亡交叉趋势跟随+资金费率确认",
-  "hypothesis": "散户与情绪型交易者把「死亡交叉」当作抄底信号(「death cross is a buy」的民间共识)而持续接多，同时趋势跟随资金在50/200日均线下穿后系统性做空；正资金费率证明多头拥挤，做空方赚取趋势延续与资金费双重收益。",
-  "signal_logic": "频率：日频，UTC 00:00 收盘后计算。字段：Binance USDⓈ-M BTCUSDT 永续日线 close，50DMA 与 200DMA，8h 资金费率。触发条件(做空)：T 日 close 使 50DMA 下穿 200DMA(前一日 50DMA≥200DMA 且当日 <)，且过去 3 日 8h 资金费率均值 >0(多头仍付费)，且 close < 200DMA。持仓方向：做空 BTCUSDT 永续，每 20 个交易日滚动复核，若 50DMA 重新上穿 200DMA 或 3 日均资金费率转负至 <-0.005%，立即平仓。扩展截面版：对成交额前 30 的 USDT 永续逐币执行同一规则，只做空同时满足死亡交叉且资金费率>0 的币，等权分配，空头组合对 BTC 做 beta 中性化。",
+  "alpha_name": "跨链桥大额ETH流入做空",
+  "hypothesis": "黑客/大额持有者把 ETH 经 THORChain、Chainflip 跨链出货时，池内 ETH 被集中抛售并立即被套利者向下砸价；部分交易者仍在抄底，为做空方提供短周期的对手盘。",
+  "signal_logic": "数据字段：①THORChain Router 与 Chainflip Vault 合约的 ETH 净流入量（Etherscan 内部交易 API + Midgard actions 接口）；②流入发起地址是否在 Arkham/Etherscan 黑客标签库；③Binance ETHUSDT 永续 5m OHLCV 与资金费率。计算：以 1h 滚动窗口汇总净流入 ETH 数量，计算相对过去 30 天同时段均值的 z-score。触发条件：z-score>3，且单笔流入>1 万 ETH 或>2000 万美元，或来自已标记黑客地址。入场：信号 bar 收盘后下一根 5m K 线开盘做空 ETHUSDT 永续。出场：持有满 8 小时、或净流入回落到 z<0.5、或浮盈>2.5% 止盈、浮亏>1.5% 止损。加仓条件：若同期资金费率为正且位于近 30 天 80 分位以上，仓位乘以 1.5。",
   "data_needed": [
-    "Binance USDⓈ-M Futures REST：GET /fapi/v1/klines（symbol=BTCUSDT, interval=1d，2019-09 至今）与全部 USDT 永续日线",
-    "Binance GET /fapi/v1/fundingRate（8 小时粒度历史资金费率）与 GET /fapi/v1/premiumIndex",
-    "Bybit V5 GET /v5/market/kline + /v5/market/funding/history 用于跨交易所交叉验证",
-    "Coinglass API：BTC 永续未平仓量 OI 与多空账户比（可选过滤器）",
-    "Farside / CoinDesk ETF 流量表：美国现货 BTC ETF 日度净流入（作为 regime 过滤，流出期放大空头权重）",
-    "RWA.xyz 或 The Block 代币化股票链上规模（月度，用于判断跨资产脱钩 regime）"
+    "Etherscan API（THORChain Router 0xD37BbE…、Chainflip Vault 合约的 ERC20 Transfer 与 internal tx）",
+    "THORChain Midgard API /actions 与 /pools 接口（ETH 池流入流出与深度变化）",
+    "Binance 与 Bybit USDT 永续 ETHUSDT 1m/5m OHLCV + fundingRate 历史（ccxt 或官方 REST）",
+    "Arkham Intelligence / Etherscan 标签 API（黑客与桥地址标签）"
   ],
-  "backtest_approach": "资产池：BTCUSDT 永续为主，加成交额前 30 USDT 永续做截面扩展；时间窗口 2019-09 至 2026-11(含 2021 牛市、2022 熊市、2023-24 复苏、2025-26 回撤)；频率日频、持仓期 20 日或至反向信号；成本假设单边 5bp 手续费+2bp 滑点，含资金费率实付/实收；止损：持仓期浮亏达 8% 或 50DMA 上穿即离场；对照组为「死亡交叉后做多」与 buy-and-hold BTC；评估指标：年化收益、Sharpe、Sortino、最大回撤、Calmar、胜率、平均持仓天数、资金费率贡献拆解，并对 20 日持仓期做参数敏感性(10/20/40 日)与 block bootstrap 显著性检验。",
+  "backtest_approach": "资产池：ETHUSDT 永续（Binance、Bybit 双市场验证），可选 ETH-PERP 与现货价差。时间段：2019-01 至 2026-11，事件窗口按 5m 频率对齐。频率：事件驱动，预计每月 3-15 次，全样本 200+ 事件。执行假设：t+1 根 5m 开盘成交，双边 4bp 手续费+2bp 滑点。评估指标：单事件平均收益、胜率、盈亏比、年化夏普、最大回撤、事件后 1h/4h/8h/24h 累计收益曲线（CAR），并与随机时点安慰剂组做 t 检验；再做分市况（BTC 恐惧贪婪指数<20 与 >50）的分层测试。",
   "supporting_sources": [
     {
-      "title": "Bitcoin Enters Death Cross as Anthropic IPO Fails to Lift Wall Street",
-      "url": "https://decrypt.co/383655/bitcoin-enters-death-cross-anthropic-ipo",
-      "why": "直接给出今日 50DMA 下穿 200DMA 的死亡交叉事件与「动量深度超卖、趋势确立」判断，是本 alpha 的信号触发源与最新样本外事件。"
+      "title": "Binance hacker moves nearly $600M in ETH, routes funds through THORChain, Chainflip",
+      "url": "https://cointelegraph.com/news/binance-hacker-600m-eth-routes-thorchain-chainflip",
+      "why": "直接给出可复现的事件模板：近 6 亿美元 ETH 经 THORChain/Chainflip 跨链转出，是本文信号的核心触发条件与首个样本点。"
     },
     {
-      "title": "Bitcoin ETF outflows show waning crypto appetite ahead of Anthropic's Nasdaq debut",
-      "url": "https://www.coindesk.com/daybook-us/2026/11/19/bitcoin-etf-outflows-show-waning-crypto-appetite-ahead-of-anthropic-s-nasdaq-debut",
-      "why": "现货 ETF 由净流入转净流出，说明边际买盘(被动资金)撤离，支持趋势延续而非反转，可作为 regime 过滤器加大空头权重。"
+      "title": "Sky Protocol sees $2 billion in stablecoin withdrawals, disputes illicit fund claims",
+      "url": "https://cointelegraph.com/news/sky-protocol-sees-2b-in-stablecoin-withdrawals-disputes-illicit-fund-claims",
+      "why": "同为链上资金异常外流事件，可用于构建“事件型流动性冲击”样本集，并做跨事件的一致性检验。"
     },
     {
-      "title": "Institutions pile back into US Bitcoin ETFs in Q3 after selling streak",
-      "url": "https://cointelegraph.com/markets/institutional-bitcoin-etf-holdings-clock-record-quarter-after-selling-streak?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-      "why": "Q3 机构净增 49,229 BTC 后转为四季度价格走弱，说明机构持仓是慢变量、对短期趋势不敏感，短线对手盘是杠杆散户而非机构，验证了资金费率过滤的有效性。"
+      "title": "Bitcoin plunges below $59,000 as rush to cash puts new bear market lows back in play",
+      "url": "https://www.coindesk.com/markets/2026/11/20/bitcoin-plunges-below-usd59-000-as-rush-to-cash-puts-new-bear-market-lows-back-in-play",
+      "why": "说明当前处于抛售主导、资金涌向现金的市况，做空方向有顺势条件，也是分市况测试的标签来源。"
     },
     {
-      "title": "Tokenized Stocks Shrug Off the Crypto Selloff",
-      "url": "https://www.theblock.co/newsletters/tokenization-briefing/2026-11-19-tokenized-stocks-shrug-off-crypto-selloff-442829",
-      "why": "BTC 六周连跌而代币化股票规模破 40 亿美元，提供跨资产脱钩的证据，支持把「加密内部下跌」与「外部风险偏好」区分开，避免用纳指做错误过滤。"
-    },
-    {
-      "title": "Bitcoin hits four-month low after Anthropic's IPO as tech stocks wilt",
-      "url": "https://www.coindesk.com/markets/2026/11/20/bitcoin-hits-four-month-low-after-anthropic-s-ipo-as-tech-stocks-wilt",
-      "why": "BTC 创四个月新低且纳指期货跌破 200 日均线，属于典型的趋势共振下跌环境，为做空信号提供当下的样本外验证场景。"
+      "title": "Stablecoin Runs as Safe-Asset Stress Signals: Episode-Level Evidence for Central Bank Surveillance",
+      "url": "http://arxiv.org/abs/2611.26180v1",
+      "why": "提供“资金外流事件具有可度量的价格冲击”的学术证据与方法论（事件级研究），支撑事件驱动的因子构造。"
     }
   ],
   "risk_factors": [
-    "死亡交叉是滞后指标，历史上多次出现「交叉即反转」的假信号(如 2019 年初、2023 年初)，胜率可能低于 50%，依赖盈亏比",
-    "样本量稀少：BTC 日线 50/200 交叉自 2019 年仅约 10-12 次，统计显著性弱，容易过拟合",
-    "资金费率过滤在极端行情中会剧烈反转，若空头过度拥挤，负费率会吞噬趋势收益",
-    "事件风险：Trump Media 11 月 30 日现金赎回窗口等突发消息可能引发单日暴力反弹导致止损被击穿",
-    "交易所数据口径差异(Binance/Bybit 资金费率结算频率与上限不同)，跨所回测需统一处理"
+    "大额 ETH 可能通过 OTC 或跨链后长期持有，未必形成即时现货抛压，导致事件与价格不相关",
+    "THORChain 池内冲击会被套利者在秒级抹平，5m 级别的信号可能已错过主要价格反应，需验证 1m 频率",
+    "黑客与桥地址标签不完整，事件样本存在选择偏差与幸存偏差，样本量小导致统计功效不足",
+    "极端行情下交易所提高保证金或限制开仓，做空拥挤时资金费率反噬持仓成本"
   ],
   "confidence": "medium",
-  "confidence_reason": "信号逻辑清晰、数据全部可从 Binance/Bybit 公开 API 免费获取，但死亡交叉事件样本极少、本质是低频趋势跟随，超额收益高度依赖少数几次大行情，统计稳健性有限。",
-  "quick_start": "今天先跑数据拉取与事件统计：用 Python 请求 https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=1d&limit=1500 获取日线，循环 startTime 参数翻页至 2019-09；同时拉 https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1000 翻页获取 8h 资金费率。用 pandas 计算 ma50/ma200，标记 sign(ma50-ma200) 变号日，统计每次交叉后 5/10/20/40 日的收益分布与资金费率累计，先看「交叉后做空」相对「交叉后做多」与 buy-and-hold 的差异是否稳定，再决定是否加入截面扩展。",
+  "confidence_reason": "链上数据与交易所行情均可低成本获取且事件逻辑清晰，但样本量有限、冲击传导速度不确定，需回测验证后再定仓位。",
+  "quick_start": "今天先用 ccxt 拉取 Binance ETHUSDT 永续 5m K 线（fetch_ohlcv('ETH/USDT:USDT','5m',since=...)）和 Etherscan tokentx（contractaddress=THORChain Router，startblock 对应 2024-01），把 2024 年至今所有单小时 ETH 净流入>1 万枚的时间戳打标，画出事件后 24h 的平均累计收益曲线，先看方向是否成立。",
   "model": "deepseek-reasoner",
-  "date": "2026-11-20",
-  "generated_at": "2026-11-20T04:09:58Z"
+  "date": "2026-11-21",
+  "generated_at": "2026-11-21T03:57:20Z"
 }
