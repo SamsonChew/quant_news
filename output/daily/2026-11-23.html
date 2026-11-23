@@ -1,0 +1,1086 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>samson 量化情报台 - 2026-11-23</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --panel: #ffffff;
+      --ink: #202124;
+      --muted: #5f6368;
+      --line: #dadce0;
+      --blue: #1a73e8;
+      --red: #ea4335;
+      --yellow: #fbbc04;
+      --green: #34a853;
+      --blue-soft: #e8f0fe;
+      --green-soft: #e6f4ea;
+      --yellow-soft: #fef7e0;
+      --red-soft: #fce8e6;
+      --shadow: 0 1px 2px rgba(60, 64, 67, 0.16), 0 8px 24px rgba(60, 64, 67, 0.10);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(66, 133, 244, 0.07), transparent 30%),
+        radial-gradient(circle at top right, rgba(251, 188, 4, 0.08), transparent 26%),
+        var(--bg);
+      color: var(--ink);
+      font-family: "Google Sans", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(280px, 620px);
+      gap: 24px;
+      align-items: center;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand h1 {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin: 0;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+
+    .brand h1::before {
+      content: "";
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background:
+        conic-gradient(from 0deg, var(--blue) 0 25%, var(--red) 0 50%, var(--yellow) 0 75%, var(--green) 0 100%);
+      box-shadow: inset 0 0 0 7px #fff;
+    }
+
+    .date-pill {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 170px 170px 150px;
+      gap: 10px;
+    }
+
+    .control {
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 12px;
+      outline: none;
+    }
+
+    .control:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.14);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 260px minmax(420px, 1fr) 420px;
+      gap: 22px;
+      padding: 24px 32px 36px;
+    }
+
+    .rail,
+    .detail {
+      position: sticky;
+      top: 86px;
+      height: calc(100vh - 112px);
+      overflow: auto;
+    }
+
+    .rail,
+    .detail,
+    .feed {
+      min-width: 0;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      padding: 12px;
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
+    }
+
+    .metric:nth-child(1) { border-top: 3px solid var(--blue); }
+    .metric:nth-child(2) { border-top: 3px solid var(--red); }
+    .metric:nth-child(3) { border-top: 3px solid var(--yellow); }
+    .metric:nth-child(4) { border-top: 3px solid var(--green); }
+
+    .metric b {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .section-label {
+      margin: 18px 0 8px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .category-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .category-button {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--ink);
+      padding: 8px 10px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .category-button:hover,
+    .category-button.active {
+      border-color: transparent;
+      background: var(--blue-soft);
+      color: #174ea6;
+    }
+
+    .count {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .source-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .source-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .feed-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .feed-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .result-count {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .items {
+      display: grid;
+      gap: 10px;
+    }
+
+    .section-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 2px 4px;
+      margin-top: 10px;
+      border-bottom: 2px solid var(--line);
+    }
+
+    .section-group-header:first-child {
+      margin-top: 0;
+    }
+
+    .section-group-title {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .section-group-header[data-section="deep_learning_quant"] .section-group-title { color: var(--blue); }
+    .section-group-header[data-section="ai_quant_tools"] .section-group-title { color: var(--green); }
+    .section-group-header[data-section="daily_news"] .section-group-title { color: var(--yellow); }
+
+    .section-group-count {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .item {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: 0 1px 2px rgba(60, 64, 67, 0.10);
+      padding: 18px;
+      cursor: pointer;
+      transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+    }
+
+    .item::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--blue), var(--red), var(--yellow), var(--green));
+    }
+
+    .item[data-section="deep_learning_quant"]::before { background: var(--blue); }
+    .item[data-section="ai_quant_tools"]::before { background: var(--green); }
+    .item[data-section="daily_news"]::before { background: var(--yellow); }
+
+    .item:hover,
+    .item.active {
+      border-color: #c6dafc;
+      box-shadow: var(--shadow);
+      transform: translateY(-2px);
+    }
+
+    .item-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .item h3 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.28;
+    }
+
+    .score {
+      min-width: 54px;
+      border-radius: 999px;
+      background: var(--blue-soft);
+      color: #174ea6;
+      padding: 6px 8px;
+      text-align: center;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .tag {
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: #f1f3f4;
+      padding: 3px 8px;
+    }
+
+    .tag:nth-child(1) { background: var(--blue-soft); color: #174ea6; }
+    .tag:nth-child(2) { background: var(--green-soft); color: #137333; }
+    .tag:nth-child(3) { background: var(--yellow-soft); color: #8a5a00; }
+    .tag:nth-child(4) { background: var(--red-soft); color: #b3261e; }
+
+    .summary {
+      margin: 0;
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .reference-link {
+      display: inline-flex;
+      width: fit-content;
+      border-top: 1px solid var(--line);
+      color: var(--blue);
+      padding-top: 9px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .reader-format {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .reader-format.compact {
+      gap: 8px;
+    }
+
+    .reader-block {
+      border-top: 1px solid var(--line);
+      padding-top: 9px;
+    }
+
+    .reader-block:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .reader-block h4 {
+      margin: 0 0 5px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .reader-block p,
+    .reader-block li {
+      margin: 0;
+      color: #30342d;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .reader-block ol {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .reader-reference {
+      color: var(--blue);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
+    .reference-url {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .detail {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .detail h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+
+    .detail-block {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .detail-block h3 {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+
+    .detail-block p,
+    .detail-block li {
+      color: #30342d;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .detail-block ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .breakdown {
+      display: grid;
+      gap: 8px;
+    }
+
+    .bar {
+      display: grid;
+      grid-template-columns: 118px 1fr 40px;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .bar-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e7eadf;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--blue), var(--green), var(--yellow), var(--red));
+    }
+
+    .open-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      margin-top: 16px;
+      border: 1px solid var(--blue);
+      border-radius: var(--radius);
+      color: var(--blue);
+      text-decoration: none;
+      padding: 0 12px;
+      font-weight: 700;
+    }
+
+    .feedback-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+    }
+
+    .feedback-btn {
+      background: #f1f3f4;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 120ms, border-color 120ms;
+    }
+
+    .feedback-btn:hover { background: var(--blue-soft); }
+    .feedback-btn.active-up { background: var(--green-soft); border-color: var(--green); }
+    .feedback-btn.active-down { background: var(--red-soft); border-color: var(--red); }
+
+    .feedback-hint {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      padding: 28px;
+      color: var(--muted);
+      background: var(--panel);
+    }
+
+    @media (max-width: 1180px) {
+      .layout {
+        grid-template-columns: 220px 1fr;
+      }
+
+      .detail {
+        position: static;
+        grid-column: 1 / -1;
+        height: auto;
+      }
+    }
+
+    @media (max-width: 820px) {
+      .topbar {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .brand {
+        display: grid;
+        gap: 4px;
+      }
+
+      .brand h1 {
+        white-space: normal;
+        font-size: 21px;
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .rail,
+      .detail {
+        position: static;
+        height: auto;
+      }
+
+      .metric-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <h1>samson 量化情报台</h1>
+        <span class="date-pill" id="report-date"></span>
+      </div>
+      <div class="controls">
+        <input class="control" id="search" type="search" placeholder="搜索标题、摘要、分类..." />
+        <select class="control" id="section-select"></select>
+        <select class="control" id="category-select"></select>
+        <select class="control" id="sort-select">
+          <option value="score">按评分排序</option>
+          <option value="priority">按优先级排序</option>
+          <option value="source">按来源排序</option>
+        </select>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="rail">
+        <div class="metric-grid">
+          <div class="metric"><b id="metric-items">0</b><span>报告条目</span></div>
+          <div class="metric"><b id="metric-categories">0</b><span>分类数量</span></div>
+          <div class="metric"><b id="metric-high">0</b><span>高优先级</span></div>
+          <div class="metric"><b id="metric-avg">0.0</b><span>平均评分</span></div>
+        </div>
+
+        <div class="section-label">两条主线</div>
+        <div class="category-list" id="section-list"></div>
+
+        <div class="section-label">细分标签</div>
+        <div class="category-list" id="category-list"></div>
+
+        <div class="section-label">主力来源</div>
+        <ul class="source-list" id="source-list"></ul>
+      </aside>
+
+      <section class="feed">
+        <div class="feed-header">
+          <h2 id="feed-title">今日情报</h2>
+          <span class="result-count" id="result-count"></span>
+        </div>
+        <div class="items" id="items"></div>
+      </section>
+
+      <aside class="detail" id="detail"></aside>
+    </main>
+  </div>
+
+  <script id="dashboard-data" type="application/json">{"report_date": "2026-11-23", "generated_at": "2026-11-23T03:41:10Z", "items": [{"id": "418caa4bfdf560a69d1ad2769bd16d27409bf9f792a58d95a1b8430cd458e0b9", "source": "arXiv", "source_type": "paper", "title": "Do Econophysics-Inspired Inputs Improve Neural Covariance Forecasting? A Leakage-Free Walk-Forward Study of Intraday DJIA Data", "url": "http://arxiv.org/abs/2611.27616v1", "authors": ["Gabriele Ranco"], "published_at": "2026-11-20", "collected_at": "2026-11-23T03:30:47Z", "raw_text": "Tools from econophysics, including Random Matrix Theory (RMT), Tsallis q-Gaussian tails, Hawkes self-excitation and diffusion-inspired regularization, are often proposed as ingredients for financial risk models, but their incremental value over strong contemporary benchmarks remains unclear. We introduce a Physics-Inspired Neural Covariance (PINC) framework for one-day-ahead covariance forecasting using 1-minute data from the 29 Dow Jones Industrial Average constituents over 545 trading days. The model incorporates RMT-cleaned correlations, Tsallis tail indices and Hawkes intensities as inputs and optionally includes a Fokker-Planck-inspired regularization term selected strictly on validation data. Evaluation is performed through a nested walk-forward design with 11 folds, 231 out-of-sample trading days and multiple random seeds, with explicit leakage controls and reproducibility tests. Neural models outperform static covariance estimators such as sample, Ledoit-Wolf, RMT and EVT-based estimators, but show no statistically significant improvement over HAR-RV or LSTM benchmarks. Validation consistently rejects the physics-inspired regularizer, and ablation studies find no measurable contribution from the RMT, Tsallis or Hawkes features. Portfolio experiments show no statistically significant Sharpe ratio improvement after transaction costs. These results suggest that, for this dataset and forecasting horizon, econophysics-inspired components do not provide measurable benefits beyond strong financial forecasting benchmarks.", "abstract": "Tools from econophysics, including Random Matrix Theory (RMT), Tsallis q-Gaussian tails, Hawkes self-excitation and diffusion-inspired regularization, are often proposed as ingredients for financial risk models, but their incremental value over strong contemporary benchmarks remains unclear. We introduce a Physics-Inspired Neural Covariance (PINC) framework for one-day-ahead covariance forecasting using 1-minute data from the 29 Dow Jones Industrial Average constituents over 545 trading days. The model incorporates RMT-cleaned correlations, Tsallis tail indices and Hawkes intensities as inputs and optionally includes a Fokker-Planck-inspired regularization term selected strictly on validation data. Evaluation is performed through a nested walk-forward design with 11 folds, 231 out-of-sample trading days and multiple random seeds, with explicit leakage controls and reproducibility tests. Neural models outperform static covariance estimators such as sample, Ledoit-Wolf, RMT and EVT-based estimators, but show no statistically significant improvement over HAR-RV or LSTM benchmarks. Validation consistently rejects the physics-inspired regularizer, and ablation studies find no measurable contribution from the RMT, Tsallis or Hawkes features. Portfolio experiments show no statistically significant Sharpe ratio improvement after transaction costs. These results suggest that, for this dataset and forecasting horizon, econophysics-inspired components do not provide measurable benefits beyond strong financial forecasting benchmarks.", "content_hash": "14d64944ed1c0c0a45eb2bf08308b6cbe2ed2ad29dd38a80a95afc5b95874d7a", "category": "Machine Learning for Finance", "tags": ["dataset", "financial forecasting", "forecasting", "lstm", "neural", "portfolio", "risk"], "language": "en", "metadata": {"arxiv_categories": ["q-fin.CP"]}, "one_line_summary": "把 RMT 去噪相关阵、Tsallis 尾指数、Hawkes 强度喂进神经协方差模型，11 折 walk-forward 显示对 HAR-RV/LSTM 无统计显著增益", "technical_summary": "要回答的问题是：常被宣传为风险模型配料的 econophysics 工具（随机矩阵理论去噪、Tsallis q-Gaussian 尾部、Hawkes 自激、扩散方程启发的正则化），在强基准面前还剩多少增量价值。做法是构造 Physics-Inspired Neural Covariance（PINC）框架，输入包含 RMT 清洗后的相关矩阵、Tsallis 尾指数、Hawkes 强度，并可选加入 Fokker-Planck 启发正则项，用 29 只道指成分股 545 个交易日的 1 分钟数据做一日前瞻协方差预测。评估采用嵌套 walk-forward：11 折、231 个样本外交易日、多随机种子，并有显式泄漏控制与可复现性测试。结果三层：神经模型确实跑赢静态估计量（sample、Ledoit-Wolf、RMT、EVT），但对 HAR-RV 和 LSTM 这两个强基准没有统计显著改进；验证集一致否决物理正则项；消融显示 RMT、Tsallis、Hawkes 三组特征贡献为零；组合层面在扣除交易成本后夏普比率无统计显著提升。", "key_points": ["231 天样本外神经协方差胜过 sample/Ledoit-Wolf/RMT/EVT，但打不过 HAR-RV 与 LSTM，差异不显著", "29 股 1 分钟数据 + 11 折嵌套 walk-forward 全流程可复现，HAR-RV 应作为协方差预测的最低基线", "仅覆盖 29 只大盘股、单日预测；损失改善未转化为扣费后夏普，且未测试小市值与高波动时段"], "quant_relevance": "风险建模 / 组合构建（协方差预测）", "possible_use_case": "把自己现有的协方差预测流程（GARCH/DCC、Ledoit-Wolf 收缩、简单 LSTM）与 HAR-RV 做同口径对比：用同样的 11 折嵌套 walk-forward + 多随机种子，先确认 HAR-RV 基线跑不跑得赢，再决定是否引入 RMT 去噪或 Hawkes 强度这类额外特征工程。", "limitations": "样本仅 29 只道指成分股、545 个交易日、单日预测步长，资产池高流动性与高相关性可能恰好压制了 RMT 与 Hawkes 的作用空间；论文只报告统计显著性而不披露具体夏普数值，组合实验的交易成本假设与换手率未在摘要层给出；无公开代码，复现需自建 Hawkes 拟合与 Tsallis 尾估计管线；负结论不能外推到更细粒度、更长预测期或高频做市场景。", "read_priority": "高", "key_figures_md": "- **Table/Figure（原文 HTML 版）**：11 折嵌套 walk-forward 样本外协方差预测损失对比：PINC vs HAR-RV vs LSTM vs sample/Ledoit-Wolf/RMT/EVT 估计量\n- **Table/Figure（原文 HTML 版）**：消融实验：分别剔除 RMT 相关阵、Tsallis 尾指数、Hawkes 强度后的损失变化，三组均无显著差异\n- **Table/Figure（原文 HTML 版）**：组合回测：扣交易成本前后的夏普比率与换手率对比，各模型间差异不显著\n- [原文图表（HTML版）](https://arxiv.org/html/2611.27616)", "relevance_score": 9.9, "novelty_score": 9.355, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 7.5, "final_score": 8.141, "display_title": "预测、组合、风险、协方差研究论文", "tldr": "把 RMT 去噪相关阵、Tsallis 尾指数、Hawkes 强度喂进神经协方差模型，11 折 walk-forward 显示对 HAR-RV/LSTM 无统计显著增益", "core_value": "对你的量化工作帮助：把它拆成一个金融机器学习复现任务，先验证预测、组合、风险、协方差是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["231 天样本外神经协方差胜过 sample/Ledoit-Wolf/RMT/EVT，但打不过 HAR-RV 与 LSTM，差异不显著", "29 股 1 分钟数据 + 11 折嵌套 walk-forward 全流程可复现，HAR-RV 应作为协方差预测的最低基线", "仅覆盖 29 只大盘股、单日预测；损失改善未转化为扣费后夏普，且未测试小市值与高波动时段"], "reference_url": "http://arxiv.org/abs/2611.27616v1", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "金融机器学习", "priority_label": "高", "source_type_label": "论文"}, {"id": "7d9cb12d2aee204254f119b16e9b75c2ad63e027b2956ae95bab8d7aacd565e4", "source": "arXiv", "source_type": "paper", "title": "Are Calibrated Decision Models Calibrated on Markets? Geolocated News, Markov Switching and a System One Model for Nasdaq-100 Allocation", "url": "http://arxiv.org/abs/2611.26716v1", "authors": ["Jakub Zając", "Michał Dyrek"], "published_at": "2026-11-19", "collected_at": "2026-11-23T03:30:47Z", "raw_text": "Portfolio allocation is driven by probabilities of losses, not only by forecasts of the direction (up/down) of the market. A decision model such as Jev returns a probability for a yes/no question and has been reported to be well calibrated on a set of benchmarks. However, the model's calibration against realised market outcomes has not been tested. In this study, every Friday we ask whether the Nasdaq-100 will close lower four weeks later and compare a two-regime Markov-switching model estimated on data from 1990 to 2026, Jev reading weekly headlines and geolocated news features computed with spatial queries in PostGIS, and their combination. A knowledge probe shows that Jev knows events up to late 2024, so we evaluate it on 88 weeks from January 2025 onwards. None of the models predicts the direction better than the historical base rate. A key finding is that raw Jev overestimates the probability of a decline: its mean forecast is 0.48 against an observed frequency of 0.38, and its ECE is 0.10. A prior shift to the historical base rate, which uses no outcomes from the test period, lowers the ECE to 0.015. In contrast, Platt scaling, isotonic regression and the combination with the Markov model all make the forecasts worse. In a half-Kelly allocation, the raw Jev strategy returns 3.1% per year, whereas after the prior shift it returns 14.5%; a simple buy-and-hold strategy in QQQ returns 15.3% per year. The Markov model forecasts large declines (more than 10%) well, with an AUC of 0.81, and its strategy has the highest Sharpe ratio over 1999-2026. Asked about such a large decline (base rate 4%), raw Jev forecasts 16-24% on average, and the same prior shift removes this offset. The practical lesson is that decision-model probabilities must be anchored to the base rate of the market event before they are used to size positions.", "abstract": "Portfolio allocation is driven by probabilities of losses, not only by forecasts of the direction (up/down) of the market. A decision model such as Jev returns a probability for a yes/no question and has been reported to be well calibrated on a set of benchmarks. However, the model's calibration against realised market outcomes has not been tested. In this study, every Friday we ask whether the Nasdaq-100 will close lower four weeks later and compare a two-regime Markov-switching model estimated on data from 1990 to 2026, Jev reading weekly headlines and geolocated news features computed with spatial queries in PostGIS, and their combination. A knowledge probe shows that Jev knows events up to late 2024, so we evaluate it on 88 weeks from January 2025 onwards. None of the models predicts the direction better than the historical base rate. A key finding is that raw Jev overestimates the probability of a decline: its mean forecast is 0.48 against an observed frequency of 0.38, and its ECE is 0.10. A prior shift to the historical base rate, which uses no outcomes from the test period, lowers the ECE to 0.015. In contrast, Platt scaling, isotonic regression and the combination with the Markov model all make the forecasts worse. In a half-Kelly allocation, the raw Jev strategy returns 3.1% per year, whereas after the prior shift it returns 14.5%; a simple buy-and-hold strategy in QQQ returns 15.3% per year. The Markov model forecasts large declines (more than 10%) well, with an AUC of 0.81, and its strategy has the highest Sharpe ratio over 1999-2026. Asked about such a large decline (base rate 4%), raw Jev forecasts 16-24% on average, and the same prior shift removes this offset. The practical lesson is that decision-model probabilities must be anchored to the base rate of the market event before they are used to size positions.", "content_hash": "ce0ff394cd34c8bf12943dcaf19b2c7ab7b9d71fc6c45811f00e8a732959ffd6", "category": "Portfolio Construction", "tags": ["allocation", "portfolio"], "language": "en", "metadata": {"arxiv_categories": ["q-fin.ST", "q-fin.PM"]}, "one_line_summary": "LLM 决策模型 Jev 在纳指下跌概率上过度自信：ECE 0.10，按历史基率平移后降至 0.015", "technical_summary": "要解决的是 LLM 决策模型输出的下跌概率能否直接用于纳指仓位。方法上每周五问 Jev“四周后纳指是否收低”，并与 1990-2026 估计的两状态 Markov 模型、PostGIS 地理定位新闻特征及二者组合对比，测试期为 2025 年起 88 周。方向预测上没有任何模型超过历史基率；Jev 原始下跌概率均值 0.48，实际频率 0.38，ECE=0.10，按历史基率做先验平移后 ECE 降至 0.015，而 Platt、isotonic 和 Markov 组合反而更差。半凯利下原始 Jev 年化 3.1%，先验平移后 14.5%，仍低于 QQQ 的 15.3%；Markov 对 >10% 下跌的 AUC=0.81，并在 1999-2026 有最高夏普。", "key_points": ["Jev 原始下跌概率均值 0.48，实际仅 0.38；先验平移把 ECE 从 0.10 压到 0.015，半凯利年化 3.1% 升至 14.5%。", "可直接复现的只有先验平移公式；Jev 与 PostGIS 新闻特征不公开，88 周样本外需自建周频纳指数据。", "仅 88 周、单一纳指且未计交易成本；14.5% 仍低于 QQQ 15.3%，方向预测未超历史基率，不能当 alpha。"], "quant_relevance": "组合构建 / 权重优化；风险建模：用下跌概率直接决定半凯利仓位，校准误差会放大回撤。", "possible_use_case": "在现有周频股指择时中，把 LLM 下跌概率按训练期历史基率做 prior shift，再接入半凯利仓位；先在纳指 2025 年 88 周复现，再加双边 5bp 成本检验。", "limitations": "样本外只有 2025 年起 88 周、单一纳指，未计交易成本、滑点和借券成本；Jev 与新闻特征不公开，复现依赖专有模型；Markov 的高夏普来自 1999-2026 全样本，不能直接外推。", "read_priority": "中", "key_figures_md": "- **校准图（原文未给编号）**：Jev 原始概率与先验平移后的校准曲线：ECE 从 0.10 降至 0.015\n- **累计收益图（原文未给编号）**：半凯利组合年化收益：原始 Jev 3.1%、先验平移 14.5%、QQQ 15.3%\n- **ROC 图（原文未给编号）**：Markov 模型对 >10% 下跌的 AUC=0.81\n- [原文图表（HTML版）](https://arxiv.org/html/2611.26716)", "relevance_score": 6.1, "novelty_score": 9.149, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 6.76, "display_title": "组合、大模型研究论文", "tldr": "LLM 决策模型 Jev 在纳指下跌概率上过度自信：ECE 0.10，按历史基率平移后降至 0.015", "core_value": "对你的量化工作帮助：把它拆成一个组合构建复现任务，先验证组合、大模型是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["Jev 原始下跌概率均值 0.48，实际仅 0.38；先验平移把 ECE 从 0.10 压到 0.015，半凯利年化 3.1% 升至 14.5%。", "可直接复现的只有先验平移公式；Jev 与 PostGIS 新闻特征不公开，88 周样本外需自建周频纳指数据。", "仅 88 周、单一纳指且未计交易成本；14.5% 仍低于 QQQ 15.3%，方向预测未超历史基率，不能当 阿尔法。"], "reference_url": "http://arxiv.org/abs/2611.26716v1", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "组合构建", "priority_label": "中", "source_type_label": "论文"}, {"id": "7903d174a6e91925c446dee0f1f839c5d4ba7775755cab32af79c2f874664410", "source": "arXiv", "source_type": "paper", "title": "Self-Supervised Learning with Recursive Quadrature Filters for Neural Time Series", "url": "http://arxiv.org/abs/2611.26856v1", "authors": ["Mirko Morello", "Shivang Rawat", "David J. Heeger"], "published_at": "2026-11-19", "collected_at": "2026-11-23T03:32:10Z", "raw_text": "We develop self-supervised methods for training Recursive Quadrature Filter (RQF) encoders on unlabeled time series. RQFs are biologically motivated, complex-valued temporal filters that form a special class of diagonal state-space models (SSMs). Each RQF acts as a band-pass filter whose selectivity is determined by two learnable parameters: its tuning frequency and bandwidth. We separately introduce a self-supervised learning objective based on prediction error; the encoder is trained so that its current state predicts its own future activity. In the windowed mode, the summary of the current window predicts the summary of a later window; in the dense mode, the state at the current timestep predicts future log-power. Each RQF encoder is pretrained on a dataset and then a readout (e.g., a task-specific classifier) is trained on the output of the RQF encoder, with the encoder either frozen or fully fine-tuned. For multichannel EEG and intracranial recordings, a shared encoder processes each channel separately, and a spatial readout combines the channel representations using electrode locations. Across four neural benchmarks using scalp or intracranial EEG, the pretrained RQF system performs close to the state of the art while using a small fraction of the parameters of the competing models. For example, a 110k-parameter RQF system achieves 0.9247 +/- 0.0022 test AUROC on 100-s TUAB segments, above SAMBA (0.9054) at the same context with 9 times as many parameters, and 0.9040 +/- 0.0019 on 10-s segments, comparable to EEG foundation models with 3.2M-369M parameters.", "abstract": "We develop self-supervised methods for training Recursive Quadrature Filter (RQF) encoders on unlabeled time series. RQFs are biologically motivated, complex-valued temporal filters that form a special class of diagonal state-space models (SSMs). Each RQF acts as a band-pass filter whose selectivity is determined by two learnable parameters: its tuning frequency and bandwidth. We separately introduce a self-supervised learning objective based on prediction error; the encoder is trained so that its current state predicts its own future activity. In the windowed mode, the summary of the current window predicts the summary of a later window; in the dense mode, the state at the current timestep predicts future log-power. Each RQF encoder is pretrained on a dataset and then a readout (e.g., a task-specific classifier) is trained on the output of the RQF encoder, with the encoder either frozen or fully fine-tuned. For multichannel EEG and intracranial recordings, a shared encoder processes each channel separately, and a spatial readout combines the channel representations using electrode locations. Across four neural benchmarks using scalp or intracranial EEG, the pretrained RQF system performs close to the state of the art while using a small fraction of the parameters of the competing models. For example, a 110k-parameter RQF system achieves 0.9247 +/- 0.0022 test AUROC on 100-s TUAB segments, above SAMBA (0.9054) at the same context with 9 times as many parameters, and 0.9040 +/- 0.0019 on 10-s segments, comparable to EEG foundation models with 3.2M-369M parameters.", "content_hash": "7d4a4add8e207256f93a9c8a51eb5f63ebd34408f4c22c513f5ff3369a6c8024", "category": "Machine Learning for Finance", "tags": ["dataset", "neural", "time series"], "language": "en", "metadata": {"arxiv_categories": ["cs.LG", "eess.SP", "q-bio.NC"]}, "one_line_summary": "11 万参数的可学习带通滤波器编码器用自监督预测误差预训练，EEG 异常检测 AUROC 0.9247 超越 9 倍参数对手——同类对角状态空间模型可直接当金融时序的轻量特征提取层", "technical_summary": "标注时序稀缺、大模型训练成本高，需要一个参数极省、可无标签预训练的时间序列编码器。做法是把每个 RQF 单元设计成复数域带通滤波器（对角状态空间模型的特例），只有两个可学习参数：调谐频率和带宽，因此隐状态可以 O(1) 递推更新。自监督目标是预测误差：窗口模式用当前窗口的摘要预测后续窗口的摘要，稠密模式用 t 时刻状态预测未来 log-power。多通道输入时共享编码器逐通道处理，再用基于电极坐标的空间读出层融合。在四个头皮 / 颅内 EEG 基准上，110k 参数系统在 100 s TUAB 片段取得 0.9247±0.0022 AUROC，高于 9 倍参数 SAMBA 的 0.9054；10 s 片段 0.9040±0.0019，与 3.2M–369M 参数的 EEG 基础模型持平。", "key_points": ["每个 RQF 只有调谐频率、带宽两个可学习参数，110k 参数在 TUAB 100 s 片段达 AUROC 0.9247±0.0022，超过 9 倍参数 SAMBA 的 0.9054，10 s 片段 0.9040±0.0019 追平 3.2M–369M 参数基础模型。", "对角 SSM 单步递推、参数仅十万级，单卡甚至 CPU 可训；预训练不需要标签，只需单变量或多通道时序，日频 / 分钟频价量面板可直接套用，但原文未给代码与超参，复现需自建。", "全部实验限于 EEG / iEEG 异常检测四个基准，未在金融或低信噪比非平稳序列上验证；自监督目标是预测自身未来功率，在近白噪声的收益率上可能只学到波动率而学不到方向，且无滚动样本外与交易成本检验。"], "quant_relevance": "因子 / alpha 信号；研究工具 / 工作流提效（轻量表征学习替代手工技术指标与固定频带分解）", "possible_use_case": "在日频量价面板上每类因子通道接一个共享 RQF 编码器，用「窗口 i 摘要预测窗口 i+k 的 log-power」在 2015–2022 全 A 上无标签预训练，冻结后接线性头预测 5 日收益，2023–2025 滚动样本外与 20 日动量、20 日波动率、量价背离三个手工因子比 Rank IC 和 ICIR。", "limitations": "领域错配明显：EEG 异常检测与金融收益预测的信噪比、非平稳性完全不同，结论不能直接迁移；原文未提供代码、超参和训练 / 推理耗时，复现门槛不清；评估指标只有 AUROC，没有交易成本、换手率和组合层面夏普；自监督任务预测的是未来 log-power，天然偏向波动率建模而非收益方向，用于 alpha 前需重新设计预训练目标。", "read_priority": "中", "key_figures_md": "- **主结果表（TUAB，100 s 片段）**：110k 参数 RQF 系统 AUROC 0.9247±0.0022，对比同上下文 9 倍参数量的 SAMBA 0.9054\n- **主结果表（TUAB，10 s 片段）**：RQF AUROC 0.9040±0.0019，与 3.2M–369M 参数的 EEG 基础模型同档\n- **四基准汇总（头皮 / 颅内 EEG）**：冻结编码器 vs 全量微调两种读出方式下的 AUROC，及与竞品模型的参数量对照\n- **方法示意图（RQF 编码器 + 双自监督目标）**：窗口模式与稠密模式的预测路径，以及多通道共享编码器 + 空间读出结构；原图见 https://arxiv.org/html/2611.26856\n- [原文图表（HTML版）](https://arxiv.org/html/2611.26856)", "relevance_score": 5.4, "novelty_score": 9.149, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 7.5, "final_score": 6.75, "display_title": "时间序列研究论文", "tldr": "11 万参数的可学习带通滤波器编码器用自监督预测误差预训练，EEG 异常检测 AUROC 0.9247 超越 9 倍参数对手——同类对角状态空间模型可直接当金融时序的轻量特征提取层", "core_value": "对你的量化工作帮助：把它拆成一个金融机器学习复现任务，先验证时间序列是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["每个 RQF 只有调谐频率、带宽两个可学习参数，110k 参数在 TUAB 100 s 片段达 AUROC 0.9247±0.0022，超过 9 倍参数 SAMBA 的 0.9054，10 s 片段 0.9040±0.0019 追平 3.2M–369M 参数基础模型。", "对角 SSM 单步递推、参数仅十万级，单卡甚至 CPU 可训；预训练不需要标签，只需单变量或多通道时序，日频 / 分钟频价量面板可直接套用，但原文未给代码与超参，复现需自建。", "全部实验限于 EEG / iEEG 异常检测四个基准，未在金融或低信噪比非平稳序列上验证；自监督目标是预测自身未来功率，在近白噪声的收益率上可能只学到波动率而学不到方向，且无滚动样本外与交易成本检验。"], "reference_url": "http://arxiv.org/abs/2611.26856v1", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "金融机器学习", "priority_label": "中", "source_type_label": "论文"}, {"id": "91e84c612a8afd9a464bf0d67561e9f254a2ccbfed2acd54d0fd766cd1e24624", "source": "arXiv", "source_type": "paper", "title": "Too Fast to Doubt? Skipping Reasoning Leaves Jev-like Models Vulnerable", "url": "http://arxiv.org/abs/2611.27679v1", "authors": ["Yue Li", "Hao Wu", "Zenan Fu", "Xiao Li", "Fengyuan Xu", "Sheng Zhong"], "published_at": "2026-11-20", "collected_at": "2026-11-23T03:31:37Z", "raw_text": "Fast decision models offer low-latency actions and explicit confidence estimates. We audit four state-of-the-art decision models on 1,440 paired synthetic browser tasks, injecting false conclusions or evidence interpretations through external comments. Across models, clean accuracy averages 91.0%, yet two-shot attack success reaches 81.2%. Mean expected calibration error rises from 2.6% on clean inputs to 36.7% under conclusion poisoning and 36.1% under evidence poisoning. Clean accuracy and calibration therefore do not ensure reliable decisions under injection. We further compare GPT-6 Luna and Luna Decisions, which share the same base model, on 48 matched tasks. With a chain of thought averaging fewer than 30 reasoning tokens per response, low-effort GPT-6 Luna answers 95.83% of poisoned inputs correctly, versus 38.54% for native Luna Decisions, while mean selected-generation latency increases from 0.29 to 1.94 seconds. These results expose a sharp latency-robustness trade-off: skipping reasoning for sub-second speed leaves fast decision models substantially more vulnerable to deceptive web content.", "abstract": "Fast decision models offer low-latency actions and explicit confidence estimates. We audit four state-of-the-art decision models on 1,440 paired synthetic browser tasks, injecting false conclusions or evidence interpretations through external comments. Across models, clean accuracy averages 91.0%, yet two-shot attack success reaches 81.2%. Mean expected calibration error rises from 2.6% on clean inputs to 36.7% under conclusion poisoning and 36.1% under evidence poisoning. Clean accuracy and calibration therefore do not ensure reliable decisions under injection. We further compare GPT-6 Luna and Luna Decisions, which share the same base model, on 48 matched tasks. With a chain of thought averaging fewer than 30 reasoning tokens per response, low-effort GPT-6 Luna answers 95.83% of poisoned inputs correctly, versus 38.54% for native Luna Decisions, while mean selected-generation latency increases from 0.29 to 1.94 seconds. These results expose a sharp latency-robustness trade-off: skipping reasoning for sub-second speed leaves fast decision models substantially more vulnerable to deceptive web content.", "content_hash": "2a308dd63dcdd6770a9f6b2ada9b9da23f8ab386b5eebddb55a060d81b9cc861", "category": "LLM / Agents for Quant", "tags": ["chain of thought", "reasoning"], "language": "en", "metadata": {"arxiv_categories": ["cs.CR"]}, "one_line_summary": "跳过推理让快速决策模型在两跳注入攻击下成功率达81.2%，校准误差从2.6%升至36.7%", "technical_summary": "快速决策模型追求低延迟并给出显式置信度，但在外部评论注入虚假结论或证据解释时可能严重失准。对四款先进决策模型在1440个配对合成浏览器任务上做审计：干净输入平均准确率91.0%，两跳攻击成功率达81.2%，平均期望校准误差从2.6%升到结论投毒下的36.7%和证据投毒下的36.1%。进一步用48个匹配任务比较同底座GPT-6 Luna与Luna Decisions：低推理模式平均少于30个推理token，在投毒输入上答对95.83%，原生Luna Decisions仅38.54%，但平均生成延迟从0.29秒增至1.94秒。结果是明确的延迟—鲁棒性权衡：为亚秒级速度跳过推理，会让快速决策模型更容易被欺骗性网页内容攻破。", "key_points": ["四模型在1440个任务上干净准确率91.0%，两跳注入成功率81.2%，ECE由2.6%升至36.7%。", "量化可用性中等：需自建浏览器任务与注入模板，适合审计交易/研究LLM agent。", "仅合成浏览器任务和48个匹配对比，未覆盖真实交易数据、成本与分布漂移，实盘风险未知。"], "quant_relevance": "风险建模；研究工具 / 工作流提效", "possible_use_case": "在交易研究agent接入网页抓取前加一道推理复核与多源交叉验证层：对高影响结论强制生成长链推理并比对证据，用ECE和注入成功率做上线前红队测试。", "limitations": "实验基于1440个合成浏览器任务和48个匹配任务，非真实市场数据；攻击仅通过外部评论注入，未覆盖多模态、工具调用链和交易成本；GPT-6 Luna等模型命名与可得性需核实；延迟仅0.29→1.94秒，未报告吞吐与实盘延迟预算；预印本结论需复现。", "read_priority": "中", "key_figures_md": "- **arXiv HTML**：完整图表与实验设置见 https://arxiv.org/html/2611.27679（摘要未给出图表编号）\n- [原文图表（HTML版）](https://arxiv.org/html/2611.27679)", "relevance_score": 5.4, "novelty_score": 9.355, "academic_score": 9.898, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 6.576, "display_title": "量化大模型 / 智能体研究论文", "tldr": "跳过推理让快速决策模型在两跳注入攻击下成功率达81.2%，校准误差从2.6%升至36.7%", "core_value": "对你的量化工作帮助：把它拆成一个量化大模型 / 智能体复现任务，先验证量化大模型 / 智能体是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["四模型在1440个任务上干净准确率91.0%，两跳注入成功率81.2%，ECE由2.6%升至36.7%。", "量化可用性中等：需自建浏览器任务与注入模板，适合审计交易/研究LLM agent。", "仅合成浏览器任务和48个匹配对比，未覆盖真实交易数据、成本与分布漂移，实盘风险未知。"], "reference_url": "http://arxiv.org/abs/2611.27679v1", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "量化大模型 / 智能体", "priority_label": "中", "source_type_label": "论文"}, {"id": "2fbccfe11231ce54e4f9e7c23206c117a8c8abd538b80c530dead5622c58aed3", "source": "arXiv", "source_type": "paper", "title": "Distributional Deep Hedging", "url": "http://arxiv.org/abs/2611.26652v1", "authors": ["El-Amine Cherrat", "Skander Kazdaghli", "Iordanis Kerenidis"], "published_at": "2026-11-17", "collected_at": "2026-11-23T03:30:51Z", "raw_text": "Deep hedging learns a hedging strategy by optimising a risk preference over a neural-network policy. The preference is fixed before training, so each new preference requires a new policy and, in actor-critic methods, a new critic. We propose distributional deep hedging, in which the distribution of the hedging profit and loss is learned through its quantiles and the risk preference is applied afterwards, as a weight on those quantiles. We characterise the preferences that admit this representation, which include expected shortfall and its mixtures, and show that the entropic utility is computed from the same quantiles. At the current policy, each of these preferences is bounded below by an expected utility with the same gradient. This bound reduces risk-sensitive hedging to a sequence of risk-neutral problems, from which we derive policy-search and actor-critic algorithms. In numerical experiments, the learned hedges approach references computed by dynamic programming, and a single distributional critic trained without a preference can serve preferences chosen after training.", "abstract": "Deep hedging learns a hedging strategy by optimising a risk preference over a neural-network policy. The preference is fixed before training, so each new preference requires a new policy and, in actor-critic methods, a new critic. We propose distributional deep hedging, in which the distribution of the hedging profit and loss is learned through its quantiles and the risk preference is applied afterwards, as a weight on those quantiles. We characterise the preferences that admit this representation, which include expected shortfall and its mixtures, and show that the entropic utility is computed from the same quantiles. At the current policy, each of these preferences is bounded below by an expected utility with the same gradient. This bound reduces risk-sensitive hedging to a sequence of risk-neutral problems, from which we derive policy-search and actor-critic algorithms. In numerical experiments, the learned hedges approach references computed by dynamic programming, and a single distributional critic trained without a preference can serve preferences chosen after training.", "content_hash": "8af989d6a7169c31c956e2e222ec171ef18550c02e3221bff319947fae718a16", "category": "Risk Management", "tags": ["hedging", "neural", "risk"], "language": "en", "metadata": {"arxiv_categories": ["q-fin.CP", "cs.LG", "q-fin.RM"]}, "one_line_summary": "用分位数学习对冲 P&L 分布、风险偏好训练后加权：一个 distributional critic 服务任意 expected shortfall 偏好，数值实验逼近动态规划基准", "technical_summary": "传统 deep hedging 把风险偏好（如 expected shortfall）固定进网络策略里，换一个偏好就得重训 policy 甚至 critic。这项工作改为先学对冲损益的整个分布——用分位数（quantile）表示——再把风险偏好作为训练后对这些分位数的加权函数施加。作者刻画了能这样表示的偏好类（含 expected shortfall 及其混合），并证明熵效用也能由同一组分位数算出；在当前策略处，这类偏好被一个同梯度的期望效用从下方界定，从而把风险敏感对冲降为一系列风险中性问题，导出 policy-search 与 actor-critic 算法。数值实验中学习到的对冲策略逼近动态规划算出的参考解，且一个不带偏好训练好的 distributional critic 可直接服务训练后选定的偏好。", "key_points": ["核心思路是把对冲 P&L 分布用分位数参数化、偏好后置加权，理论覆盖 expected shortfall 及其混合；原文摘要未给出夏普、收益或误差的具体数值，只称数值实验逼近动态规划参考解，量化结论待复核。", "可用性强于传统 deep hedging：一次训练得到 distributional critic 即可在期望短缺等偏好间切换，避免换偏好重训；但需分位数回归/分布型 RL 实现经验，摘要未提代码或数据需求。", "仅有摘要与理论陈述，无样本外测试、无交易成本/滑点假设、无与经典对冲基线的具体量化对比，且偏好可表示类的边界条件需在实盘约束下验证。"], "quant_relevance": "风险建模 / 对冲执行", "possible_use_case": "在现有 deep hedging 回测中先训练一个分位数分布型 critic 预测对冲 P&L 分布，再对同一策略按 expected shortfall 不同置信水平（如 95%/99%）后置加权评估，快速比较风险偏好敏感性而无需重训。", "limitations": "仅有摘要信息，未见完整实验、图表或代码；无样本外与交易成本验证，也未给出与 delta-hedge、方差最优对冲等基线的具体数值对比；分位数表示对偏好类的可表示性有理论约束，实盘摩擦下是否成立需独立验证。", "read_priority": "中", "key_figures_md": "", "relevance_score": 6.1, "novelty_score": 8.752, "academic_score": 9.865, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 6.26, "display_title": "风险研究论文", "tldr": "用分位数学习对冲 P&L 分布、风险偏好训练后加权：一个 distributional critic 服务任意 expected shortfall 偏好，数值实验逼近动态规划基准", "core_value": "对你的量化工作帮助：把它拆成一个风险管理复现任务，先验证风险是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["核心思路是把对冲 P&L 分布用分位数参数化、偏好后置加权，理论覆盖 expected shortfall 及其混合；原文摘要未给出夏普、收益或误差的具体数值，只称数值实验逼近动态规划参考解，量化结论待复核。", "可用性强于传统 deep hedging：一次训练得到 distributional critic 即可在期望短缺等偏好间切换，避免换偏好重训；但需分位数回归/分布型 RL 实现经验，摘要未提代码或数据需求。", "仅有摘要与理论陈述，无样本外测试、无交易成本/滑点假设、无与经典对冲基线的具体量化对比，且偏好可表示类的边界条件需在实盘约束下验证。"], "reference_url": "http://arxiv.org/abs/2611.26652v1", "report_sections": ["deep_learning_quant"], "report_section_labels": ["深度学习量化未来"], "category_label": "风险管理", "priority_label": "中", "source_type_label": "论文"}, {"id": "b70bf0507995d2858bd1ad4af6cb7b2111391b50e339acccfb9201e03c4e6fe0", "source": "arXiv", "source_type": "paper", "title": "Error analysis for the numerical approximation of the quantile hedging problem", "url": "http://arxiv.org/abs/2611.26673v1", "authors": ["Cyril Bénézet", "Cyril Nefzaoui-Blanchard", "Sergio Pulido"], "published_at": "2026-11-19", "collected_at": "2026-11-23T03:30:47Z", "raw_text": "We analyse numerical approximations of quantile hedging in complete linear markets with Markovian diffusion dynamics. The problem is formulated as stochastic control for an augmented state $(X,P)$, where the probability martingale $P$ is constrained to $[0,1]$ and controlled through an unbounded volatility coefficient. We combine control truncation with piecewise-constant policy time-stepping (PCPT), stopping controls continuously upon boundary hitting to preserve the state constraint. Using one-step dynamic programming principles and regularisation, we derive a generator inequality and explicit value-function error bounds. Under standard coefficient regularity and a Lipschitz payoff, optimising the truncation and regularisation parameters yields an error exponent arbitrarily close to $1/8$ from below, uniformly in the probability variable. For controls bounded from the outset, we obtain exponents arbitrarily close to $1/4$ from below, approaching the exponent established by Jakobsen, Picarelli and Reisinger without state constraints. We also implement a fully discrete scheme with neural-network controls. Grid-time projection onto $[0,1]$ introduces a martingale defect and a pricing bias. We quantify this bias in a toy problem and mitigate it using a state-dependent control bound. Experiments in Black--Scholes and Lipschitz local-volatility models illustrate the correction and the decrease in pricing errors under grid refinement.", "abstract": "We analyse numerical approximations of quantile hedging in complete linear markets with Markovian diffusion dynamics. The problem is formulated as stochastic control for an augmented state $(X,P)$, where the probability martingale $P$ is constrained to $[0,1]$ and controlled through an unbounded volatility coefficient. We combine control truncation with piecewise-constant policy time-stepping (PCPT), stopping controls continuously upon boundary hitting to preserve the state constraint. Using one-step dynamic programming principles and regularisation, we derive a generator inequality and explicit value-function error bounds. Under standard coefficient regularity and a Lipschitz payoff, optimising the truncation and regularisation parameters yields an error exponent arbitrarily close to $1/8$ from below, uniformly in the probability variable. For controls bounded from the outset, we obtain exponents arbitrarily close to $1/4$ from below, approaching the exponent established by Jakobsen, Picarelli and Reisinger without state constraints. We also implement a fully discrete scheme with neural-network controls. Grid-time projection onto $[0,1]$ introduces a martingale defect and a pricing bias. We quantify this bias in a toy problem and mitigate it using a state-dependent control bound. Experiments in Black--Scholes and Lipschitz local-volatility models illustrate the correction and the decrease in pricing errors under grid refinement.", "content_hash": "04cb678f372a646125b1b2ff75f147e68585d1549ab79f5873bfba23837d45a0", "category": "Risk Management", "tags": ["hedging", "neural", "pricing", "volatility"], "language": "en", "metadata": {"arxiv_categories": ["q-fin.CP", "math.OC", "math.PR", "q-fin.MF"]}, "one_line_summary": "分位数对冲数值格式误差界：控制无界时收敛阶逼近 1/8、有界时逼近 1/4，并用神经网络控制修正网格投影带来的定价偏差", "technical_summary": "解决的问题是：在带 Markov 扩散的完全线性市场中，分位数对冲的最优解没有闭式解，需要数值离散，但离散化误差此前没有收敛阶理论保证。做法是把原问题写成增广状态 (X,P) 的随机控制问题，其中概率鞅 P 被约束在 [0,1] 区间内，并由无界波动率系数驱动；再叠加控制截断与分段常数策略时间步进（PCPT），在边界命中时连续停止控制以保住状态约束，由单步动态规划原理加正则化导出生成元不等式与显式值函数误差界。核心结论：在标准系数正则性与 Lipschitz 收益假设下，联合优化截断参数与正则化参数可使误差指数从下方任意逼近 1/8（对概率变量一致成立），控制从一开始就有界时误差指数从下方任意逼近 1/4，接近 Jakobsen–Picarelli–Reisinger 在无状态约束情形下给出的阶数。全离散实现用神经网络参数化控制，实验在 Black–Scholes 与 Lipschitz 局部波动率模型上显示网格细化时定价误差下降、修正项有效。", "key_points": ["带 [0,1] 状态约束时误差指数从下方逼近 1/8，控制有界时逼近 1/4（无约束已知阶）。", "只需 Markov 扩散 + Lipschitz 收益设定，NN 控制全离散格式可直接复现，实验仅用 Black–Scholes 与局部波动率。", "仅合成模型验证，无真实市场数据与交易成本；1/8 阶极慢，高维实盘需极细网格，NN 训练误差未计入误差界。"], "quant_relevance": "风险建模 / 对冲执行；直接给出分位数对冲（quantile hedging，即约束对冲成功概率、最小化成本）可落地的离散化误差量级，以及对冲成本被系统性高估或低估的方向。", "possible_use_case": "把 PCPT + 神经网络控制的格式接到自研对冲引擎，在欧式期权或结构化产品账簿上跑 Black–Scholes 与局部波动率两套基准，测量 1/8 阶实际下降速度，据此确定网格步长与计算预算；同时用状态依赖控制上界替代简单截断 [0,1]，消除投影带来的对冲成本高估。", "limitations": "只在完全线性市场加 Markov 扩散的合成模型中验证，没有任何真实行情、买卖价差、冲击成本或保证金约束；理论阶 1/8 意味着误差下降极慢，实际达到目标精度所需网格可能不可承受；神经网络控制的训练误差与优化误差未被纳入值函数误差界，「全离散格式有效」只有图示而无误差表；P 的鞅性质依赖精确投影，网格投影引入的定价偏差只在玩具问题上量化，量级是否可忽略取决于具体参数。", "read_priority": "中", "key_figures_md": "- **数值实验（Black–Scholes 与 Lipschitz 局部波动率）**：网格细化过程中定价误差下降曲线，对比未修正与加状态依赖控制上界修正后的误差\n- **Toy problem 算例**：网格时间投影到 [0,1] 产生的鞅缺陷与定价偏差的量化，以及该偏差随控制上界收紧的变化\n- **arXiv HTML 版**：含全部图表原图：https://arxiv.org/html/2611.26673\n- [原文图表（HTML版）](https://arxiv.org/html/2611.26673)", "relevance_score": 4.2, "novelty_score": 9.149, "academic_score": 10.0, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.79, "display_title": "定价、波动率、扩散模型研究论文", "tldr": "分位数对冲数值格式误差界：控制无界时收敛阶逼近 1/8、有界时逼近 1/4，并用神经网络控制修正网格投影带来的定价偏差", "core_value": "对你的量化工作帮助：把它拆成一个风险管理复现任务，先验证定价、波动率、扩散模型是否真的带来样本外提升，再检查交易成本、数据泄漏和换手约束。", "key_points_list": ["带 [0,1] 状态约束时误差指数从下方逼近 1/8，控制有界时逼近 1/4（无约束已知阶）。", "只需 Markov 扩散 + Lipschitz 收益设定，NN 控制全离散格式可直接复现，实验仅用 Black–Scholes 与局部波动率。", "仅合成模型验证，无真实市场数据与交易成本；1/8 阶极慢，高维实盘需极细网格，NN 训练误差未计入误差界。"], "reference_url": "http://arxiv.org/abs/2611.26673v1", "report_sections": ["deep_learning_quant"], "report_section_labels": ["深度学习量化未来"], "category_label": "风险管理", "priority_label": "中", "source_type_label": "论文"}, {"id": "7af5b504d36ab5e8ba12b9473540fdc1a96ccffc8e788963ea7652ae650d7419", "source": "Quant StackExchange", "source_type": "forum", "title": "How do you calculate option SL and TP premiums from underlying chart levels before entering a trade?", "url": "https://quant.stackexchange.com/questions/86954/how-do-you-calculate-option-sl-and-tp-premiums-from-underlying-chart-levels-befo", "authors": ["KaranSRMA"], "published_at": "2026-11-22", "collected_at": "2026-11-23T03:38:19Z", "raw_text": "I'm trading BTC options on Delta Exchange, and I'm trying to find an easy way to calculate the option's SL and TP premium before entering a trade. My strategy is based on price action. I first analyze the BTC chart, identify my entry, stop-loss (SL) and take-profit (TP) levels, and then choose an option to trade. For example: Option: 60200 CE (Buy) BTC market price: $59,000 Option entry premium: $460 Delta: 0.40 My underlying SL: $57,356 My underlying TP: $61,000 My problem is that I need to convert my underlying BTC SL and TP levels into option premium prices. I tried using the delta formula: Option price change = Delta × BTC price change But it gives me a negative SL premium because the BTC price movement is large. I understand that delta changes as the underlying price moves, so this method isn't accurate for larger movements. I also came across Black-Scholes, but it seems complicated for calculating this before every trade. My questions: Is there an easy way to calculate the estimated option premium at my underlying SL and TP levels? Is there any calculator or tool that can do this without manually calculating Black-Scholes? Can I calculate the option's SL and TP premiums using its IV, expiry, strike and current premium? How do experienced options traders calculate their RPT and position size before entering a trade? I want to know my potential loss and calculate the correct quantity/lots BEFORE placing an order. Any practical method, calculator or tool recommendation would be appreciated.", "abstract": "I'm trading BTC options on Delta Exchange, and I'm trying to find an easy way to calculate the option's SL and TP premium before entering a trade. My strategy is based on price action. I first analyze the BTC chart, identify my entry, stop-loss (SL) and take-profit (TP) levels, and then choose an option to trade. For example: Option: 60200 CE (Buy) BTC market price: $59,000 Option entry premium: $460 Delta: 0.40 My underlying SL: $57,356 My underlying TP: $61,000 My problem is that I need to convert my underlying BTC SL and TP levels into option premium prices. I tried using the delta formula: Option price change = Delta × BTC price change But it gives me a negative SL premium because the BTC price movement is large. I understand that delta changes as the underlying price moves, so this method isn't accurate for larger movements. I also came across Black-Scholes, but it seems complicated for calculating this before every trade. My questions: Is there an easy way to calculate the estimated option premium at my underlying SL and TP levels? Is there any calculator or tool that can do this without manually calculating Black-Scholes? Can I calculate the option's SL and TP premiums using its IV, expiry, strike and current premium? How do experienced options traders calculate their RPT and position size before entering a trade? I want to know my potential loss and calculate the correct quantity/lots BEFORE placing an order. Any practical method, calculator or tool recommendation would be appreciated.", "content_hash": "762d2798c8a8cf63e07e7139d247f1b1996ca59fa3e4bfd92453d48826eabf8f", "category": "Options / Volatility", "tags": ["option"], "language": "en", "metadata": {"feed_url": "https://quant.stackexchange.com/feeds"}, "one_line_summary": "BTC 期权用标的 SL/TP 反推权利金时，Delta×价格变动在 2.8% 跌幅下算出 -198 权利金，需改用 BS/IV 重定价", "technical_summary": "帖子问的是：先看 BTC 价格行为定好标的入场、止损 57356、止盈 61000，再买 60200 CE、权利金 460、Delta 0.40，如何在下单前把标的 SL/TP 换算成期权权利金。直接用 Delta×标的变动会把止损权利金算成约 -198，原因是标的下跌 2.8% 时 Delta 会随价格变化，线性近似忽略了 Gamma。可行做法是用 Black-Scholes 或期权计算器，输入 IV、到期、行权价和标的 SL/TP 重新估值，再用入场权利金与止损权利金之差计算每张风险并反推仓位。原文没有社区回答或工具推荐，也没有讨论 IV 跳升、滑点和合约乘数。", "key_points": ["原文无回答；最有价值的信息是具体算例暴露了核心问题：BTC 从 59000 跌到 57356 仅 2.8%，用 Delta 0.40 线性换算会把 460 权利金算成 -198，必须重定价。", "用 Black-Scholes 或期权计算器输入 IV、到期、行权价、当前标的价，分别算 SL/TP 对应理论权利金；每张风险=入场权利金-止损权利金，止损权利金最低取 0，再按账户风险预算反推张数。", "固定 IV 会低估 BTC 急跌时 IV 跳升和偏斜影响，且未计 Delta Exchange 合约乘数、手续费和滑点；线性 Delta 在大幅波动下会系统性失真。"], "quant_relevance": "风险建模 / 仓位管理；执行 / 交易成本", "possible_use_case": "在 Delta Exchange 下单前用 Python 的 py_vollib 或自写 BS 函数，输入 BTC 现价、行权价 60200、到期时间、IV，计算 57356 和 61000 对应的理论权利金；按账户 1% 风险除以（460-SL 权利金）×合约乘数得到张数，并加 IV 上升 10 个点的压力测试。", "limitations": "这是社区提问，原文没有回答、回测或工具实测，需用数据验证后才能用于研究结论；固定 IV 的 BS 重定价忽略波动率微笑、跳跃风险和流动性滑点，BTC 期权实盘偏差可能明显。", "read_priority": "中", "key_figures_md": "", "relevance_score": 4.9, "novelty_score": 9.78, "academic_score": 5.5, "discussion_score": 3.0, "actionable_score": 4.5, "final_score": 5.601, "display_title": "期权实践讨论", "tldr": "BTC 期权用标的 SL/TP 反推权利金时，Delta×价格变动在 2.8% 跌幅下算出 -198 权利金，需改用 BS/IV 重定价", "core_value": "对你的量化工作帮助：把它当作期权的实盘经验线索，用来补充回测假设、交易成本假设或风控检查清单。", "key_points_list": ["原文无回答；最有价值的信息是具体算例暴露了核心问题：BTC 从 59000 跌到 57356 仅 2.8%，用 Delta 0.40 线性换算会把 460 权利金算成 -198，必须重定价。", "用 Black-Scholes 或期权计算器输入 IV、到期、行权价、当前标的价，分别算 SL/TP 对应理论权利金；每张风险=入场权利金-止损权利金，止损权利金最低取 0，再按账户风险预算反推张数。", "固定 IV 会低估 BTC 急跌时 IV 跳升和偏斜影响，且未计 Delta Exchange 合约乘数、手续费和滑点；线性 Delta 在大幅波动下会系统性失真。"], "reference_url": "https://quant.stackexchange.com/questions/86954/how-do-you-calculate-option-sl-and-tp-premiums-from-underlying-chart-levels-befo", "report_sections": ["ai_quant_tools"], "report_section_labels": ["AI 量化工具"], "category_label": "期权 / 波动率", "priority_label": "中", "source_type_label": "论坛"}, {"id": "4fd92000db232dd4cfd86f07f6b0ae6d1d09ad03ff20f7a8c0b4946ded6eeadc", "source": "CoinTelegraph", "source_type": "crypto_news", "title": "Half of wallets on Trump’s dinner list got tokens from non-US exchanges", "url": "https://cointelegraph.com/news/half-wallets-trumps-dinner-list-got-tokens-from-non-us-exchanges?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "authors": [], "published_at": "2026-11-23", "collected_at": "2026-11-23T03:38:19Z", "raw_text": "Public Citizen traced 66 of 130 qualifying wallets to exchanges that restrict US users, raising questions over who is attending Trump’s memecoin dinner on Sunday.", "abstract": "Public Citizen traced 66 of 130 qualifying wallets to exchanges that restrict US users, raising questions over who is attending Trump’s memecoin dinner on Sunday.", "content_hash": "c141d7c88fb209426f40826544764e9d1c90636e5b35576a676ac8d9bd60c610", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://cointelegraph.com/rss"}, "one_line_summary": "Public Citizen 链上追踪：特朗普晚宴 130 个合格钱包中 66 个来自限制美国用户交易所，TRUMP 持有者来源透明度受质疑", "technical_summary": "特朗普 memecoin 晚宴的参会资格由持有 TRUMP 代币的钱包决定，争议点是谁实际控制这些钱包。Public Citizen 对 130 个合格钱包做链上归属追踪，发现其中 66 个可追溯至限制美国用户使用的交易所。这个比例意味着近半数合格地址可能并非美国本土用户直接持有，也可能通过海外交易所托管或中转。报道未给出这些钱包的 TRUMP 持仓量、交易时间或晚宴前后价格反应。", "key_points": ["Public Citizen 追踪 130 个合格钱包，66 个可追溯至限制美国用户的交易所，占比约 50.8%。", "对加密量化：可把交易所来源与钱包集中度纳入 TRUMP 事件驱动因子，监控晚宴前后大额转账和净流。", "交易所归属依赖链上启发式，可能误判；报道缺少持仓量、成交量和价格数据，不能单独构成交易信号。"], "quant_relevance": "风险建模 / 因子信号", "possible_use_case": "可作为 TRUMP memecoin 事件驱动策略的持有者结构风险信号：晚宴前后监控这 66 个钱包的转入转出与交易所净流，用于判断潜在抛压和波动放大。", "limitations": "仅基于公开钱包归属推断，交易所归属可能误判；新闻未提供价格、成交量、持仓集中度或链上净流入数据，事件影响需结合市场数据独立验证。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 10.0, "academic_score": 5.702, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.355, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "Public Citizen 链上追踪：特朗普晚宴 130 个合格钱包中 66 个来自限制美国用户交易所，TRUMP 持有者来源透明度受质疑", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["Public Citizen 追踪 130 个合格钱包，66 个可追溯至限制美国用户的交易所，占比约 50.8%。", "对加密量化：可把交易所来源与钱包集中度纳入 TRUMP 事件驱动因子，监控晚宴前后大额转账和净流。", "交易所归属依赖链上启发式，可能误判；报道缺少持仓量、成交量和价格数据，不能单独构成交易信号。"], "reference_url": "https://cointelegraph.com/news/half-wallets-trumps-dinner-list-got-tokens-from-non-us-exchanges?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "75342ea4ff77fb969c5638be2b5dd23168882c6369e839791b654b1c809e9bb8", "source": "CoinTelegraph", "source_type": "crypto_news", "title": "Billionaire Bill Ackman warns Fed will make a rate ‘mistake’ in December", "url": "https://cointelegraph.com/markets/billionaire-bill-ackman-warns-fed-rate-hikes-could-trigger-recession?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "authors": [], "published_at": "2026-11-23", "collected_at": "2026-11-23T03:38:19Z", "raw_text": "Markets and economists widely expect the US Federal Reserve to raise interest rates by 25 basis points in its December meeting.", "abstract": "Markets and economists widely expect the US Federal Reserve to raise interest rates by 25 basis points in its December meeting.", "content_hash": "a2eac4a3b5905e0ce39a6cadbe8ef12568a3ff7ecdd1c6ac411ab4b3fcb59c22", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://cointelegraph.com/rss"}, "one_line_summary": "Ackman 公开警告美联储12月加息25个基点是「错误」，提示 BTC 在 FOMC 窗口的宏观 beta 风险", "technical_summary": "文章讨论的是美联储12月议息会议的政策路径而非资产定价模型。市场共识与经济学家预测为加息25个基点，Pershing Square 创始人 Bill Ackman 公开将这一动作定性为「错误」，隐含指向紧缩过度触发衰退的风险。对加密市场而言，这类宏观表态通过美债收益率与美元流动性渠道传导至 BTC 等风险资产，构成 FOMC 前后的波动来源。原文未给出 Ackman 的完整论据、发言时间点或任何市场反应数据，仅有观点层面的定性与一个政策数字（25bp）。", "key_points": ["市场与经济学家共识为美联储12月加息25个基点，Ackman 公开警告该决策是「错误」并可能引发衰退。", "加密交易者可在12月 FOMC 前后把 BTC 与美债收益率、美元指数的滚动相关性作为事件窗口的风险敞口调节依据。", "原文仅两句话重复，无 Ackman 具体论据、无发言时间、无市场反应数据；实际决议仍取决于 CPI 与非农，警告本身不构成可交易信号。"], "quant_relevance": "风险建模；因子 / alpha 信号（宏观事件驱动）", "possible_use_case": "把12月 FOMC 决议日加入事件日历，在决议前3个交易日下调 BTC 净多头敞口或买入跨式期权做多隐含波动率，决议后按点阵图与实际加息幅度之差做方向回归。", "limitations": "这是新闻转述而非研究结论，原文信息密度极低，缺乏 Ackman 的完整论证、发言时间和市场即时反应数据，摘要基于定性描述；加息预期本身已被市场定价，事件落地后可能出现「预期兑现」的反向走势；社区/媒体观点需用收益率曲线与资金流数据独立验证后才能进入模型。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 10.0, "academic_score": 5.659, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.349, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "Ackman 公开警告美联储12月加息25个基点是「错误」，提示 BTC 在 FOMC 窗口的宏观 beta 风险", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["市场与经济学家共识为美联储12月加息25个基点，Ackman 公开警告该决策是「错误」并可能引发衰退。", "加密交易者可在12月 FOMC 前后把 BTC 与美债收益率、美元指数的滚动相关性作为事件窗口的风险敞口调节依据。", "原文仅两句话重复，无 Ackman 具体论据、无发言时间、无市场反应数据；实际决议仍取决于 CPI 与非农，警告本身不构成可交易信号。"], "reference_url": "https://cointelegraph.com/markets/billionaire-bill-ackman-warns-fed-rate-hikes-could-trigger-recession?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "4807ee6e8282d8a6c63567270e59201945350c30202dcfa5434c076e0940e198", "source": "CoinTelegraph", "source_type": "crypto_news", "title": "Chainflip confirms $12M hack, offers attacker 10% bounty", "url": "https://cointelegraph.com/news/chainflip-12m-crypto-hack-10-percent-bounty?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "authors": [], "published_at": "2026-11-22", "collected_at": "2026-11-23T03:38:19Z", "raw_text": "Chainflip offered the attacker a 10% bounty to return 90% of the stolen funds by Nov. 23, promising to treat the return as a white-hat recovery and withdraw law enforcement complaints.", "abstract": "Chainflip offered the attacker a 10% bounty to return 90% of the stolen funds by Nov. 23, promising to treat the return as a white-hat recovery and withdraw law enforcement complaints.", "content_hash": "4cee206b582330dccbe616bac3ce6dc39b87627bf8a1dac05a15a4afc9e432a2", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://cointelegraph.com/rss"}, "one_line_summary": "Chainflip 确认 1200 万美元被盗，悬赏 10% 追回 90% 资金", "technical_summary": "Chainflip 确认约 1200 万美元被盗，要求攻击者在 11 月 23 日前归还 90%（约 1080 万美元），可保留 10%（约 120 万美元）赏金，并承诺按白帽恢复处理、撤销执法投诉。对量化交易者而言，这直接构成跨链 DEX 协议的智能合约与流动性风险事件，可能影响 FLIP 代币价格、LP 头寸和跨链 swap 执行。原文未披露攻击向量和资金追回进展。", "key_points": ["Chainflip 确认 1200 万美元被盗，攻击者若在 11 月 23 日前归还 90%（约 1080 万美元）可保留 10%（约 120 万美元）赏金。", "持有 FLIP 或 Chainflip LP 头寸的量化账户应检查敞口，事件未明朗前可减仓或撤池，并监控链上资金回流与跨链 swap 量变化。", "仅来自 CoinTelegraph 单篇报道，未附攻击向量、链上交易哈希或项目方完整声明；资金能否归还、截止日后是否转向执法仍不确定。"], "quant_relevance": "风险建模 / 执行：跨链 DEX 协议安全事件直接影响 LP 头寸、代币价格和 swap 执行路径。", "possible_use_case": "将 Chainflip 黑客事件加入 DeFi 协议风险事件库，作为 FLIP 代币和跨链 LP 策略的减仓/撤池触发信号；同时可用于事件研究，检验黑客事件后 24–72 小时跨链 DEX 交易量和 TVL 变化。", "limitations": "仅来自 CoinTelegraph 单篇报道，未附攻击向量、链上交易哈希或项目方完整声明；90% 资金能否归还、11 月 23 日截止后是否转向执法仍不确定；若攻击者不回应，FLIP 和 LP 流动性可能继续承压。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 5.73, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.316, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "Chainflip 确认 1200 万美元被盗，悬赏 10% 追回 90% 资金", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["Chainflip 确认 1200 万美元被盗，攻击者若在 11 月 23 日前归还 90%（约 1080 万美元）可保留 10%（约 120 万美元）赏金。", "持有 FLIP 或 Chainflip LP 头寸的量化账户应检查敞口，事件未明朗前可减仓或撤池，并监控链上资金回流与跨链 swap 量变化。", "仅来自 CoinTelegraph 单篇报道，未附攻击向量、链上交易哈希或项目方完整声明；资金能否归还、截止日后是否转向执法仍不确定。"], "reference_url": "https://cointelegraph.com/news/chainflip-12m-crypto-hack-10-percent-bounty?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "6948d6bc08da9677d43ebea668d29466c146b7484970bde49beef21de95a4bd2", "source": "The Block", "source_type": "crypto_news", "title": "Chainflip’s losses climb to $12 million after protocol discloses 122.9 BTC theft, offers hacker bounty", "url": "https://www.theblock.co/news/defi/2026-11-22-chainflips-losses-climb-to-12-million-after-protocol-discloses-122-9-btc-theft-offers-hacker-bounty-444829", "authors": [], "published_at": "2026-11-22", "collected_at": "2026-11-23T03:38:20Z", "raw_text": "Chainflip offered the attacker a 10% bounty to return the remainder of the $12 million in stolen BTC, ETH, and stablecoins by Monday.", "abstract": "Chainflip offered the attacker a 10% bounty to return the remainder of the $12 million in stolen BTC, ETH, and stablecoins by Monday.", "content_hash": "ef5928089a38a1a7605657c59c5b1f49041260b2e9bdcc20db91a7919bb37852", "category": "Alpha / Factor Research", "tags": [], "language": "en", "metadata": {"feed_url": "https://www.theblock.co/rss.xml"}, "one_line_summary": "Chainflip 跨链协议被盗 122.9 BTC，含 ETH 与稳定币累计损失 1200 万美元，10% 白帽赏金限期周一", "technical_summary": "跨链协议 Chainflip 发生资产被盗，官方披露的攻击损失为 122.9 BTC，并连同 ETH 与稳定币，使总损失规模达到 1200 万美元。协议公开向攻击者提出 10% 白帽赏金（约 120 万美元），条件是周一前归还剩余被盗资产。事件的核心量化含义不在价格方向，而在跨链执行环节：当这类协议的池子被抽走 BTC，跨链兑换的深度、滑点和报价有效性会突然改变，依赖该通道做跨链搬砖、DEX-CEX 价差或做市库存回转的策略，会在同一时间段内遭遇找不到对手方或成交价格严重不利的情况。", "key_points": ["被盗 122.9 BTC，叠加 ETH 与稳定币后总损失 1200 万美元，10% 赏金约 120 万美元限周一归还", "跨链池 BTC 被抽走会同时打击深度与报价，事件窗口内应下调该场所额度并切换到替代通道", "信息仅来自单一媒体转述，无链上哈希、地址与资金流向，1200 万美元的资产拆分口径未公布"], "quant_relevance": "风险建模 / 执行：跨链交易场所的对手方敞口、资金池深度和路由报价需要在事件期间临时重估。", "possible_use_case": "把 Chainflip 临时加入路由黑名单，并将相关交易对的单笔下单上限和最大敞口下调；将跨链兑换路由切换到 Thor 等替代通道，并逐笔核对存量跨链头寸，写入风险敞口日志。", "limitations": "报道极为简短，缺少被盗交易的链上哈希、攻击合约、资金归集地址和具体被盗时间，因此无法做资金追踪或复现攻击路径；1200 万美元总损失里 BTC、ETH 与稳定币各自的占比未披露，10% 赏金是否已被接受也没有后续确认；此金额在 DeFi 攻击事件中属于中等规模，市场层面的价格影响可能被高估；新闻稿没有说明协议是否暂停跨链功能，实际流动性状态需自行查询链上和官方公告后再做决策。", "read_priority": "高", "key_figures_md": "", "relevance_score": 3.0, "novelty_score": 9.78, "academic_score": 5.666, "discussion_score": 2.0, "actionable_score": 6.5, "final_score": 5.306, "display_title": "阿尔法 / 因子研究加密市场新闻情报", "tldr": "Chainflip 跨链协议被盗 122.9 BTC，含 ETH 与稳定币累计损失 1200 万美元，10% 白帽赏金限期周一", "core_value": "对你的量化工作帮助：围绕阿尔法 / 因子研究补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["被盗 122.9 BTC，叠加 ETH 与稳定币后总损失 1200 万美元，10% 赏金约 120 万美元限周一归还", "跨链池 BTC 被抽走会同时打击深度与报价，事件窗口内应下调该场所额度并切换到替代通道", "信息仅来自单一媒体转述，无链上哈希、地址与资金流向，1200 万美元的资产拆分口径未公布"], "reference_url": "https://www.theblock.co/news/defi/2026-11-22-chainflips-losses-climb-to-12-million-after-protocol-discloses-122-9-btc-theft-offers-hacker-bounty-444829", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "阿尔法 / 因子研究", "priority_label": "高", "source_type_label": "加密市场新闻"}, {"id": "de66599a757bd356653d08f79223c5296ebbbd4c80807f5a594a47f4717631b8", "source": "CoinDesk", "source_type": "crypto_news", "title": "More on the pending oversight hearings: State of Crypto", "url": "https://www.coindesk.com/", "authors": [], "published_at": "2026-11-22", "collected_at": "2026-11-23T03:38:19Z", "raw_text": "New letters show the widening range of Congressional committees that will be probing the presidential administration — and the crypto collateral that may be swept up.", "abstract": "New letters show the widening range of Congressional committees that will be probing the presidential administration — and the crypto collateral that may be swept up.", "content_hash": "c9f2bfdb21a4c496c9c300a31bfa1d22f0decd13ac5595aa95903b31bec70902", "category": "Crypto Quant", "tags": ["crypto"], "language": "en", "metadata": {"feed_url": "https://www.coindesk.com/arc/outboundfeeds/rss/"}, "one_line_summary": "美国国会多个委员会就加密相关事务向政府发出质询函，听证会临近使加密监管事件风险重新定价", "technical_summary": "CoinDesk「State of Crypto」栏目披露，多封新公开的信函显示，对总统行政部门的国会监督调查正在向更多委员会扩散，调查范围超出原先预期。报道特别指出，加密行业可能作为「附带损伤」被卷入这轮质询，即监管矛头并非专门针对加密，但加密相关业务、抵押品和合规安排会被一并纳入取证范围。原文未披露具体委员会名称、信函对象机构、听证排期以及涉及的具体资产或法案编号，属于栏目导语级别的信息。对交易端的含义是：未来数周内监管新闻流的密度和不确定性都会上升，属于典型的事件驱动型波动来源。", "key_points": ["国会监督调查向多个委员会扩散，加密业务被列为可能的「附带卷入方」，但未披露委员会名单、听证日期和涉及资产", "听证会日期是天然的事件日历节点：可在会前压低杠杆、缩短持有时长，会后按新闻方向做均值回归或动量跟随", "原文仅两句话导语、无任何数字或法案编号，事件的实际冲击无法从文本定价，须回溯信函原文与国会日程核实"], "quant_relevance": "风险建模 / 执行：监管听证属于离散事件风险，直接影响加密永续资金费率、隐含波动率与做市商风险限额", "possible_use_case": "把参众两院相关委员会听证排期抓进事件日历，用听证前后各 24 小时窗口对 BTC/ETH 永续资金费率、25-delta 偏斜和现货成交量做事件研究；若后续出现针对稳定币储备或交易所托管的法案文本，可作为稳定币二级折价与交易所间价差套利的触发信号。", "limitations": "原文是栏目导语，两句话内容完全重复，缺少委员会名称、信函收件方、听证日期、涉及资产和法案编号，无法提取任何可量化信息；「crypto collateral」措辞含糊，既可能指加密抵押品，也可能指加密行业被顺带波及，含义需回溯原始信函确认；监管新闻的标题效应常被算法交易过度反应，事件窗口内的价格反应不能直接归因为政策实质变化。", "read_priority": "中", "key_figures_md": "", "relevance_score": 4.2, "novelty_score": 9.78, "academic_score": 5.707, "discussion_score": 2.0, "actionable_score": 4.5, "final_score": 5.272, "display_title": "加密资产加密市场新闻情报", "tldr": "美国国会多个委员会就加密相关事务向政府发出质询函，听证会临近使加密监管事件风险重新定价", "core_value": "对你的量化工作帮助：围绕加密资产补充研究素材，进一步判断是否能转化成因子、回测、风控或工程任务。", "key_points_list": ["国会监督调查向多个委员会扩散，加密业务被列为可能的「附带卷入方」，但未披露委员会名单、听证日期和涉及资产", "听证会日期是天然的事件日历节点：可在会前压低杠杆、缩短持有时长，会后按新闻方向做均值回归或动量跟随", "原文仅两句话导语、无任何数字或法案编号，事件的实际冲击无法从文本定价，须回溯信函原文与国会日程核实"], "reference_url": "https://www.coindesk.com/", "report_sections": ["daily_news"], "report_section_labels": ["Crypto 市场每日 Top 5"], "category_label": "加密资产量化", "priority_label": "中", "source_type_label": "加密市场新闻"}], "source_stats": {"arXiv": 6, "Quant StackExchange": 1, "CoinTelegraph": 3, "The Block": 1, "CoinDesk": 1}, "category_counts": {"Machine Learning for Finance": 2, "Portfolio Construction": 1, "LLM / Agents for Quant": 1, "Risk Management": 2, "Options / Volatility": 1, "Alpha / Factor Research": 4, "Crypto Quant": 1}, "section_counts": {"ai_quant_tools": 5, "deep_learning_quant": 2, "daily_news": 5}, "sections": [{"key": "deep_learning_quant", "label": "深度学习量化未来", "description": "技术主线：深度学习、强化学习、Transformer、图神经网络、表征学习、订单簿预测、金融时间序列大模型等在量化里的应用。"}, {"key": "ai_quant_tools", "label": "AI 量化工具", "description": "工具主线：能提升量化研究效率的 AI 工具、代码仓库、研究自动化、智能体、回测/数据工程工具和可接入团队工作流的基础设施。"}, {"key": "daily_news", "label": "Crypto 市场每日 Top 5", "description": "加密市场新闻主线：来自 CoinDesk、CoinTelegraph、The Block、Decrypt、Blockworks 等主流媒体当日最重要的 Crypto 市场报道。"}], "category_labels": {"Alpha / Factor Research": "阿尔法 / 因子研究", "Statistical Arbitrage": "统计套利", "Portfolio Construction": "组合构建", "Risk Management": "风险管理", "Options / Volatility": "期权 / 波动率", "Market Microstructure": "市场微观结构", "Execution / Transaction Cost": "交易执行 / 交易成本", "Machine Learning for Finance": "金融机器学习", "LLM / Agents for Quant": "量化大模型 / 智能体", "Crypto Quant": "加密资产量化", "Data Engineering": "数据工程", "Backtesting / Research Tools": "回测 / 研究工具", "Industry / Career": "行业 / 职业 / 合规", "Unclassified": "未分类"}, "priority_labels": {"High": "高", "Medium": "中", "Low": "低", "高": "高", "中": "中", "低": "低"}, "source_type_labels": {"paper": "论文", "forum": "论坛", "github": "代码仓库", "blog": "博客", "news": "新闻", "social": "社交媒体", "zhihu": "知乎", "x": "X", "quantml": "QuantML", "crypto_news": "加密市场新闻"}, "report_config": {"max_items_per_category": 5, "max_total_items": 60, "executive_brief_items": 5}}</script>
+  <script>
+    const payload = JSON.parse(document.getElementById('dashboard-data').textContent);
+    const items = payload.items || [];
+    const categoryLabels = payload.category_labels || {};
+    const priorityLabels = payload.priority_labels || {};
+    const sourceTypeLabels = payload.source_type_labels || {};
+    const state = {
+      query: '',
+      section: 'All',
+      category: 'All',
+      sort: 'score',
+      activeId: items[0]?.id || null,
+    };
+
+    const priorityRank = { High: 3, Medium: 2, Low: 1, '高': 3, '中': 2, '低': 1 };
+    const $ = (id) => document.getElementById(id);
+
+    // --- Feedback ---
+    const _feedbackStore = JSON.parse(localStorage.getItem('quant-feedback') || '{}');
+    function getFeedback(id) { return _feedbackStore[id] || 0; }
+    function setFeedback(id, signal) {
+      if (_feedbackStore[id] === signal) { delete _feedbackStore[id]; signal = 0; }
+      else { _feedbackStore[id] = signal; }
+      localStorage.setItem('quant-feedback', JSON.stringify(_feedbackStore));
+      fetch('http://localhost:8080/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, signal }),
+      }).catch(() => {});
+    }
+
+    function init() {
+      $('report-date').textContent = payload.report_date + ' - 主力源：arXiv / 知乎 / QuantML / 大型论坛 - 生成时间 ' + payload.generated_at;
+      $('metric-items').textContent = items.length;
+      $('metric-categories').textContent = new Set(items.map((item) => item.category)).size;
+      $('metric-high').textContent = items.filter((item) => priorityLabel(item.read_priority) === '高').length;
+      $('metric-avg').textContent = averageScore(items).toFixed(1);
+
+      buildSectionControls();
+      buildCategoryControls();
+      buildSourceList();
+      bindControls();
+      render();
+    }
+
+    function bindControls() {
+      $('search').addEventListener('input', (event) => {
+        state.query = event.target.value.trim().toLowerCase();
+        render();
+      });
+      $('category-select').addEventListener('change', (event) => {
+        state.category = event.target.value;
+        render();
+      });
+      $('section-select').addEventListener('change', (event) => {
+        state.section = event.target.value;
+        render();
+      });
+      $('sort-select').addEventListener('change', (event) => {
+        state.sort = event.target.value;
+        render();
+      });
+    }
+
+    function buildCategoryControls() {
+      const counts = countBy(items, 'category');
+      const categories = Object.keys(counts).sort();
+      const select = $('category-select');
+      select.innerHTML = option('All', `全部细分标签 (${items.length})`) +
+        categories.map((category) => option(category, `${categoryLabel(category)} (${counts[category]})`)).join('');
+
+      const list = $('category-list');
+      list.innerHTML = categoryButton('All', items.length) +
+        categories.map((category) => categoryButton(category, counts[category])).join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.category = button.dataset.category;
+          select.value = state.category;
+          if (state.category === 'All') {
+            state.section = 'All';
+            $('section-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSectionControls() {
+      const counts = payload.section_counts || {};
+      const sections = payload.sections || [];
+      const select = $('section-select');
+      select.innerHTML = option('All', `全部主线 (${items.length})`) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => option(section.key, `${section.label} (${counts[section.key]})`))
+          .join('');
+
+      const list = $('section-list');
+      list.innerHTML = sectionButton('All', '全部', items.length) +
+        sections
+          .filter((section) => counts[section.key])
+          .map((section) => sectionButton(section.key, section.label, counts[section.key]))
+          .join('');
+
+      list.querySelectorAll('button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.section = button.dataset.section;
+          select.value = state.section;
+          if (state.section === 'All') {
+            state.category = 'All';
+            $('category-select').value = 'All';
+          }
+          render();
+        });
+      });
+    }
+
+    function buildSourceList() {
+      const stats = payload.source_stats || {};
+      const entries = Object.entries(stats)
+        .filter(([source]) => !source.startsWith('fetched:'))
+        .sort((a, b) => b[1] - a[1]);
+      $('source-list').innerHTML = entries.length
+        ? entries.map(([source, count]) => `<li><span>${escapeHtml(source)}</span><b>${count}</b></li>`).join('')
+        : '<li><span>暂无来源统计</span><b>0</b></li>';
+    }
+
+    function render() {
+      let visible = items.filter(matchesFilters);
+      visible = sortItems(visible);
+      if (!visible.some((item) => item.id === state.activeId)) {
+        state.activeId = visible[0]?.id || null;
+      }
+
+      $('feed-title').textContent = feedTitle();
+      $('result-count').textContent = `展示 ${visible.length} 条 - 两条主线每条最多 ${payload.report_config.max_items_per_category} 条`;
+      renderSectionActive();
+      renderCategoryActive();
+      renderItems(visible);
+      renderDetail(visible.find((item) => item.id === state.activeId) || visible[0]);
+    }
+
+    function matchesFilters(item) {
+      const sectionMatch = state.section === 'All' || (item.report_sections || []).includes(state.section);
+      if (!sectionMatch) return false;
+      const categoryMatch = state.category === 'All' || item.category === state.category;
+      if (!categoryMatch) return false;
+      if (!state.query) return true;
+      const haystack = [
+        item.title,
+        item.display_title,
+        item.source,
+        item.source_type,
+        item.category,
+        categoryLabel(item.category),
+        sectionLabel(item.report_sections?.[0]),
+        sourceTypeLabel(item.source_type),
+        priorityLabel(item.read_priority),
+        item.one_line_summary,
+        item.technical_summary,
+        item.quant_relevance,
+        item.possible_use_case,
+        item.tldr,
+        item.core_value,
+        ...(item.key_points_list || []),
+        item.reference_url,
+      ].join(' ').toLowerCase();
+      return haystack.includes(state.query);
+    }
+
+    function sortItems(list) {
+      return [...list].sort((a, b) => {
+        if (state.sort === 'priority') {
+          return (priorityRank[b.read_priority] || 0) - (priorityRank[a.read_priority] || 0)
+            || b.final_score - a.final_score;
+        }
+        if (state.sort === 'source') {
+          return a.source.localeCompare(b.source) || b.final_score - a.final_score;
+        }
+        return b.final_score - a.final_score;
+      });
+    }
+
+    function renderCategoryActive() {
+      document.querySelectorAll('.category-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.category === state.category);
+      });
+    }
+
+    function renderSectionActive() {
+      document.querySelectorAll('.section-button').forEach((button) => {
+        button.classList.toggle('active', button.dataset.section === state.section);
+      });
+    }
+
+    function itemCard(item) {
+      const sec = item.report_sections?.[0] || 'other';
+      const sig = getFeedback(item.id);
+      return `
+        <article class="item ${item.id === state.activeId ? 'active' : ''}"
+                 data-id="${escapeAttr(item.id)}"
+                 data-section="${escapeAttr(sec)}">
+          <div class="item-top">
+            <h3>${escapeHtml(item.display_title || item.title)}</h3>
+            <div class="score">${Number(item.final_score).toFixed(1)}</div>
+          </div>
+          <div class="meta">
+            <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+            <span class="tag">${escapeHtml(item.source)}</span>
+            <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+          </div>
+          ${readerFormat(item, true)}
+          <div class="feedback-row">
+            <button class="feedback-btn ${sig === 1 ? 'active-up' : ''}" data-feedback="1" title="有用">👍</button>
+            <button class="feedback-btn ${sig === -1 ? 'active-down' : ''}" data-feedback="-1" title="跳过">👎</button>
+            <span class="feedback-hint">${sig === 1 ? '已标记有用' : sig === -1 ? '已标记跳过' : ''}</span>
+          </div>
+        </article>
+      `;
+    }
+
+    function sectionGroupHeader(section, count) {
+      return `
+        <div class="section-group-header" data-section="${escapeAttr(section.key)}">
+          <span class="section-group-title">${escapeHtml(section.label)}</span>
+          <span class="section-group-count">${count} 条</span>
+        </div>
+      `;
+    }
+
+    function renderItems(visible) {
+      const container = $('items');
+      if (!visible.length) {
+        container.innerHTML = '<div class="empty">当前筛选条件下没有匹配内容。</div>';
+        return;
+      }
+
+      let html = '';
+      if (state.section === 'All') {
+        // Group by section in defined order, with a header for each group
+        const grouped = {};
+        for (const item of visible) {
+          const sec = item.report_sections?.[0] || 'other';
+          if (!grouped[sec]) grouped[sec] = [];
+          grouped[sec].push(item);
+        }
+        for (const section of (payload.sections || [])) {
+          const group = grouped[section.key];
+          if (!group || !group.length) continue;
+          html += sectionGroupHeader(section, group.length);
+          html += group.map((item) => itemCard(item)).join('');
+        }
+        // Append any items that fell into 'other' (shouldn't normally happen)
+        if (grouped['other']?.length) {
+          html += grouped['other'].map((item) => itemCard(item)).join('');
+        }
+      } else {
+        html = visible.map((item) => itemCard(item)).join('');
+      }
+
+      container.innerHTML = html;
+      container.querySelectorAll('.item').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.activeId = node.dataset.id;
+          render();
+        });
+      });
+      container.querySelectorAll('.feedback-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const itemNode = btn.closest('.item');
+          setFeedback(itemNode.dataset.id, parseInt(btn.dataset.feedback, 10));
+          render();
+        });
+      });
+    }
+
+    function renderDetail(item) {
+      const detail = $('detail');
+      if (!item) {
+        detail.innerHTML = '<div class="empty">选择一条内容查看详情。</div>';
+        return;
+      }
+
+      detail.innerHTML = `
+        <h2>${escapeHtml(item.display_title || item.title)}</h2>
+        <div class="meta">
+          <span class="tag">${escapeHtml(categoryLabel(item.category))}</span>
+          <span class="tag">${escapeHtml(sourceTypeLabel(item.source_type))}</span>
+          <span class="tag">${escapeHtml(priorityLabel(item.read_priority))}</span>
+        </div>
+
+        ${readerFormat(item, false)}
+
+        <div class="detail-block">
+          <h3>评分拆解</h3>
+          <div class="breakdown">
+            ${bar('相关性', item.relevance_score)}
+            ${bar('新颖度', item.novelty_score)}
+            ${bar('学术性', item.academic_score)}
+            ${bar('讨论度', item.discussion_score)}
+            ${bar('可行动性', item.actionable_score)}
+          </div>
+        </div>
+
+      `;
+    }
+
+    function readerFormat(item, compact) {
+      const points = itemKeyPoints(item);
+      return `
+        <div class="reader-format ${compact ? 'compact' : ''}">
+          <div class="reader-block">
+            <h4>1. 这篇文章的太长不读</h4>
+            <p>${escapeHtml(item.tldr || item.one_line_summary || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>2. 核心价值，对我量化的工作能够提供什么样的帮助</h4>
+            <p>${escapeHtml(item.core_value || '')}</p>
+          </div>
+          <div class="reader-block">
+            <h4>3. 关键核心点 / 论文或帖子摘要</h4>
+            <ol>${points.map((point) => `<li>${escapeHtml(point)}</li>`).join('')}</ol>
+          </div>
+          <div class="reader-block">
+            <h4>4. 原文链接</h4>
+            ${referenceHtml(item)}
+          </div>
+        </div>
+      `;
+    }
+
+    function itemKeyPoints(item) {
+      const points = Array.isArray(item.key_points_list)
+        ? item.key_points_list
+        : (Array.isArray(item.key_points) ? item.key_points : []);
+      const clean = points.filter(Boolean).slice(0, 3);
+      return clean.length ? clean : ['需要打开原文进一步确认方法、数据和适用边界。'];
+    }
+
+    function referenceHtml(item) {
+      const url = item.reference_url || '';
+      if (!url) return '<p>暂无可打开链接</p>';
+      return `
+        <a class="reader-reference" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">打开原文</a>
+        <small class="reference-url">${escapeHtml(url)}</small>
+      `;
+    }
+
+    function bar(label, value) {
+      const score = Number(value || 0);
+      const width = Math.max(0, Math.min(100, score * 10));
+      return `
+        <div class="bar">
+          <span>${label}</span>
+          <div class="bar-track"><div class="bar-fill" style="width: ${width}%"></div></div>
+          <b>${score.toFixed(1)}</b>
+        </div>
+      `;
+    }
+
+    function countBy(list, key) {
+      return list.reduce((acc, item) => {
+        acc[item[key]] = (acc[item[key]] || 0) + 1;
+        return acc;
+      }, {});
+    }
+
+    function averageScore(list) {
+      if (!list.length) return 0;
+      return list.reduce((sum, item) => sum + Number(item.final_score || 0), 0) / list.length;
+    }
+
+    function option(value, label) {
+      return `<option value="${escapeAttr(value)}">${escapeHtml(label)}</option>`;
+    }
+
+    function sectionButton(section, label, count) {
+      return `
+        <button class="category-button section-button" type="button" data-section="${escapeAttr(section)}">
+          <span>${escapeHtml(label)}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryButton(category, count) {
+      return `
+        <button class="category-button" type="button" data-category="${escapeAttr(category)}">
+          <span>${escapeHtml(category === 'All' ? '全部' : categoryLabel(category))}</span>
+          <span class="count">${count}</span>
+        </button>
+      `;
+    }
+
+    function categoryLabel(category) {
+      return categoryLabels[category] || category;
+    }
+
+    function sectionLabel(sectionKey) {
+      const section = (payload.sections || []).find((item) => item.key === sectionKey);
+      return section ? section.label : '其他';
+    }
+
+    function feedTitle() {
+      const parts = [];
+      if (state.section !== 'All') parts.push(sectionLabel(state.section));
+      if (state.category !== 'All') parts.push(categoryLabel(state.category));
+      return parts.length ? parts.join(' / ') : '今日情报';
+    }
+
+    function priorityLabel(priority) {
+      return priorityLabels[priority] || priority;
+    }
+
+    function sourceTypeLabel(sourceType) {
+      return sourceTypeLabels[sourceType] || sourceType;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replaceAll('`', '&#096;');
+    }
+
+    init();
+  </script>
+</body>
+</html>
