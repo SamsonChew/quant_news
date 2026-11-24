@@ -1,43 +1,50 @@
 {
-  "alpha_name": "跨链攻击事件做空CAR",
-  "hypothesis": "当跨链桥攻击或交易所暂停充提的公告出现时，散户与做市商第一反应是撤离流动性并抛售，但永续合约上的价格反应通常在公告后 15-60 分钟内仍不充分（尤其公告先用韩文/非英文发出），事件驱动的空头可利用这段信息扩散滞后；对手盘是抢反弹的散户和被冻结提现、只能靠永续对冲的持币者（他们在恐慌中提供溢价后的接盘）。",
-  "signal_logic": "数据字段：币安 USDT 永续 15m OHLCV + fundingRate + 交易所公告 RSS（Upbit/Bithumb/Binance 公告页）+ DefiLlama 协议 TVL 小时级 + 链上桥锁仓地址余额。触发条件：T0 = 公告首次发布时间戳（精确到分钟），要求（a）事件类型属于『桥被盗/异常增发/充提暂停』，（b）该代币存在币安 USDT 永续且 T0 前 24h 成交额 > 5M USDT，（c）T0 前 24h 累计涨跌幅 > -15%（排除已被定价）。开仓：T0 之后第一根完整 15m K 线开盘价做空，等名义本金 1 单位。加仓过滤：若 T0 后 15m 内跌幅 < 3%，视为未定价，追加第二笔同等仓位。出场：T0+24h 强平仓；或任一 15m 收盘价回升至 T0 前 1h VWAP 上方则止盈离场；硬止损 +8%（相对入场价）。同时做空同板块等权 basket 或以 BTC 永续对冲 beta，取超额收益。",
+  "alpha_name": "ETH/BTC 下尾依赖风险择时",
+  "hypothesis": "市场对加密资产共同尾部风险的定价滞后：当下尾依赖显著高于上尾依赖时，意味着下跌时 BTC 与 ETH 会同步放大波动，高 beta 的 ETH 将首当其冲；那些按常态波动率定价、只做多 ETH/BTC 相对价值或卖出波动率挣 carry 的参与者，是这一机会的主要对手盘。",
+  "signal_logic": "数据字段：Binance 日频 close 的 BTCUSDT、ETHUSDT（取 UTC 0 点收盘）。计算：日对数收益 r_t；滚动 120 日窗口内，取各自经验分布 10% 分位为阈值，估计下尾依赖 λ_L = P(r_ETH<q_ETH | r_BTC<q_BTC)，上尾依赖 λ_U = P(r_ETH>q'_ETH | r_BTC>q'_BTC)；计算比值 R = λ_L / max(λ_U, 0.05)，以及 λ_L 在过去 250 日内的分位数 p_L。触发条件：当 R > 1.5 且 p_L > 0.8（即下尾依赖进入一年高位）且 ETH/BTC 20 日动量 < 0 时，做空 ETH/BTC（等美元名义，Binance 永续 ETHUSDT 空、BTCUSDT 多，或用 ETHBTC 现货/永续直接做空）；当 R < 1.1 或 p_L < 0.5 时平仓。频率：每日收盘后计算，次日 UTC 00:05 执行，持仓最短 3 日、最长 30 日。",
   "data_needed": [
-    "币安 USDⓈ-M 永续 15m K线 + fundingRate（/fapi/v1/klines, /fapi/v1/fundingRate）",
-    "Bybit v5 线性永续 15m K线（用于交叉验证与补充标的）",
-    "Upbit / Bithumb / Binance 公告页 RSS 或 API（充提暂停公告时间戳）",
-    "DefiLlama API（协议 TVL 小时级、跨链桥锁仓量，用于事件真实性与严重度打分）",
-    "Solana / Ethereum RPC（异常增发、桥合约余额变动，用于提前 5-30 分钟预警）"
+    "Binance 现货/永续日频 K 线：BTCUSDT、ETHUSDT、ETHBTC（可通过 ccxt 或 Binance Vision 数据下载）",
+    "Binance 永续资金费率历史（用于计算做空 ETH、做多 BTC 的 carry 成本）",
+    "可选：Bybit/OKX 永续价格做交叉验证，避免单一交易所的尾部分位偏差"
   ],
-  "backtest_approach": "资产池：2021-01 至 2026-11 期间所有发生过『桥攻击/异常增发/主流所暂停充提』且拥有币安或 Bybit USDT 永续的代币（预计 40-80 个事件）。频率：事件驱动，15m 粒度。基准：同板块（Layer1/DeFi/跨链）等权 basket 与 BTC 永续双基准，计算 CAR[-1h,+24h]。止损 +8%、时间止损 24h。评估指标：事件级平均/中位超额收益、胜率、t 统计、年化夏普（按事件数折算）、最大回撤、分年度稳定性，并按事件严重度（TVL 流出占比）与公告语言（韩文/英文）分组做稳健性检验。",
+  "backtest_approach": "资产池：ETH/BTC 相对价值组合（ETH 空 + BTC 多，等美元名义、日度再平衡），并作为对照测试 SOL/BTC。时间窗口：2019-01-01 至 2025-11-30（覆盖论文 2020–2025 区间并留出 2019 年样本外预热）。频率：日频信号、日频盯市、周度再平衡权重。成本假设：单边 taker 5bp + 永续资金费率实际计入。止损：单笔相对回撤 8% 或持仓 30 日强制平仓；组合层面日波动率目标 15% 年化。评估指标：年化夏普、最大回撤、胜率、平均持仓天数、换手率、相对买入持有 ETH/BTC 的超额收益与信息比率；并做参数敏感性（窗口 60/120/250 日、分位 5%/10%/20%）与分层测试（仅在 λ_L 高位 vs 低位分组中比较 ETH 相对 BTC 的下行 beta）。",
   "supporting_sources": [
     {
-      "title": "South Korean exchanges halt CYBER transfers amid suspected bridge exploit",
-      "url": "https://cointelegraph.com/news/upbit-bithumb-suspend-cyber-transfers-bridge-exploit?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-      "why": "提供今日可立即验证的样本事件：Upbit/Bithumb 暂停 CYBER 充提叠加 Solana 异常增发与以太坊桥流出，可直接作为 T0 触发点检验 15m-24h 窗口内的永续做空收益。"
+      "title": "Modeling Joint Tail Risk and Dependence for Cryptocurrencies via a Copula-Based Semiparametric Framework",
+      "url": "http://arxiv.org/abs/2611.28524v1",
+      "why": "该论文实证发现 BTC/ETH 在 2020–2025 多数时间下尾依赖高于上尾依赖，为“下尾依赖上升时 ETH 相对 BTC 下行放大”的核心假设和阈值设计提供了直接实证依据。"
     },
     {
-      "title": "Chainflip’s losses climb to $12 million after protocol discloses 122.9 BTC theft, offers hacker bounty",
-      "url": "https://www.theblock.co/news/defi/2026-11-22-chainflips-losses-climb-to-12-million-after-protocol-discloses-122-9-btc-theft-offers-hacker-bounty-444829",
-      "why": "同类『跨链桥被盗』事件，说明该 alpha 可泛化为事件类别而非单一币种，用于扩充历史样本并验证跨事件的稳定性。"
+      "title": "Tom Lee Says Ethereum Is as Scarce as Bitcoin—And Bitmine Just Bought More",
+      "url": "https://decrypt.co/383800/tom-lee-ethereum-scarce-bitcoin-bitmine-buys-more",
+      "why": "ETH 供应增速 0.90% 逼近 BTC 的 0.82% 的稀缺性叙事，会吸引资金做多 ETH/BTC 相对价值；当尾部风险抬升时，这部分拥挤的多头正是本策略的对手盘与收益来源。"
     },
     {
-      "title": "Bitcoin briefly drops to $17K on Kraken, exchange upholds trades",
-      "url": "https://cointelegraph.com/news/bitcoin-17k-kraken-canadian-dollar-market-trades-stand?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
-      "why": "提示事件窗口内低流动性法币对/小币种会出现极端执行滑点且交易所不回滚成交，支持在回测中加入流动性过滤（24h 成交额门槛）与滑点假设。"
+      "title": "Bitcoin slips back toward $60,000 as Jensen Huang’s Nvidia return rally fizzles",
+      "url": "https://www.theblock.co/news/markets/2026-11-24-bitcoin-60000-jensen-huang-fizzles-445472",
+      "why": "风险偏好反弹熄火、BTC 回落至 60,000 美元附近，是下尾依赖抬升的典型宏观触发场景，为信号的 risk-off 分支提供现实案例。"
+    },
+    {
+      "title": "Ethereum Foundation doubles protocol security team ahead of overhaul",
+      "url": "https://cointelegraph.com/news/ethereum-foundation-doubles-protocol-security-team-amid-ai-quantum-overhaul?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "why": "以太坊下一次升级难度高于 Merge，升级窗口期 ETH 的链上风险溢价需重新定价，意味着 ETH 具有更多异质下行风险，支持在尾部依赖高位时做空 ETH/BTC。"
+    },
+    {
+      "title": "Eric Trump-backed American Bitcoin secures $150 million loan against its bitcoin",
+      "url": "https://www.coindesk.com/business/2026/11/23/eric-trump-backed-american-bitcoin-secures-usd150-million-loan-against-its-bitcoin",
+      "why": "杠杆化金库模式为 BTC 引入新的强制卖压来源，强化了“下跌时 BTC 与 ETH 同步放量下杀”的尾部传染机制，是量价共振假设的补充证据。"
     }
   ],
   "risk_factors": [
-    "样本量有限（每年仅数十个事件），统计显著性容易受个别极端事件主导，需靠分年度与分组检验控制",
-    "公告时间戳精度不足（RSS 延迟、韩文公告先于英文），可能导致 T0 前移/后移并高估收益，需用 1m K 线回溯首根异常放量 K 线做时间校准",
-    "被攻击代币常伴随交易所下架或永续合约停牌，可能出现无法开仓/强制结算，回测需显式剔除",
-    "恐慌后常见空头挤压式暴力反弹（尤其小市值高资金费率标的），做空可能承受资金费率成本与逼空损失",
-    "同类新闻频繁误报（『疑似 exploit』最终为谣言），需用链上 TVL/桥余额变化做事件真实性二筛"
+    "下尾依赖指标基于 120 日滚动窗口与经验分位估计，样本短、估计噪声大，λ_L/λ_U 比值在极端行情中可能剧烈跳动导致频繁进出。",
+    "做空 ETH/BTC 的 carry 成本不确定：ETH 永续资金费率为正时做空可收息，为负时需付费，若长期负费率会侵蚀策略收益。",
+    "ETH 相对 BTC 的强势可能由 ETF 流入、质押/销毁等结构性因素驱动，与尾部依赖脱钩，导致信号失效（2019–2021 类牛市阶段尤其明显）。",
+    "交易所价差与流动性：ETHBTC 现货盘口在极端波动时点差扩大，实际成交价可能显著偏离回测假设。"
   ],
   "confidence": "medium",
-  "confidence_reason": "事件类型明确、数据（币安永续 15m + fundingRate + 公告时间戳）完全可获取且今日就有 CYBER 即时样本，但历史事件样本量偏小、公告时间精度与下架偏差会显著影响回测可信度。",
-  "quick_start": "立即执行：用 ccxt 或 curl 拉取 CYBER/USDT:USDT 永续 15m K线 — `ccxt.binance().fetch_ohlcv('CYBER/USDT:USDT','15m',since=ts_ms('2026-11-19'))`，同时从 Upbit 公告页抓取暂停充提公告的精确发布时间，把 T0 前 1h VWAP、T0 后 0-24h 每根 15m 收盘价打表，先手工验证这一单事件的 CAR，再写脚本按同一模板批量回填 2021 年以来的 exploit 事件列表（可用 rekt.news / DefiLlama hacks 数据集作事件字典）。",
+  "confidence_reason": "下尾依赖高于上尾依赖有明确的学术实证支持，且数据完全可获取、逻辑可复现；但尾依赖估计对小样本敏感、信号频率低（触发次数有限），统计显著性需通过跨资产（SOL/BTC）与分层检验来确认。",
+  "quick_start": "今天用 ccxt 拉取 Binance 日线数据：`pip install ccxt pandas numpy && python -c \"import ccxt,pandas as pd; b=ccxt.binance({'enableRateLimit':True}); d=b.fetch_ohlcv('ETHUSDT','1d',since=b.parse8601('2019-01-01T00:00:00Z'),limit=1000)\"`，同样方式取 BTCUSDT，对齐日期后计算日对数收益，再写 30 行代码实现滚动 120 日经验分位方法的下尾/上尾依赖估计，先画出 2019–2025 的 R=λ_L/λ_U 时间序列，观察其与 ETH/BTC 后续 20 日收益的相关性，作为信号是否值得进入完整回测的第一道检验。",
   "model": "deepseek-reasoner",
-  "date": "2026-11-23",
-  "generated_at": "2026-11-23T03:41:09Z"
+  "date": "2026-11-24",
+  "generated_at": "2026-11-24T07:08:16Z"
 }
