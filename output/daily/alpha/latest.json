@@ -1,48 +1,40 @@
 {
-  "alpha_name": "极端恐惧+矿工抛售逆向做多",
-  "hypothesis": "在恐惧贪婪指数跌至个位数、杠杆多头被强制清算、矿工净流出后，边际卖方（恐慌散户与被动去杠杆的杠杆多头）会被耗尽，此时价格由流动性驱动的超卖反弹主导，做多是在承受对手方（被迫平仓者）的抛压。",
-  "signal_logic": "每日 00:05 UTC 计算并决策，全部使用日频与 8 小时频数据。分别定义四处特征：(1) 情绪 FNG：alternative.me 恐惧贪婪指数日值，取 5 日移动均值 FNG_5d；(2) 清算 LIQ：Coinglass 全市场 24h 多头清算额，计算其相对过去 90 日的 z 分数 z_liq；(3) 矿工 MINER：Glassnode/CryptoQuant 矿工净头寸变化 7 日滚动和 netflow_7d（单位 BTC，负值表示矿工净卖出）；(4) 资金费率 FUND：Binance BTCUSDT 永续合约最近 3 个 8 小时资金费率之和 f_sum_24h。触发条件（需同时满足）：FNG_5d ≤ 15 且 z_liq ≥ 2 且 netflow_7d ≤ -1000 BTC 且 f_sum_24h < 0 且 BTC 30 日收益率 < -15%。触发后于次日 00:00 UTC 开盘价做多 BTCUSDT 永续合约，仓位按 20% 年化波动率目标反推名义规模（上限 1 倍）。平仓规则：持仓满 5 个交易日强制平仓；或期间 FNG 日值回升至 ≥ 25、f_sum_24h 转正且大于 0.03%、或触发 -2×ATR(14) 日线止损，任一条件即提前平仓。ETH 采用相同逻辑做同向加仓（作为 beta 增强，权重 0.5）。",
+  "alpha_name": "美股风险传导ETH相对空",
+  "hypothesis": "美股大跌时跨资产风险传导会先打击高beta的ETH与DeFi，而散户和被动多头仍在抄底高beta，导致ETH相对BTC超跌，对手盘是滞后的高beta抄底资金。",
+  "signal_logic": "频率：事件驱动，日频触发、24小时持仓。数据字段：Nasdaq-100指数或NQ期货每日收盘收益、Binance/Bybit ETHUSDT与BTCUSDT永续1h/4h OHLCV、ETH与BTC资金费率。计算：在美股现金收盘后21:00 UTC计算ret_nasdaq=当日收盘/前收-1、ret_ethbtc=ETH/BTC过去24h收益。触发条件：ret_nasdaq<=-2%且ETH/BTC过去4h收益<0（确认高beta已开始跑输）；若ETH资金费率<-0.02%则跳过，避免空头过度拥挤。持仓：21:05 UTC开空ETHUSDT永续、等名义开多BTCUSDT永续，持有24h至次日21:00 UTC平仓；若ETH/BTC相对入场上涨2%则止损。",
   "data_needed": [
-    "Binance 永续合约 BTCUSDT/ETHUSDT 日线与 8h 线（data.binance.vision 批量归档或 /fapi/v1/klines）",
-    "Binance 资金费率历史（GET /fapi/v1/fundingRate，8h 结算间隔）",
-    "alternative.me Crypto Fear & Greed Index 日频历史（https://api.alternative.me/fng/?limit=0）",
-    "Coinglass 全市场 24h 多头/空头清算额 API（v2 liquidation aggregated history）",
-    "Glassnode 或 CryptoQuant 矿工净头寸变化（Miner Net Position Change，日频，7 日滚动）"
+    "Binance/Bybit ETHUSDT、BTCUSDT永续合约1h/4h OHLCV与资金费率API",
+    "Yahoo Finance或CME的NQ=F/Nasdaq-100日线与分钟线",
+    "BEA/FRED美国PCE发布日历（用于标注宏观冲击日）"
   ],
-  "backtest_approach": "资产池：BTCUSDT 与 ETHUSDT 永续（Binance UM），另用 Bybit 同合约做数据稳健性复核。时间区间：2018-02（FNG 指数起点）至 2026-11，其中 2018-2022 为样本内，2023-2026 为样本外滚动验证。频率：日频信号、8h 检查止损、事件驱动持仓（非连续暴露）。成本假设：单边 taker 5bp + 持仓期间实际资金费率。对照组：(a) BTC 买入持有；(b) 仅 FNG ≤ 15 单因子；(c) 仅清算瀑布单因子；(d) 四因子等权合成无阈值版本——用于验证各因子边际贡献。评估指标：年化收益、年化夏普（日收益）、最大回撤、Calmar、胜率、平均持仓天数、暴露占比、t 统计量、与买入持有的相关性、极端恐惧事件样本数（应 ≥ 25 次以保证统计意义）。另做参数敏感性网格（FNG 阈值 10/15/20、z_liq 阈值 1.5/2/2.5、持仓 3/5/7 天），检查夏普曲面是否平滑而非单点尖峰。",
+  "backtest_approach": "资产池：ETHUSDT、BTCUSDT永续及ETH/BTC比值；时间窗口：2021-01至2026-11；频率：日频事件驱动，每次持有24h；止损：ETH/BTC相对入场反向2%或资金费率极端反转；评估指标：年化收益、夏普、最大回撤、胜率、平均单次收益、t统计量，并与同期做多ETH/BTC、做空ETHUSDT基准对比；同时做±0.5%触发阈值与12h/48h持有期敏感性分析。",
   "supporting_sources": [
     {
-      "title": "Wall Street and Crypto Are in 'Extreme Fear'. What's Spooking Investors?",
-      "url": "https://decrypt.co/383898/wall-street-crypto-extreme-whats-spooking-investors",
-      "why": "确认股币恐惧贪婪指数同步报「极度恐惧」，为 FNG_5d 触发条件提供当日情绪极值锚点"
+      "title": "Bitcoin falls toward $57K amid US tariff fears, hot PCE data as Nasdaq drops 4%",
+      "url": "https://cointelegraph.com/markets/bitcoin-falls-57k-us-tariff-pce-data-nasdaq-drops?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound",
+      "why": "提供明确的跨资产触发条件：关税预期、PCE超预期、纳指单日跌4%，支持用美股大跌作为加密风险传导信号。"
     },
     {
-      "title": "Bitcoin sell-off driven by weak demand, forced liquidations: 21Shares",
-      "url": "https://cointelegraph.com/news/bitcoin-selloff-weak-demand-forced-liquidations-21shares",
-      "why": "直接指出抛售由强制清算驱动，是 z_liq 清算瀑布因子的核心依据，也说明对手盘是被动平仓的杠杆多头"
+      "title": "Ether, DeFi fall twice as hard as bitcoin as equities selloff resumes",
+      "url": "https://www.coindesk.com/markets/2026/11/25/ether-defi-fall-twice-as-hard-as-bitcoin-as-equities-selloff-resumes",
+      "why": "直接说明ETH与DeFi在美股抛售中跌幅约为BTC两倍，支持做空ETH相对BTC的超跌延续逻辑。"
     },
     {
-      "title": "CleanSpark weighs selling more Bitcoin than it mines to de-risk books",
-      "url": "https://cointelegraph.com/news/cleanspark-weighs-selling-more-bitcoin-than-it-mines-to-de-risk-books",
-      "why": "季度卖出 2,102 BTC 超产出 1,708 BTC、净流出 394 BTC，为 netflow_7d 矿工抛售因子提供当期实证样本"
-    },
-    {
-      "title": "We've Entered Peak FEAR; SKY Falls",
-      "url": "https://www.theblock.co/newsletters/data-and-insights/2026-11-24-weve-entered-peak-fear-sky-falls-445476",
-      "why": "BTC 从 $87k 回落至 $59k、指数逼近个位数，为本轮事件驱动型逆向信号提供具体价格与情绪位置"
+      "title": "Crypto Long & Short: Bitcoin investors can’t keep ignoring Japan",
+      "url": "https://www.coindesk.com/coindesk-indices/2026/11/25/crypto-long-and-short-bitcoin-investors-can-t-keep-ignoring-japan",
+      "why": "日元套息与BOJ紧缩构成外部杠杆平仓风险，支持风险冲击不止一日、24小时持仓窗口合理。"
     }
   ],
   "risk_factors": [
-    "FNG 为问卷调查型指数，成分与权重不透明且可能事后微调，极端读数样本稀少（约 20-30 次），存在过拟合与小样本偏差",
-    "矿工净流出依赖地址聚类与实体标注，矿工转入托管地址或交易所内部划转会产生假阳性，导致误触发",
-    "2024 年后 ETF 与机构资金流主导边际定价，矿工与散户情绪因子的解释力可能已结构性衰减，历史夏普不可外推",
-    "强制清算数据来自第三方聚合商（Coinglass），存在延迟与交易所覆盖不全，z 分数在数据断点处会失真",
-    "逆向做多在下跌趋势末端进场，若宏观利空延续，-2 ATR 止损在跳空行情中可能大幅滑点"
+    "宏观冲击可能快速反转，政策喊话或关税缓和导致空头被挤",
+    "事件样本稀疏，阈值与持有期过拟合风险高",
+    "ETH/BTC相对空需同时承担两腿资金费率与基差成本",
+    "交易所永续数据与美股收盘时间戳错配可能引入前视偏差"
   ],
   "confidence": "medium",
-  "confidence_reason": "四条支持源同日共振（极端恐惧、强制清算、矿工净卖出、价格瀑布），逻辑链条完整且数据全部可公开获取，但极端恐惧事件样本少、因子在 ETF 时代可能衰减，需样本外验证后才能提升到 high。",
-  "quick_start": "第一步先把两类原始数据保存到本地：`curl -s \"https://api.alternative.me/fng/?limit=0&format=json\" -o fng.json` 拉全量恐惧贪婪指数；`curl -s \"https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1000\"` 与 `wget -r -np -nH --cut-dirs=4 https://data.binance.vision/data/futures/um/daily/klines/BTCUSDT/1h/` 拿到 BTC 永续 1h 与资金费率历史；再把 fng.json 解析为 DataFrame、按日期对齐日线 close，先只用 FNG_5d ≤ 15 单因子跑 2018-2026 的事件研究（计算事件后 1/3/5/10 日累计收益均值与 t 值），确认基础边际后再叠加清算 z 分数与矿工净流出两项过滤条件。",
+  "confidence_reason": "有当日跨资产与ETH高beta的直接证据，但事件驱动样本少且阈值需回测验证。",
+  "quick_start": "用Python拉取数据：yfinance下载NQ=F日线，Binance API下载ETHUSDT/BTCUSDT永续1h K线；按21:00 UTC重采样日收益，筛出Nasdaq<=-2%事件，计算事件后24h ETH/BTC收益均值与t值。",
   "model": "deepseek-reasoner",
-  "date": "2026-11-25",
-  "generated_at": "2026-11-25T05:31:08Z"
+  "date": "2026-11-26",
+  "generated_at": "2026-11-26T04:56:12Z"
 }
